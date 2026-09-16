@@ -29,8 +29,10 @@ func RegistrantProxyHandler(cfg config.ExternalServiceConfig) gin.HandlerFunc {
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(remote)
 			pr.SetXForwarded()
-			// Preserve the full original path including /registrant
-			pr.Out.URL.Path = "/" + strings.TrimPrefix(pr.In.URL.Path, "/registrant/")
+			// Preserve the full original path including /registrant (and the base path of the external gateway)
+			trimmedPath := strings.TrimPrefix(pr.In.URL.Path, "/registrant/")
+			basePath := strings.TrimSuffix(remote.Path, "/")
+			pr.Out.URL.Path = basePath + "/" + strings.TrimPrefix(trimmedPath, "/")
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			// Strip CORS headers from the downstream response to prevent duplicate
