@@ -1013,3 +1013,103 @@ func TestLoad_NonPositiveAIRequestTimeoutFallsBackToDefault(t *testing.T) {
 		})
 	}
 }
+
+// notificationEnv is the complete, valid notification block. Each partial case
+// below is this map with one key removed, so the cases stay in step with the
+// rule as it changes.
+var notificationEnv = map[string]string{
+	"NOTIFICATION_ENDPOINT":      "https://apis-stg.wso2.com/urwb/push-notification-gateway/v1.0",
+	"NOTIFICATION_TOKEN_URL":     "https://api.asgardeo.io/t/wso2/oauth2/token",
+	"NOTIFICATION_CLIENT_ID":     "notification-client",
+	"NOTIFICATION_CLIENT_SECRET": "notification-secret",
+}
+
+// notificationEnvWithout returns the valid block minus one variable -- the
+// deployment shape that boots today and then fails every broadcast.
+func notificationEnvWithout(missing string) map[string]string {
+	env := make(map[string]string, len(notificationEnv))
+	for k, v := range notificationEnv {
+		if k == missing {
+			continue
+		}
+		env[k] = v
+	}
+	return env
+}
+
+// Three of four never works: the push gateway authorises on the token's
+// client_id claim, so a grant missing any of its parts yields a 401 that the
+// broadcast handler reports without naming the absent variable.
+func TestValidate_RejectsPartialNotificationConfig(t *testing.T) {
+	for _, missing := range []string{
+		"NOTIFICATION_ENDPOINT",
+		"NOTIFICATION_TOKEN_URL",
+		"NOTIFICATION_CLIENT_ID",
+		"NOTIFICATION_CLIENT_SECRET",
+	} {
+		t.Run("missing "+missing, func(t *testing.T) {
+			validAIBaseConfig(t)
+			for k, v := range notificationEnvWithout(missing) {
+				t.Setenv(k, v)
+			}
+
+			err := Load().Validate()
+			if err == nil {
+				t.Fatalf("expected an error with %s unset and the rest of the notification block set", missing)
+			}
+			if !strings.Contains(err.Error(), missing) {
+				t.Errorf("error = %q, want it to mention %s", err.Error(), missing)
+			}
+		})
+	}
+}
+
+func TestValidate_AcceptsCompleteAndAbsentNotificationConfig(t *testing.T) {
+	t.Run("all four set", func(t *testing.T) {
+		validAIBaseConfig(t)
+		for k, v := range notificationEnv {
+			t.Setenv(k, v)
+		}
+
+		if err := Load().Validate(); err != nil {
+			t.Errorf("Validate() = %v, want nil", err)
+		}
+	})
+
+	// A deployment that never broadcasts configures nothing here, so an empty
+	// block must still boot -- the rule is all-or-nothing, not mandatory.
+	t.Run("none set", func(t *testing.T) {
+		validAIBaseConfig(t)
+
+		if err := Load().Validate(); err != nil {
+			t.Errorf("Validate() = %v, want nil with no notification configuration at all", err)
+		}
+	})
+}
+
+// Trimmed at load time so that a whitespace-only value reads as unset to the
+// all-or-nothing rule and to the notification client alike, and so that a
+// secret pasted into a Choreo config field does not carry its newline into the
+// token request.
+func TestLoad_TrimsNotificationValues(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("NOTIFICATION_ENDPOINT", " https://apis-stg.wso2.com/urwb/push-notification-gateway/v1.0\n")
+	t.Setenv("NOTIFICATION_TOKEN_URL", "https://api.asgardeo.io/t/wso2/oauth2/token\n")
+	t.Setenv("NOTIFICATION_CLIENT_ID", "  notification-client  ")
+	t.Setenv("NOTIFICATION_CLIENT_SECRET", "notification-secret\r\n")
+
+	cfg := Load()
+
+	if cfg.Notification.Endpoint != "https://apis-stg.wso2.com/urwb/push-notification-gateway/v1.0" {
+		t.Errorf("Endpoint = %q, want it trimmed", cfg.Notification.Endpoint)
+	}
+	if cfg.Notification.OAuth.TokenURL != "https://api.asgardeo.io/t/wso2/oauth2/token" {
+		t.Errorf("TokenURL = %q, want it trimmed", cfg.Notification.OAuth.TokenURL)
+	}
+	if cfg.Notification.OAuth.ClientID != "notification-client" {
+		t.Errorf("ClientID = %q, want it trimmed", cfg.Notification.OAuth.ClientID)
+	}
+	if cfg.Notification.OAuth.ClientSecret != "notification-secret" {
+		t.Errorf("ClientSecret = %q, want it trimmed", cfg.Notification.OAuth.ClientSecret)
+	}
+}
