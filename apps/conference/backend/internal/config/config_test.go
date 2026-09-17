@@ -1093,17 +1093,17 @@ func TestValidate_AcceptsCompleteAndAbsentNotificationConfig(t *testing.T) {
 // token request.
 func TestLoad_TrimsNotificationValues(t *testing.T) {
 	clearEnv(t)
-	t.Setenv("NOTIFICATION_ENDPOINT", " https://apis-stg.wso2.com/urwb/push-notification-gateway/v1.0\n")
-	t.Setenv("NOTIFICATION_TOKEN_URL", "https://api.asgardeo.io/t/wso2/oauth2/token\n")
+	t.Setenv("NOTIFICATION_ENDPOINT", " https://push.example.com/v1.0\n")
+	t.Setenv("NOTIFICATION_TOKEN_URL", "https://auth.example.com/token\n")
 	t.Setenv("NOTIFICATION_CLIENT_ID", "  notification-client  ")
 	t.Setenv("NOTIFICATION_CLIENT_SECRET", "notification-secret\r\n")
 
 	cfg := Load()
 
-	if cfg.Notification.Endpoint != "https://apis-stg.wso2.com/urwb/push-notification-gateway/v1.0" {
+	if cfg.Notification.Endpoint != "https://push.example.com/v1.0" {
 		t.Errorf("Endpoint = %q, want it trimmed", cfg.Notification.Endpoint)
 	}
-	if cfg.Notification.OAuth.TokenURL != "https://api.asgardeo.io/t/wso2/oauth2/token" {
+	if cfg.Notification.OAuth.TokenURL != "https://auth.example.com/token" {
 		t.Errorf("TokenURL = %q, want it trimmed", cfg.Notification.OAuth.TokenURL)
 	}
 	if cfg.Notification.OAuth.ClientID != "notification-client" {
