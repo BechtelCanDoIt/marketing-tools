@@ -245,7 +245,7 @@ func TestLoad_AIAgentDefaults(t *testing.T) {
 func TestLoad_AIAgentConfigFromEnv(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("AI_SERVICE_URL", "https://ai.example.com")
-	t.Setenv("AI_TOKEN_URL", "https://api.asgardeo.io/t/wso2/oauth2/token")
+	t.Setenv("AI_TOKEN_URL", "https://auth.example.com/token")
 	t.Setenv("AI_CLIENT_ID", "ai-client")
 	t.Setenv("AI_CLIENT_SECRET", "ai-secret")
 	t.Setenv("AI_REQUEST_TIMEOUT_SECONDS", "30")
@@ -259,7 +259,7 @@ func TestLoad_AIAgentConfigFromEnv(t *testing.T) {
 	if cfg.AIAgent.ServiceURL != "https://ai.example.com" {
 		t.Errorf("ServiceURL = %q", cfg.AIAgent.ServiceURL)
 	}
-	if cfg.AIAgent.OAuth.TokenURL != "https://api.asgardeo.io/t/wso2/oauth2/token" ||
+	if cfg.AIAgent.OAuth.TokenURL != "https://auth.example.com/token" ||
 		cfg.AIAgent.OAuth.ClientID != "ai-client" || cfg.AIAgent.OAuth.ClientSecret != "ai-secret" {
 		t.Errorf("AIAgent.OAuth = %+v", cfg.AIAgent.OAuth)
 	}
@@ -806,8 +806,8 @@ func TestValidate_RejectsEnabledAIWithoutServiceURL(t *testing.T) {
 // running service.
 func TestValidate_RejectsPartialAIOAuthCredentials(t *testing.T) {
 	cases := map[string]map[string]string{
-		"token URL only":     {"AI_TOKEN_URL": "https://api.asgardeo.io/t/wso2/oauth2/token"},
-		"missing secret":     {"AI_TOKEN_URL": "https://api.asgardeo.io/t/wso2/oauth2/token", "AI_CLIENT_ID": "id"},
+		"token URL only":     {"AI_TOKEN_URL": "https://auth.example.com/token"},
+		"missing secret":     {"AI_TOKEN_URL": "https://auth.example.com/token", "AI_CLIENT_ID": "id"},
 		"credentials no URL": {"AI_CLIENT_ID": "id", "AI_CLIENT_SECRET": "secret"},
 	}
 	for name, env := range cases {
@@ -832,7 +832,7 @@ func TestValidate_AcceptsCompleteAndAbsentAIOAuthCredentials(t *testing.T) {
 	t.Run("all three set", func(t *testing.T) {
 		validAIBaseConfig(t)
 		t.Setenv("AI_SERVICE_URL", "https://ai.example.com")
-		t.Setenv("AI_TOKEN_URL", "https://api.asgardeo.io/t/wso2/oauth2/token")
+		t.Setenv("AI_TOKEN_URL", "https://auth.example.com/token")
 		t.Setenv("AI_CLIENT_ID", "id")
 		t.Setenv("AI_CLIENT_SECRET", "secret")
 		t.Setenv("AI_ENABLED_CHAT_ASSISTANT", "true")
@@ -862,7 +862,7 @@ func TestValidate_AcceptsCompleteAndAbsentAIOAuthCredentials(t *testing.T) {
 func TestLoad_TrimsAIAgentValues(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("AI_SERVICE_URL", " https://ai.example.com\n")
-	t.Setenv("AI_TOKEN_URL", "https://api.asgardeo.io/t/wso2/oauth2/token\n")
+	t.Setenv("AI_TOKEN_URL", "https://auth.example.com/token\n")
 	t.Setenv("AI_CLIENT_ID", "  ai-client  ")
 	t.Setenv("AI_CLIENT_SECRET", "ai-secret\r\n")
 
@@ -871,7 +871,7 @@ func TestLoad_TrimsAIAgentValues(t *testing.T) {
 	if cfg.AIAgent.ServiceURL != "https://ai.example.com" {
 		t.Errorf("ServiceURL = %q, want it trimmed", cfg.AIAgent.ServiceURL)
 	}
-	if cfg.AIAgent.OAuth.TokenURL != "https://api.asgardeo.io/t/wso2/oauth2/token" {
+	if cfg.AIAgent.OAuth.TokenURL != "https://auth.example.com/token" {
 		t.Errorf("TokenURL = %q, want it trimmed", cfg.AIAgent.OAuth.TokenURL)
 	}
 	if cfg.AIAgent.OAuth.ClientID != "ai-client" {
@@ -908,7 +908,7 @@ func TestLoad_WhitespaceOnlyAICredentialsBecomeEmpty(t *testing.T) {
 // permits it, because zero of three is a legal shape.
 func TestValidate_RejectsRemoteAIServiceURLWithoutCredentials(t *testing.T) {
 	cases := map[string]string{
-		"gateway host":   "https://wso2-stg-internal.prod-internal.wdt.choreoapis.dev/con/ai/v1.0",
+		"gateway host":   "https://gateway.example.com/con/ai/v1.0",
 		"public host":    "https://ai.example.com",
 		"lan address":    "http://10.0.0.4:8000",
 		"look-alike":     "https://ai-localhost.example.com",
@@ -964,7 +964,7 @@ func TestValidate_AllowsLocalAIServiceURLWithoutCredentials(t *testing.T) {
 func TestValidate_AcceptsRemoteAIServiceURLWithCredentials(t *testing.T) {
 	validAIBaseConfig(t)
 	t.Setenv("AI_SERVICE_URL", "https://ai.example.com\n")
-	t.Setenv("AI_TOKEN_URL", "https://api.asgardeo.io/t/wso2/oauth2/token\n")
+	t.Setenv("AI_TOKEN_URL", "https://auth.example.com/token\n")
 	t.Setenv("AI_CLIENT_ID", "id\n")
 	t.Setenv("AI_CLIENT_SECRET", "secret\n")
 	t.Setenv("AI_ENABLED_CHAT_ASSISTANT", "true")
@@ -1018,8 +1018,8 @@ func TestLoad_NonPositiveAIRequestTimeoutFallsBackToDefault(t *testing.T) {
 // below is this map with one key removed, so the cases stay in step with the
 // rule as it changes.
 var notificationEnv = map[string]string{
-	"NOTIFICATION_ENDPOINT":      "https://apis-stg.wso2.com/urwb/push-notification-gateway/v1.0",
-	"NOTIFICATION_TOKEN_URL":     "https://api.asgardeo.io/t/wso2/oauth2/token",
+	"NOTIFICATION_ENDPOINT":      "https://push.example.com/v1.0",
+	"NOTIFICATION_TOKEN_URL":     "https://auth.example.com/token",
 	"NOTIFICATION_CLIENT_ID":     "notification-client",
 	"NOTIFICATION_CLIENT_SECRET": "notification-secret",
 }
