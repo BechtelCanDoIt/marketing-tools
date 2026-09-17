@@ -69,9 +69,11 @@ schemaVersion: 1.2
 #   NOTIFICATION_SCOPES          comma-separated; unlike the wallet/QR-portal/
 #                                transaction integrations, this IdP client needs
 #                                its scopes requested explicitly
-# Set the four above NOTIFICATION_SCOPES all four or none -- a partial set fails
-# at startup. All four empty still boots, because a deployment that never
-# broadcasts has nothing to configure. Note that the `notifications` feature
+# Set NOTIFICATION_ENDPOINT, NOTIFICATION_TOKEN_URL, NOTIFICATION_CLIENT_ID and
+# NOTIFICATION_CLIENT_SECRET all four or none -- a partial set fails at startup.
+# NOTIFICATION_SCOPES sits outside that rule: it is never validated, which does
+# not make it dispensable. All four empty still boots, because a deployment that
+# never broadcasts has nothing to configure. Note that the `notifications` feature
 # flag defaults to ON (it is seeded '1' in the app_config table, not set here),
 # so an environment that leaves this block empty still advertises the feature
 # and fails the call.
