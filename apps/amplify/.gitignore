@@ -1,0 +1,21 @@
+# Ballerina build output and generated sources
+target/
+generated/
+
+# Runtime config may hold secrets: commit Config.toml.local / tests/Config.toml only
+Config.toml
+!**/tests/Config.toml
+
+# Local env files (keep the template)
+local/.env
+local/*.env
+!local/.env.example
+
+# Decrypted .gitsecret files
+*.secret
+!*.secret.example
+
+.DS_Store
+
+# Load-test scratch (dev JWTs), scripts/load-test.sh
+local/.load/
