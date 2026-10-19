@@ -1,0 +1,144 @@
+openapi: 3.0.1
+info:
+  title: Amplify Jobs
+  version: 0.2.0
+  description: >-
+    Internal worker; Project visibility only, never published. The scheduler (akornatskyy/scheduler, ADR-026) and amplify-api
+    ("Save & Share Now") call these endpoints. ADR-003, ADR-025.
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/HealthStatus"}
+  /ready:
+    get:
+      operationId: getReadiness
+      description: >-
+        Readiness. Only the database gates it (breaker not open and `SELECT 1` answers); LinkedIn, Chat and the
+        token keys are reported in `breakers` but not fatal, because a run defers those rows (ADR-025).
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ReadyReport"}
+        "503":
+          description: Database down
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ReadyReport"}
+  /runs:
+    post:
+      operationId: startRun
+      description: Runs the outbox once (announcements, sharing, scoring) and returns the run log. One run at a time across replicas.
+      parameters:
+        - {name: X-Correlation-ID, in: header, required: false, schema: {type: string}}
+      responses:
+        "200":
+          description: Run finished
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RunReport"}
+        "202":
+          description: Another run is in progress (not a failure)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, enum: [SKIPPED]}
+                  reason: {type: string, enum: [RUN_IN_PROGRESS]}
+        "503": {description: Database unavailable}
+        "500": {description: Run failed}
+  /maintenance/partitions:
+    post:
+      operationId: runPartitionMaintenance
+      description: Daily upkeep (B10) plus expired Idempotency-Key purge (ADR-024).
+      responses:
+        "200":
+          description: Done
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MaintenanceReport"}
+        "503": {description: Database unavailable}
+        "500": {description: Maintenance failed}
+  /maintenance/rebuild-recognition:
+    post:
+      operationId: rebuildRecognition
+      responses:
+        "200":
+          description: Rebuilt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  standingVersion: {type: integer}
+        "503": {description: Database unavailable}
+        "500": {description: Rebuild failed}
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [component, status]
+      properties:
+        component: {type: string}
+        status: {type: string, enum: [UP, DOWN]}
+    ReadyReport:
+      type: object
+      required: [component, status, database, runInProgress, breakers]
+      properties:
+        component: {type: string}
+        status: {type: string, enum: [UP, DOWN]}
+        database: {type: string, enum: [UP, DOWN]}
+        runInProgress: {type: boolean}
+        breakers:
+          type: object
+          additionalProperties: {type: string}
+    RunReport:
+      type: object
+      properties:
+        runId: {type: string}
+        correlationId: {type: string, nullable: true}
+        startedAt: {type: string, format: date-time}
+        claimed: {type: integer}
+        succeeded: {type: integer}
+        retried: {type: integer}
+        deferred: {type: integer}
+        failed: {type: integer}
+        staleReleased: {type: integer}
+        linkedinPosts: {type: integer}
+        connections:
+          type: object
+          properties:
+            expiring: {type: integer}
+            needsReconnect: {type: integer}
+        breakers:
+          type: object
+          additionalProperties: {type: string, enum: [CLOSED, HALF_OPEN, OPEN, NOT_CONFIGURED]}
+        durationMs: {type: integer}
+    MaintenanceReport:
+      type: object
+      properties:
+        audit_partitions_created: {type: integer}
+        token_partitions_created: {type: integer}
+        token_partitions_dropped: {type: integer}
+        audit_partitions_dropped: {type: integer}
+        outbox_rows_purged: {type: integer}
+        oauth_states_swept: {type: integer}
+        idempotency_keys_purged: {type: integer}
+        token_rotation:
+          type: object
+          description: Key rotation step (provider_token rows re-sealed under the active key). Never fails the call.
+          required: [status, resealed, skipped, failed]
+          properties:
+            status: {type: string, enum: [DONE, PARTIAL, NOT_CONFIGURED, FAILED]}
+            resealed: {type: integer}
+            skipped: {type: integer}
+            failed: {type: integer}
