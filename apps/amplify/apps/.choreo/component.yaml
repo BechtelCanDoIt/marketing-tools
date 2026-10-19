@@ -1,0 +1,98 @@
+# Amplify Jobs (amplify-jobs). Choreo Service, Dockerfile buildpack. Never published.
+# Docker context: apps/amplify/apps  |  Dockerfile: apps/amplify/apps/amplify-jobs/Dockerfile
+# Choreo reads this file from <docker context>/.choreo/component.yaml, so every component has its own context
+# (ADR-027). Keep endpoints and env names in sync with apps/amplify/apps/amplify-jobs/workload.yaml (scripts/check-descriptors.sh).
+# Console steps (connections, secrets, visibility): docs/runbooks/choreo-deploy.md.
+schemaVersion: "1.2"
+endpoints:
+  - name: amplify-jobs
+    displayName: Amplify Jobs
+    service:
+      basePath: /
+      port: 9091
+    type: REST
+    networkVisibilities:
+      - Project
+    schemaFilePath: amplify-jobs/openapi.yaml
+configurations:
+  env:
+    - name: BAL_CONFIG_VAR_DBHOST
+      valueFrom:
+        configForm:
+          displayName: DB host
+          type: string
+    - name: BAL_CONFIG_VAR_DBPORT
+      valueFrom:
+        configForm:
+          displayName: DB port
+          type: number
+    - name: BAL_CONFIG_VAR_DBNAME
+      valueFrom:
+        configForm:
+          displayName: DB name
+          type: string
+    - name: BAL_CONFIG_VAR_DBUSER
+      valueFrom:
+        configForm:
+          displayName: DB user
+          type: string
+    - name: BAL_CONFIG_VAR_DBPASSWORD
+      valueFrom:
+        configForm:
+          displayName: DB password
+          type: secret
+    # Managed Postgres CA (domain review H-1): mount the CA PEM as a Choreo file mount (console: Configs &
+    # Secrets > File Mount, e.g. /home/choreo/db-ca/ca.pem) and put that path here. dbSslMode defaults to
+    # VERIFY_FULL, which checks the server certificate against it and the host name.
+    - name: BAL_CONFIG_VAR_DBSSLROOTCERT
+      valueFrom:
+        configForm:
+          displayName: DB CA certificate file path (file mount)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_LINKEDINCLIENTID
+      valueFrom:
+        configForm:
+          displayName: LinkedIn client id
+          type: string
+    - name: BAL_CONFIG_VAR_LINKEDINAPIBASEURL
+      valueFrom:
+        configForm:
+          displayName: LinkedIn API base URL
+          type: string
+    - name: BAL_CONFIG_VAR_LINKEDINAUTHBASEURL
+      valueFrom:
+        configForm:
+          displayName: LinkedIn OAuth base URL
+          type: string
+    - name: BAL_CONFIG_VAR_TOKENKEYS
+      valueFrom:
+        configForm:
+          displayName: Token keys keyId:base64Key[,...]
+          type: secret
+    - name: BAL_CONFIG_VAR_TOKENCURRENTKEYID
+      valueFrom:
+        configForm:
+          displayName: Current token key id
+          type: string
+    - name: BAL_CONFIG_VAR_CHATWEBHOOKURL
+      valueFrom:
+        configForm:
+          displayName: Google Chat webhook URL
+          type: secret
+    - name: BAL_CONFIG_VAR_CHATSPACE
+      valueFrom:
+        configForm:
+          displayName: Chat space label (club or dev-test)
+          type: string
+    - name: BAL_CONFIG_VAR_CHATCARDAVATARURL
+      valueFrom:
+        configForm:
+          displayName: Chat card avatar URL (https)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_SHAREPAGEBASEURL
+      valueFrom:
+        configForm:
+          displayName: One WSO2 share page base URL
+          type: string

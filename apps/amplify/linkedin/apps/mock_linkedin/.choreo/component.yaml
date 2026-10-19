@@ -1,0 +1,56 @@
+# LinkedIn Mock (mock_linkedin). DEV ENVIRONMENT ONLY, never promoted to prod. Choreo Service, Dockerfile buildpack.
+# www (OAuth) is Public because the browser follows the authorization redirect to it.
+# Docker context: projects/linkedin/apps/mock_linkedin  |  Dockerfile: projects/linkedin/apps/mock_linkedin/Dockerfile
+# Choreo reads this file from <docker context>/.choreo/component.yaml, so every component has its own context
+# (ADR-027). Keep endpoints and env names in sync with projects/linkedin/apps/mock_linkedin/workload.yaml (scripts/check-descriptors.sh).
+# Console steps (connections, secrets, visibility): docs/runbooks/choreo-deploy.md.
+schemaVersion: "1.2"
+endpoints:
+  - name: mock-linkedin-api
+    displayName: LinkedIn Mock API
+    service:
+      basePath: /
+      port: 9090
+    type: REST
+    networkVisibilities:
+      - Project
+  - name: mock-linkedin-www
+    displayName: LinkedIn Mock OAuth
+    service:
+      basePath: /
+      port: 9091
+    type: REST
+    networkVisibilities:
+      - Public
+configurations:
+  env:
+    - name: BAL_CONFIG_VAR_LISTENERHOST
+      valueFrom:
+        configForm:
+          displayName: BAL_CONFIG_VAR_LISTENERHOST (fixed 0.0.0.0)
+          type: string
+    - name: BAL_CONFIG_VAR_WWWBASEURL
+      valueFrom:
+        configForm:
+          displayName: Public URL of the www endpoint
+          type: string
+    - name: BAL_CONFIG_VAR_CLIENTID
+      valueFrom:
+        configForm:
+          displayName: Mock OAuth client id
+          type: string
+    - name: BAL_CONFIG_VAR_CLIENTSECRET
+      valueFrom:
+        configForm:
+          displayName: Mock OAuth client secret
+          type: secret
+    - name: BAL_CONFIG_VAR_ENABLEMOCKADMIN
+      valueFrom:
+        configForm:
+          displayName: BAL_CONFIG_VAR_ENABLEMOCKADMIN (fixed true)
+          type: string
+    - name: BAL_CONFIG_DATA
+      valueFrom:
+        configForm:
+          displayName: TOML: redirectUris = ["<One WSO2 dev callback>"]
+          type: string
