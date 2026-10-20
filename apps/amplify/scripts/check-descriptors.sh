@@ -26,10 +26,10 @@ LINKEDIN=linkedin/apps/mock_linkedin
 
 # component | Choreo descriptor | workload.yaml | Dockerfile | compose service
 COMPONENTS=(
-  "amplify-api|.choreo/component.yaml|apps/amplify-api/workload.yaml|apps/amplify-api/Dockerfile|amplify-api"
-  "amplify-jobs|apps/.choreo/component.yaml|apps/amplify-jobs/workload.yaml|apps/amplify-jobs/Dockerfile|amplify-jobs"
-  "amplify-database|apps/amplify-database/.choreo/component.yaml|apps/amplify-database/workload.yaml|apps/amplify-database/Dockerfile|amplify-db-migrate"
-  "amplify-scheduler|apps/amplify-scheduler/.choreo/component.yaml|apps/amplify-scheduler/workload.yaml|apps/amplify-scheduler/Dockerfile|scheduler"
+  "amplify-api|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api"
+  "amplify-jobs|amplify-jobs/.choreo/component.yaml|amplify-jobs/workload.yaml|amplify-jobs/Dockerfile|amplify-jobs"
+  "amplify-database|amplify-database/.choreo/component.yaml|amplify-database/workload.yaml|amplify-database/Dockerfile|amplify-db-migrate"
+  "amplify-scheduler|amplify-scheduler/.choreo/component.yaml|amplify-scheduler/workload.yaml|amplify-scheduler/Dockerfile|scheduler"
   "mock-linkedin|$LINKEDIN/.choreo/component.yaml|$LINKEDIN/workload.yaml|$LINKEDIN/Dockerfile|mock-linkedin"
 )
 # Set only in local Compose, never in Choreo/OpenChoreo (dev JWT, plain-http stub, fast schedules, no TLS to

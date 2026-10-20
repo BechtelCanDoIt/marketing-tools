@@ -58,7 +58,7 @@ for _ in $(seq 1 30); do
 done
 curl -fsS "http://127.0.0.1:${PORT}/health"; echo
 
-cd "$HERE/apps/amplify-api"
+cd "$HERE/amplify-api"
 AMPLIFY_IT=true \
 AMPLIFY_IT_SCHEDULER_URL="http://127.0.0.1:${PORT}" \
   bal test --groups scheduler-it

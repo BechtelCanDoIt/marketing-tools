@@ -32,9 +32,9 @@ set -euo pipefail
 scan() {
   local root="$1"
   local files
-  files=$(find "$root"/apps/amplify-domain "$root"/apps/amplify-api "$root"/apps/amplify-jobs -name '*.bal' \
+  files=$(find "$root"/amplify-domain "$root"/amplify-api "$root"/amplify-jobs -name '*.bal' \
             -not -path '*/target/*' -not -path '*/tests/*' 2>/dev/null | sort)
-  [ -n "$files" ] || { echo "no Ballerina sources under $root/apps"; return 1; }
+  [ -n "$files" ] || { echo "no Ballerina sources under $root"; return 1; }
   # Pass 1: functions that contain a transaction block, and rule 1 / rule 3 violations.
   # shellcheck disable=SC2086
   awk '
@@ -77,8 +77,8 @@ scan() {
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 
 if [ "${1:-}" = "--self-test" ]; then
-  fx="$tmp/fx"; mkdir -p "$fx/apps/amplify-domain" "$fx/apps/amplify-api" "$fx/apps/amplify-jobs"
-  cat > "$fx/apps/amplify-domain/ok.bal" <<'BAL'
+  fx="$tmp/fx"; mkdir -p "$fx/amplify-domain" "$fx/amplify-api" "$fx/amplify-jobs"
+  cat > "$fx/amplify-domain/ok.bal" <<'BAL'
 public isolated function save(int v) returns error? => store:inTransaction(() => saveTx(v));
 isolated function saveTx(int v) returns error? {
     transaction {
@@ -87,7 +87,7 @@ isolated function saveTx(int v) returns error? {
 }
 BAL
   ( scan "$fx" >/dev/null ) || { echo "self-test: a gated transaction was rejected"; exit 1; }
-  cat > "$fx/apps/amplify-api/bad1.bal" <<'BAL'
+  cat > "$fx/amplify-api/bad1.bal" <<'BAL'
 isolated function direct() returns error? {
     transaction {
         check commit;
@@ -95,13 +95,13 @@ isolated function direct() returns error? {
 }
 BAL
   ( scan "$fx" >/dev/null ) && { echo "self-test: a transaction outside a Tx function passed"; exit 1; }
-  rm "$fx/apps/amplify-api/bad1.bal"
-  cat > "$fx/apps/amplify-jobs/bad2.bal" <<'BAL'
+  rm "$fx/amplify-api/bad1.bal"
+  cat > "$fx/amplify-jobs/bad2.bal" <<'BAL'
 isolated function bypass() returns error? => saveTx(1);
 BAL
   ( scan "$fx" >/dev/null ) && { echo "self-test: an ungated Tx call passed"; exit 1; }
-  rm "$fx/apps/amplify-jobs/bad2.bal"
-  cat > "$fx/apps/amplify-jobs/bad3.bal" <<'BAL'
+  rm "$fx/amplify-jobs/bad2.bal"
+  cat > "$fx/amplify-jobs/bad3.bal" <<'BAL'
 isolated function againTx() returns error? {
     retry transaction {
         check commit;

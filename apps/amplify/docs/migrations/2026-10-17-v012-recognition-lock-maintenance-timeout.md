@@ -1,6 +1,6 @@
 # V012: recognition writers serialized, upkeep lock waits bounded (2026-10-17)
 
-Script: `apps/amplify-database/migrations/V012__recognition_lock_maintenance_timeout.sql`. Found in the deep
+Script: `amplify-database/migrations/V012__recognition_lock_maintenance_timeout.sql`. Found in the deep
 review of jobs/db/infra (`docs/reviews/2026-10-17-deep-review-jobs-db-infra.md`, findings D1 and D2).
 
 ## Context
@@ -36,10 +36,10 @@ unchanged (`CREATE OR REPLACE` and `ALTER FUNCTION ... SET` keep them). No calle
 
 ## Changed files
 
-- `apps/amplify-database/migrations/V012__recognition_lock_maintenance_timeout.sql` (new)
-- `apps/amplify-database/tests/invariants_test.bal` (new: the two regression tests above, plus constraint,
+- `amplify-database/migrations/V012__recognition_lock_maintenance_timeout.sql` (new)
+- `amplify-database/tests/invariants_test.bal` (new: the two regression tests above, plus constraint,
   grant, definer and partition-bound invariants)
-- `apps/amplify-database/migrations/README.md`, `docs/migrations/README.md` (script list)
+- `amplify-database/migrations/README.md`, `docs/migrations/README.md` (script list)
 
 ## Verify
 

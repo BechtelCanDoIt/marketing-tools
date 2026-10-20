@@ -8,7 +8,7 @@ Mitigated on 2201.13.3; the fix (the upgrade) is still open. Details in [round 2
 
 **In place**
 
-- **Gate.** `amplify_domain.store:inTransaction` / `inTransactionValue` (`apps/amplify-domain/modules/store/tx_gate.bal`) lock one isolated variable. All **19** product `transaction` blocks run through it: 17 in amplify-domain, 2 in amplify-api (`auditTx`, `dashboardTx`); amplify-jobs has none of its own. (The "20" under Impact below was counted before round 2 merged `recordDenial` and `recordAudit` into `auditTx`.)
+- **Gate.** `amplify_domain.store:inTransaction` / `inTransactionValue` (`amplify-domain/modules/store/tx_gate.bal`) lock one isolated variable. All **19** product `transaction` blocks run through it: 17 in amplify-domain, 2 in amplify-api (`auditTx`, `dashboardTx`); amplify-jobs has none of its own. (The "20" under Impact below was counted before round 2 merged `recordDenial` and `recordAudit` into `auditTx`.)
 - **Check.** `scripts/check-transaction-gate.sh` (plus `--self-test`) runs in `make check`. It fails on a block outside a non-public `...Tx` function, a `...Tx` call that doesn't go through the gate, and any `retry transaction`.
 - **`lockRecognition`** polls for at most **2 s** (`store:RECOGNITION_LOCK_WAIT_SECONDS`, was 10 s), because it now waits inside the gate.
 - **V013** sets `idle_in_transaction_session_timeout = '30s'` on `amplify_api` and `amplify_jobs`.

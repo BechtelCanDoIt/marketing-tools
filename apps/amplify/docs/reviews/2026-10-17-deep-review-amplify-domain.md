@@ -4,15 +4,15 @@ Branch `rv-domain` off `feat/phase1-build` @ `a603099`. Reviewer: Claude (agent)
 
 ## Scope
 
-Every `.bal` file in `apps/amplify-domain` (root module, the eight bounded contexts, `store`, and all unit and integration tests), checked against:
+Every `.bal` file in `amplify-domain` (root module, the eight bounded contexts, `store`, and all unit and integration tests), checked against:
 
-- the migrations in `apps/amplify-database/migrations` V001 to V011 (columns, constraints, grants per role), read-only
+- the migrations in `amplify-database/migrations` V001 to V011 (columns, constraints, grants per role), read-only
 - ADR-005, 009, 010, 012 to 019, 021, 024, 025, 028, 029, 031
 - `phase1-data-model.md`, `activity-matrix.md`, `leaderboards.md`, `po-dashboard.md`
 - `threat-model-phase1.md`, `token-and-oauth-notes.md`, `deployment-security-checklist.md` (known gaps)
 - the WSO2 Digital coding standards and code review checklist
 
-Nothing outside `apps/amplify-domain` was changed. Changes other packages need are in the HANDOFF list.
+Nothing outside `amplify-domain` was changed. Changes other packages need are in the HANDOFF list.
 
 ## Method
 
@@ -112,9 +112,9 @@ Unit + integration (`AMPLIFY_IT=true AMPLIFY_IT_DB_PORT=55433 bal test --code-co
 # private Postgres
 docker run -d --name amplify-rv-domain-pg -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:55433:5432 postgres:18
 # migrate (amplify-database IT runner, read-only use)
-cd apps/amplify-database && BAL_CONFIG_VAR_ITENABLED=true BAL_CONFIG_VAR_DBPORT=55433 \
+cd amplify-database && BAL_CONFIG_VAR_ITENABLED=true BAL_CONFIG_VAR_DBPORT=55433 \
   BAL_CONFIG_VAR_DBPASSWORD=postgres BAL_CONFIG_VAR_DBSSLMODE=DISABLE bal test --groups integration   # 7 passing
-cd apps/amplify-domain
+cd amplify-domain
 bal test --code-coverage                                                    # unit
 AMPLIFY_IT=true AMPLIFY_IT_DB_PORT=55433 bal test --groups integration      # integration
 AMPLIFY_IT=true AMPLIFY_IT_DB_PORT=55433 bal test --code-coverage           # unit + integration coverage
@@ -130,24 +130,24 @@ docker rm -f amplify-rv-domain-pg
 
 ## HANDOFF
 
-**H-1 (R-04) DB TLS verify-full configuration**, `apps/amplify-api/database.bal:48,125` and `apps/amplify-jobs/database.bal:37,104,128`.
+**H-1 (R-04) DB TLS verify-full configuration**, `amplify-api/database.bal:48,125` and `amplify-jobs/database.bal:37,104,128`.
 Change: add `configurable string dbSslRootCert = "";` and pass `sslRootCert: dbSslRootCert` into both `store:newClient` calls (jobs has two). Change the `dbSslMode` default from `postgresql:REQUIRE` to `postgresql:VERIFY_FULL`. At start-up, `log:printWarn` when `!store:verifiesServer(config)` and the host isn't local. Mount the managed Postgres CA as a Choreo file mount and set `BAL_CONFIG_VAR_DBSSLROOTCERT` per environment. `compose.yaml:13` keeps `BAL_CONFIG_VAR_DBSSLMODE: DISABLE`. Then update `deployment-security-checklist.md:100,113` from "Met w/ exception" to met.
 Why: the security checklist requires `sslmode=verify-full`; `REQUIRE` encrypts but accepts any server. Needs amplify_domain republished first.
 
-**H-2 (R-05) Token re-seal on use**, `apps/amplify-domain/modules/connection/service.bal` (after amplify_common 0.6 is published) and `apps/amplify-jobs/handlers.bal:217`.
+**H-2 (R-05) Token re-seal on use**, `amplify-domain/modules/connection/service.bal` (after amplify_common 0.6 is published) and `amplify-jobs/handlers.bal:217`.
 Change: bump the domain dependency to amplify_common 0.6 and add next to `openToken`:
 `public isolated function resealToken(crypto:TokenCipher cipher, StoredToken token) returns crypto:SealedToken|error?` calling `cipher.reseal({ciphertext, nonce, keyId}, {tokenId, ownerId, provider})` (returns `()` when the row already uses the active key). In jobs, after a successful `openToken`, call `resealToken` and, when it returns a value, `PgTokenRepository.updateSeal(token, resealed)` (already in this branch, guarded by the old `key_id`). A failed or no-op re-seal is logged without token material and never fails the share. Add a jobs port method for `updateSeal`.
 Why: closes `token-and-oauth-notes.md` claim 2 / threat model AMP-R2 (rotation is by partition drop only). The domain half can't call `TokenCipher.reseal` while it builds against published 0.5.0.
 
 **H-3 (R-13) Ballerina runtime race under concurrent transactions**, platform (Ballerina 2201.13.3, ballerinax/postgresql 1.19.1, ballerinai/transaction).
-Change: (a) reproduce with `AMPLIFY_IT=true bal test --groups runtime-probe` in apps/amplify-domain and raise it with the Ballerina team / check for a fixed patch release; (b) new migration `V012__idle_in_transaction_timeout.sql` (amplify-database owner): `ALTER ROLE amplify_api SET idle_in_transaction_session_timeout = '60s'; ALTER ROLE amplify_jobs SET idle_in_transaction_session_timeout = '60s';` so any connection the runtime leaves idle in a transaction releases its locks, not just the recognition lock holders covered in this branch; (c) the M11 load test should add a concurrent-write scenario (PO approvals and adjustments in parallel) and compare committed rows to 2xx responses.
+Change: (a) reproduce with `AMPLIFY_IT=true bal test --groups runtime-probe` in amplify-domain and raise it with the Ballerina team / check for a fixed patch release; (b) new migration `V012__idle_in_transaction_timeout.sql` (amplify-database owner): `ALTER ROLE amplify_api SET idle_in_transaction_session_timeout = '60s'; ALTER ROLE amplify_jobs SET idle_in_transaction_session_timeout = '60s';` so any connection the runtime leaves idle in a transaction releases its locks, not just the recognition lock holders covered in this branch; (c) the M11 load test should add a concurrent-write scenario (PO approvals and adjustments in parallel) and compare committed rows to 2xx responses.
 Why: under parallel transactions some report success without committing, or fail with `ConcurrentModificationException`; a leaked open transaction can hold row locks indefinitely. Every transactional write in api and jobs shares this exposure.
 
 **H-4 (R-15) Dashboard indexes**, new migration `V012+` (amplify-database owner).
 Change: `CREATE INDEX points_ledger_created_at_idx ON scoring.points_ledger (created_at);` `CREATE INDEX share_request_published_at_idx ON sharing.share_request (published_at) WHERE published_at IS NOT NULL;` `CREATE INDEX share_request_failed_at_idx ON sharing.share_request (failed_at) WHERE failed_at IS NOT NULL;` `CREATE INDEX external_share_decided_at_idx ON external_sharing.external_share (decided_at) WHERE decided_at IS NOT NULL;`
 Why: tiles 4, 7 and 2 filter by time on whole tables; cheap now, a seq scan per dashboard load as the ledger grows. Confirm with `EXPLAIN` on production-like volume before adding.
 
-**H-5 (R-14) Share stuck QUEUED after a duplicate publish**, `apps/amplify-jobs/handlers.bal:235-238`.
+**H-5 (R-14) Share stuck QUEUED after a duplicate publish**, `amplify-jobs/handlers.bal:235-238`.
 Change: when `recordPublish` fails with a unique violation, mark the share request published or failed (for example `markFailed(share, PROVIDER_REJECTED, "DUPLICATE_ENGAGEMENT", now)` through `update`) instead of returning `done` with the request still `QUEUED`. If a domain helper is preferred, add `sharing:PgShareRepository.recordDuplicatePublish` in amplify-domain (additive) in a follow-up.
 Why: the employee sees "on its way" forever and can't retry (`SHARE_ALREADY_QUEUED`).
 

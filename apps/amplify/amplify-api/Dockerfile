@@ -15,10 +15,11 @@
 # under the License.
 
 
-# Docker context: apps/amplify/apps (not the repo folder: that context belongs to amplify-api, and
-# Choreo reads <docker context>/.choreo/component.yaml, ADR-027).
-#   docker build -f amplify-jobs/Dockerfile -t amplify-jobs apps
-# Clean checkout: shared packages are packed and pushed to the build stage's own local repository (ADR-020/021).
+# Docker context: apps/amplify. Choreo reads this component's descriptor from
+# <docker context>/.choreo/component.yaml, so the context is unique per component (ADR-027).
+#   docker build -f amplify-api/Dockerfile -t amplify-api .
+# Clean checkout: the shared packages are packed and pushed to the build stage's own local repository first
+# (ADR-020/021), so nothing comes from a developer's ~/.ballerina.
 
 FROM ballerina/ballerina:2201.13.3@sha256:7cba1a3bcb3314e2444aa6823d332e79882437df512de71037c4b0607d39e019 AS build
 WORKDIR /home/ballerina
@@ -26,13 +27,13 @@ COPY --chown=ballerina amplify-common amplify-common
 RUN cd amplify-common && bal pack && bal push --repository=local
 COPY --chown=ballerina amplify-domain amplify-domain
 RUN cd amplify-domain && bal pack && bal push --repository=local
-COPY --chown=ballerina amplify-jobs amplify-jobs
-RUN cd amplify-jobs && bal build
+COPY --chown=ballerina amplify-api amplify-api
+RUN cd amplify-api && bal build
 
 FROM eclipse-temurin:21-jre-alpine@sha256:51ab5e3302e7141ce665ca3ea85e8b5cd648eafbc3c0c90dd79d6537684e4555
 RUN addgroup -g 10014 choreo && adduser -D -H -u 10014 -G choreo choreouser
 WORKDIR /app
-COPY --from=build /home/ballerina/amplify-jobs/target/bin/amplify_jobs.jar app.jar
+COPY --from=build /home/ballerina/amplify-api/target/bin/amplify_api.jar app.jar
 USER 10014
-EXPOSE 9091
+EXPOSE 9090
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

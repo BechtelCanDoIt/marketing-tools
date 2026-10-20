@@ -31,7 +31,7 @@ services:
   # Amplify DB Migrate: one-shot, migrations then seeds (idempotent; `make seed` reruns it).
   amplify-db-migrate:
     build:
-      context: apps/amplify-database
+      context: amplify-database
     environment:
       <<: *db-common
       BAL_CONFIG_VAR_DBUSER: postgres
@@ -47,7 +47,7 @@ services:
   amplify-api:
     build:
       context: .
-      dockerfile: apps/amplify-api/Dockerfile
+      dockerfile: amplify-api/Dockerfile
     environment:
       <<: *db-common
       BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_API_DB_PASSWORD:?}
@@ -103,7 +103,7 @@ services:
   # Worker: internal only, never published (cell rules). Healthy = `GET /ready` (the database answers).
   amplify-jobs:
     build:
-      context: apps
+      context: .
       dockerfile: amplify-jobs/Dockerfile
     environment:
       <<: *db-common
@@ -135,7 +135,7 @@ services:
   # Look at it: docker compose exec amplify-api wget -qO- http://scheduler:8080/jobs
   scheduler:
     build:
-      context: apps/amplify-scheduler
+      context: amplify-scheduler
     read_only: true
     stop_signal: SIGINT
     environment:
@@ -144,7 +144,7 @@ services:
       scheduler-db: {condition: service_healthy}
     networks: [internal]
 
-  # One-shot: installs the job_history retention trigger (apps/amplify-scheduler/history-retention.sql) once
+  # One-shot: installs the job_history retention trigger (amplify-scheduler/history-retention.sql) once
   # the scheduler has created its tables. Its own database and user only.
   scheduler-retention:
     image: postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
@@ -154,7 +154,7 @@ services:
       PGDATABASE: scheduler
       PGPASSWORD: ${SCHEDULER_DB_PASSWORD:?}
     volumes:
-      - ./apps/amplify-scheduler/history-retention.sql:/retention.sql:ro
+      - ./amplify-scheduler/history-retention.sql:/retention.sql:ro
     entrypoint:
       - sh
       - -c
@@ -231,7 +231,7 @@ services:
     networks: [internal]
 
   # OPTIONAL, pending the non-prod Asgardeo org (D10): `make up PROFILE=apim`. WSO2 API Manager 4.7.0 as
-  # the local stand-in for the Choreo API proxy. Import the Amplify API from apps/amplify-api/openapi.yaml
+  # the local stand-in for the Choreo API proxy. Import the Amplify API from amplify-api/openapi.yaml
   # (Publisher > Create API > Import OpenAPI, endpoint http://amplify-api:9090), register the non-prod
   # Asgardeo org as key manager, then point GATEWAY_JWKS_URL / GATEWAY_ISSUER / GATEWAY_AUDIENCES at the
   # gateway's backend JWT and set AMPLIFY_DEV_LOCAL_JWT=false. Until then the default profile publishes
