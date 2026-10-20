@@ -4,7 +4,7 @@ Branch `rv-api` off `feat/phase1-build` @ `a603099`. Reviewer: Claude (agent), f
 
 ## Scope
 
-Everything under `apps/amplify/apps/amplify-api/`: every `.bal` file in the root package and in
+Everything under `apps/amplify/amplify-api/`: every `.bal` file in the root package and in
 `modules/auth`, `modules/scheduler`, `modules/utils`, `openapi.yaml`, every test, `tests/Config.toml`. Plus
 the one row of `architecture/solution/Phase 1/activity-matrix.md` where the doc disagreed with the code.
 
@@ -105,7 +105,7 @@ key-store failure → 503 and breaker open; replay bytes; contract drift both wa
 
 ## Commands and results
 
-Run inside `apps/amplify/apps/amplify-api` (`openssl` on PATH; ports 9090 and 9591):
+Run inside `apps/amplify/amplify-api` (`openssl` on PATH; ports 9090 and 9591):
 
 | Command | Before | After |
 | --- | --- | --- |

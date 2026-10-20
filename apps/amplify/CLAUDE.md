@@ -1,15 +1,15 @@
 # CLAUDE.md — Amplify backend (marketing-tools `apps/amplify`)
 
 ## Overview
-Ballerina backend for WSO2 Amplify phase 1. Three Ballerina deployables, the scheduler image and two shared libraries under `apps/`. Lives in the marketing-tools repo at `apps/amplify` (ADR-033). UI lives in One WSO2, `webapp/src/features/amplify` (workspace submodule `projects/one-wso2`); change it there, not from here.
+Ballerina backend for WSO2 Amplify phase 1. Three Ballerina deployables, the scheduler image and two shared libraries in this folder. Lives in the marketing-tools repo at `apps/amplify` (ADR-033). UI lives in One WSO2, `webapp/src/features/amplify` (workspace submodule `projects/one-wso2`); change it there, not from here.
 
 ## Commands
-- Publish shared libs first, in order: `cd apps/amplify-common && bal pack && bal push --repository=local`, then the same in `apps/amplify-domain`
-- Per component: `bal build`, `bal test` (run inside `apps/<component>`)
-- Images: one Docker context per component (ADR-027): api `-f apps/amplify-api/Dockerfile .`, jobs `-f amplify-jobs/Dockerfile apps`, database/scheduler their own folder. Shared packages are packed inside the build stage (clean checkout)
+- Publish shared libs first, in order: `cd amplify-common && bal pack && bal push --repository=local`, then the same in `amplify-domain`
+- Per component: `bal build`, `bal test` (run inside `<component>`)
+- Images: one Docker context per component (ADR-027): api `-f amplify-api/Dockerfile .`, jobs `-f amplify-jobs/Dockerfile .`, database/scheduler their own folder. Shared packages are packed inside the build stage (clean checkout)
 - Local stack: `make up`, `make e2e`, `make seed`, `make down` (removes volumes). Only amplify-api (:9090), the mock OAuth page (:19091) and people-stub (:19092, local One WSO2 photos) reach the host
 - Checks: `make check` = `scripts/check-descriptors.sh` + `scripts/check-logs-pii.sh` + `scripts/check-transaction-gate.sh` (R-13)
-- Descriptors: `scripts/check-descriptors.sh` (Choreo `.choreo/component.yaml` vs `workload.yaml` vs Dockerfile vs compose). api's descriptor is `./.choreo/`, jobs' is `apps/.choreo/`
+- Descriptors: `scripts/check-descriptors.sh` (Choreo `.choreo/component.yaml` vs `workload.yaml` vs Dockerfile vs compose). api's descriptor is `./.choreo/`, jobs' is `amplify-jobs/.choreo/`
 
 ## Architecture
 - `amplify-api`: published API, fronted by the Choreo API proxy at the cell edge (ADR-004). Only the proxy is published; the backend has Project visibility.

@@ -25,12 +25,12 @@
 # LinkedIn's resource, not Amplify's. The rule is about Amplify's own nouns. Add a provider to
 # `external` only when the name really counts or carries that provider's resource.
 #
-# Usage: scripts/lint-openapi-names.sh [openapi.yaml ...]   (default: every apps/*/openapi.yaml)
+# Usage: scripts/lint-openapi-names.sh [openapi.yaml ...]   (default: every amplify-*/openapi.yaml)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 files=("$@")
 if [ ${#files[@]} -eq 0 ]; then
-  files=(apps/*/openapi.yaml)
+  files=(amplify-*/openapi.yaml)
 fi
 # A banned word as a whole name segment: at the start (any case) or a camel/snake segment (`Post`,
 # `_post`). `reposters` and `OWN_POST`-style enum values don't match.

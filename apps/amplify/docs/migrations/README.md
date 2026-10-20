@@ -1,8 +1,8 @@
 # Database migrations and integration tests
 
 Schema source of truth: `architecture/solution/Phase 1/phase1-data-model.md`. Scripts:
-`apps/amplify-database/migrations/` (V001–V013) and `seed/` (S001–S004). Per-migration notes:
-`2026-10-17-v012-recognition-lock-maintenance-timeout.md`, `2026-10-17-v013-idle-timeout-dashboard-indexes.md`. Runner: `apps/amplify-database/main.bal`.
+`amplify-database/migrations/` (V001–V013) and `seed/` (S001–S004). Per-migration notes:
+`2026-10-17-v012-recognition-lock-maintenance-timeout.md`, `2026-10-17-v013-idle-timeout-dashboard-indexes.md`. Runner: `amplify-database/main.bal`.
 
 ## Running the migrate runner
 
@@ -34,7 +34,7 @@ Local: `make up` runs it once before api/jobs start; `make seed` reruns it (comp
 docker run -d --name amplify-pg18 -e POSTGRES_PASSWORD=postgres -p 55432:5432 postgres:18
 
 # 1. Runner: drops/creates `amplify_it`, migrates fresh, reruns (idempotent), checksum guard, partition tests.
-cd apps/amplify-database
+cd amplify-database
 BAL_CONFIG_VAR_ITENABLED=true BAL_CONFIG_VAR_DBPORT=55432 BAL_CONFIG_VAR_DBPASSWORD=postgres \
   BAL_CONFIG_VAR_DBSSLMODE=DISABLE bal test --groups integration
 
