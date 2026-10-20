@@ -27,7 +27,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-APPS="$HERE/apps"
+APPS="$HERE"
 MOCK="$(cd "$HERE/linkedin/apps/mock_linkedin" 2>/dev/null && pwd || true)"
 TIERS="${TIERS:-unit it scheduler e2e}"
 PG="amplify-it-pg-$$"

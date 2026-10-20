@@ -17,7 +17,7 @@
 # Amplify Scheduler (ADR-026): the upstream akornatskyy/scheduler image, pinned by tag and digest, run as a
 # Choreo-compatible numeric UID (the upstream image runs as `nobody`). Nothing else is added: the scheduler
 # is a single static binary in a scratch image and needs only DSN (secret) and port 8080.
-#   docker build -t amplify-scheduler apps/amplify-scheduler   (Docker context = this folder, ADR-027)
+#   docker build -t amplify-scheduler amplify-scheduler   (Docker context = this folder, ADR-027)
 # Bumping the version: change tag + digest together, read the upstream changes, run scripts/it-scheduler.sh.
 
 FROM akorn/scheduler:1.7.8@sha256:07462c0684245d5f8aaed8018e4594da3ba113d5b38bb6dffcc32403108d2cf6

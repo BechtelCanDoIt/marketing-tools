@@ -1,7 +1,7 @@
 # Amplify Backend (amplify-api). Choreo Service, Dockerfile buildpack.
-# Docker context: apps/amplify  |  Dockerfile: apps/amplify/apps/amplify-api/Dockerfile
+# Docker context: apps/amplify  |  Dockerfile: apps/amplify/amplify-api/Dockerfile
 # Choreo reads this file from <docker context>/.choreo/component.yaml, so every component has its own context
-# (ADR-027). Keep endpoints and env names in sync with apps/amplify/apps/amplify-api/workload.yaml (scripts/check-descriptors.sh).
+# (ADR-027). Keep endpoints and env names in sync with apps/amplify/amplify-api/workload.yaml (scripts/check-descriptors.sh).
 # Console steps (connections, secrets, visibility): docs/runbooks/choreo-deploy.md.
 schemaVersion: "1.2"
 endpoints:
@@ -13,7 +13,7 @@ endpoints:
     type: REST
     networkVisibilities:
       - Project
-    schemaFilePath: apps/amplify-api/openapi.yaml
+    schemaFilePath: amplify-api/openapi.yaml
 dependencies:
   # resourceRef values come from each connection's developer guide in the console; replace REPLACE_WITH_ID.
   connectionReferences:

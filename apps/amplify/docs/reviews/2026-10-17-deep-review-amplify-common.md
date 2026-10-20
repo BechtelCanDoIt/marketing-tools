@@ -4,7 +4,7 @@ Branch `rv-common`, based on `feat/phase1-build` at `a603099`. Package `wso2/amp
 
 ## Scope
 
-Every `.bal` file under `apps/amplify-common`, tests included: `common.bal` plus the modules `types`, `events`, `linkedin`, `googlechat`, `crypto` and `resilience`. That's 3,928 lines before the review.
+Every `.bal` file under `amplify-common`, tests included: `common.bal` plus the modules `types`, `events`, `linkedin`, `googlechat`, `crypto` and `resilience`. That's 3,928 lines before the review.
 
 Out of scope: the callers in `amplify-api`, `amplify-domain` and `amplify-jobs`. I read them only to check how this package is used. Anything they need is listed under HANDOFF.
 
@@ -86,7 +86,7 @@ The ID-token tests generate RSA key pairs per run with `openssl`, the same way `
 
 ## Coverage and test counts
 
-Command, run in `apps/amplify/apps/amplify-common`: `bal test --code-coverage`. Report: `target/report/test_results.json`.
+Command, run in `apps/amplify/amplify-common`: `bal test --code-coverage`. Report: `target/report/test_results.json`.
 
 | Module | Tests before | Tests after | Lines covered/missed before | Before | Lines covered/missed after | After |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -122,6 +122,6 @@ Changes other packages need. I didn't make any of them.
 
   Then update `token-and-oauth-notes.md` claim 2 and threat-model AMP-R2. Why: it lets a key be retired on compromise without waiting for partition drops.
 - **H5. Pass the campaign title.** In `amplify-jobs/handlers.bal:223-230` (the `publishShare` call), add `targetTitle: c is () ? () : c.title`. Why: RC-03. Without it, `SHARE*` posts carry the generic `DEFAULT_ARTICLE_TITLE`.
-- **H6. Version.** Either republish as `0.5.0` (no consumer change), or bump `apps/amplify-common/Ballerina.toml` `version` to `0.6.0` together with `[[dependency]] version` in `amplify-api/Ballerina.toml:13`, `amplify-domain/Ballerina.toml:13` and `amplify-jobs/Ballerina.toml:13`, and update the "Current version" note in `apps/amplify-common/CLAUDE.md`. Why: the package `CLAUDE.md` says to bump the version when the API changes, and the API grew additively.
+- **H6. Version.** Either republish as `0.5.0` (no consumer change), or bump `amplify-common/Ballerina.toml` `version` to `0.6.0` together with `[[dependency]] version` in `amplify-api/Ballerina.toml:13`, `amplify-domain/Ballerina.toml:13` and `amplify-jobs/Ballerina.toml:13`, and update the "Current version" note in `amplify-common/CLAUDE.md`. Why: the package `CLAUDE.md` says to bump the version when the API changes, and the API grew additively.
 - **H7. Docs.** In `architecture/security/token-and-oauth-notes.md`, update claim 2 (rotation API exists, wiring pending H4) and claim 6. Under the §2 gaps: PKCE isn't available to web clients (LinkedIn's native-client page), ID-token validation is available (pending H1), and LinkedIn's docs disagree on the issuer (RC-13). Mirror the same changes in `threat-model-phase1.md` rows 2.2 and 2.5.
 - **H8. Behaviour notes for callers.** `googlechat:isPublicHttpsUrl` now refuses every IP-literal host, so a campaign image or avatar on a bare IP is left off the card. `types:awardReference` refuses parts with surrounding whitespace; current callers pass parsed or normalized values. `WebhookClient` refuses plain `http` unless the host is exactly `localhost`/`127.0.0.1` or `allowInsecureHttp` is set (the compose `chat-stub` already sets it).

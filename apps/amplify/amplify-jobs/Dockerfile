@@ -15,20 +15,23 @@
 # under the License.
 
 
-# Docker context: apps/amplify-database (no shared packages; ADR-027).
-#   docker build -t amplify-database apps/amplify-database
-# Choreo Manual Task: runs once and exits, so no port.
+# Docker context: apps/amplify (shared with amplify-api, which needs the same shared packages).
+#   docker build -f amplify-jobs/Dockerfile -t amplify-jobs .
+# Clean checkout: shared packages are packed and pushed to the build stage's own local repository (ADR-020/021).
 
 FROM ballerina/ballerina:2201.13.3@sha256:7cba1a3bcb3314e2444aa6823d332e79882437df512de71037c4b0607d39e019 AS build
 WORKDIR /home/ballerina
-COPY --chown=ballerina . amplify-database
-RUN cd amplify-database && bal build
+COPY --chown=ballerina amplify-common amplify-common
+RUN cd amplify-common && bal pack && bal push --repository=local
+COPY --chown=ballerina amplify-domain amplify-domain
+RUN cd amplify-domain && bal pack && bal push --repository=local
+COPY --chown=ballerina amplify-jobs amplify-jobs
+RUN cd amplify-jobs && bal build
 
 FROM eclipse-temurin:21-jre-alpine@sha256:51ab5e3302e7141ce665ca3ea85e8b5cd648eafbc3c0c90dd79d6537684e4555
 RUN addgroup -g 10014 choreo && adduser -D -H -u 10014 -G choreo choreouser
 WORKDIR /app
-COPY --from=build /home/ballerina/amplify-database/target/bin/amplify_database.jar app.jar
-COPY --from=build --chown=10014:10014 /home/ballerina/amplify-database/migrations migrations
-COPY --from=build --chown=10014:10014 /home/ballerina/amplify-database/seed seed
+COPY --from=build /home/ballerina/amplify-jobs/target/bin/amplify_jobs.jar app.jar
 USER 10014
+EXPOSE 9091
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
