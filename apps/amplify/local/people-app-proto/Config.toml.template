@@ -12,6 +12,8 @@ EXTERNAL_USER_ROLES = []
 
 [people.authorization.serviceClients]
 clientIdClaim = "azp"
+applicationClaim = "aut"
+applicationValue = "APPLICATION"
 directoryClientIds = [__DIRECTORY_CLIENT_IDS__]
 
 [people.database.dbConfig]

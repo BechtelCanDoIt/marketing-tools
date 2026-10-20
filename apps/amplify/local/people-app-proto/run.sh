@@ -139,7 +139,8 @@ demo() {
   check "search refused" "403" "$(status -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '{}' "$gw/employees/search")"
 
   echo "== people-app, other callers unchanged"
-  check "unlisted client id refused (as before)" "500" "$(status -H "x-jwt-assertion: $(jwt '{"azp":"someone-else"}')" "$app/employees/basic-info")"
+  check "unlisted client id refused (as before)" "500" "$(status -H "x-jwt-assertion: $(jwt '{"azp":"someone-else","aut":"APPLICATION"}')" "$app/employees/basic-info")"
+  check "listed id on a user token (no email) refused" "500" "$(status -H "x-jwt-assertion: $(jwt '{"azp":"'"$CLIENT_ID"'","aut":"APPLICATION_USER"}')" "$app/employees/basic-info")"
   check "employee user reads the directory" "200" "$(status -H "x-jwt-assertion: $(jwt '{"email":"grace@wso2.com","groups":["people-employee"]}')" "$app/employees/basic-info")"
   check "user without a people group refused" "403" "$(status -H "x-jwt-assertion: $(jwt '{"email":"grace@wso2.com","groups":[]}')" "$app/employees/basic-info")"
 

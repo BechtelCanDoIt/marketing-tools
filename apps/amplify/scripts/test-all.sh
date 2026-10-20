@@ -38,13 +38,16 @@ LOGDIR="$(mktemp -d)"
 SUMMARY=()
 mock_pid=""
 stack_up=false
+# A failure keeps the logs for reading but still removes containers and processes, so the next run can
+# bind its ports (it used to switch the whole cleanup off and leave the IT Postgres on 55432).
+KEEP_LOGS=false
 
 cleanup() {
   [ -n "$mock_pid" ] && kill "$mock_pid" >/dev/null 2>&1 || true
   [ -f "$LOGDIR/mock-deps.bak" ] && cp "$LOGDIR/mock-deps.bak" "$MOCK/Dependencies.toml"
   docker rm -f "$PG" >/dev/null 2>&1 || true
   if $stack_up; then (cd "$HERE" && make down >/dev/null 2>&1) || true; fi
-  rm -rf "$LOGDIR"
+  $KEEP_LOGS || rm -rf "$LOGDIR"
 }
 trap cleanup EXIT
 
@@ -54,7 +57,7 @@ bal_test() {
   local log="$LOGDIR/$(echo "$label" | tr ' /' '__').log"
   if ! (cd "$dir" && env "$@" bal test ${BAL_ARGS:-} > "$log" 2>&1); then
     grep -E "\[fail\]|ERROR \[" "$log" | head -20 || true
-    echo "FAILED: $label (log kept: $log)"; trap - EXIT; exit 1
+    echo "FAILED: $label (log kept: $log)"; KEEP_LOGS=true; exit 1
   fi
   local pass fail skip
   pass=$(grep -E "^\s+[0-9]+ passing" "$log" | awk '{s+=$1} END {print s+0}')
@@ -127,14 +130,14 @@ tier_scheduler() {
   echo "== scheduler IT"
   local log="$LOGDIR/sched.log"
   if ! "$HERE/scripts/it-scheduler.sh" > "$log" 2>&1; then
-    tail -30 "$log"; echo "FAILED: scheduler IT"; trap - EXIT; exit 1
+    tail -30 "$log"; echo "FAILED: scheduler IT"; KEEP_LOGS=true; exit 1
   fi
   local pass; pass=$(grep -E "^\s+[0-9]+ passing" "$log" | awk '{s+=$1} END {print s+0}')
   printf '  %-34s %4d passing\n' "IT scheduler" "$pass"
   SUMMARY+=("IT scheduler:$pass:0")
   local hlog="$LOGDIR/sched-history.log"
   if ! "$HERE/scripts/it-scheduler-history.sh" > "$hlog" 2>&1; then
-    tail -30 "$hlog"; echo "FAILED: scheduler history retention IT"; trap - EXIT; exit 1
+    tail -30 "$hlog"; echo "FAILED: scheduler history retention IT"; KEEP_LOGS=true; exit 1
   fi
   pass=$(grep -E "^\s+[0-9]+ passing" "$hlog" | awk '{s+=$1} END {print s+0}')
   printf '  %-34s %4d passing\n' "IT scheduler history retention" "$pass"

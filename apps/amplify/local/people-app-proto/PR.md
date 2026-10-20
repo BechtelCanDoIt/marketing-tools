@@ -22,9 +22,10 @@ All of it is in `apps/people-app/backend`.
 | Field | Default | Meaning |
 |---|---|---|
 | `clientIdClaim` | `"azp"` | The gateway JWT claim that holds the calling application's client id |
+| `applicationClaim` / `applicationValue` | `"aut"` / `"APPLICATION"` | The claim and value that mark a token issued to an application rather than a person |
 | `directoryClientIds` | `[]` | Client ids allowed to read the directory. Empty means no service callers at all |
 
-`modules/authorization/authorization.bal` adds `public configurable ServiceClientConfig serviceClients = {};`. Inside `JwtInterceptor`, before the existing user path, a token with **no `email` claim** is checked against that list:
+`modules/authorization/authorization.bal` adds `public configurable ServiceClientConfig serviceClients = {};`. Inside `JwtInterceptor`, before the existing user path, a token with **no `email` and no `groups` claim** is checked: it must be issued to an application (`aut = APPLICATION` by default) **and** its client id must be on the list:
 
 - Listed client and `GET /employees/basic-info`: the client id goes into the request context under `HEADER_SERVICE_CLIENT`, and the request carries on.
 - Listed client and any other route or method: 403 "Insufficient privileges!", with a warning log naming the client and the route.
@@ -46,7 +47,7 @@ It's off unless someone turns it on. With `directoryClientIds` empty, nothing be
 
 The route is fixed in code. The client list is config, but the one route a service may reach is a constant. Opening a second endpoint to services should take a code change and a review, not a config edit in the console.
 
-User tokens never take the new path. The branch only runs when the token has no `email`, so a person signed in through an app whose id happens to be listed still goes through the normal role checks. There's a test for exactly that case.
+User tokens never take the new path. A person signing in through an app carries that app's id in `azp` too, so the id alone isn't enough: the token also has to say it was issued to an application (`aut = APPLICATION`), and a token with `email` or `groups` never qualifies. A person with no email claim, signed in through a listed app, still goes through the normal role checks. There are tests for each of those cases.
 
 It doesn't widen what's visible. A service client gets the same rows and fields any signed-in employee can already read from this endpoint. Personal info, search and single employee records stay off limits (403).
 
@@ -63,8 +64,10 @@ Unit tests, new in `modules/authorization/tests/service_client_test.bal`. They r
 | Unlisted or blank client id | 500, same as before |
 | Employee user | 200 as before; a user with no people group still gets 403 |
 | User token that also carries a listed client id | Stays a user (403 without a role) |
+| Email-less token with a listed id but `aut = APPLICATION_USER`, no `aut`, or with `groups` | Never a service (falls through, 500 as before) |
+| `/employees%2Fbasic-info`, `/employees/basic-info/extra` as a listed client | 403: the route is matched segment by segment |
 
-Run them with `bal test --tests "people.authorization:*"` on Ballerina 2201.12.7: 5 passing.
+Run them with `bal test --tests "people.authorization:*"` on Ballerina 2201.12.7: 7 passing.
 
 End to end, I ran the real people-app (this branch, built on 2201.12.7) against MySQL 8.0 loaded with `people_app_creation.sql` and a handful of seeded employees. A small stand-in for the Choreo gateway issues client-credentials tokens and turns them into `x-jwt-assertion` with `azp` set. Then I pointed `amplify-api` at it through its normal OAuth2 client-credentials config.
 
@@ -85,7 +88,7 @@ The harness lives in the marketing-tools repo at `apps/amplify/local/people-app-
 ## Rolling it out
 
 1. Create a Choreo connection from the Amplify project to the people-app API, which gives Amplify a client id and secret.
-2. **Look at a real gateway token from that connection and confirm which claim carries the client id.** I defaulted to `azp`, but I haven't seen a Choreo backend JWT for a client-credentials call yet. If it's a different claim, set `clientIdClaim` to match.
+2. **Look at a real gateway token from that connection and confirm two claims:** which one carries the client id (default `azp`), and which one says the token was issued to an application, with what value (default `aut` = `APPLICATION`). I haven't seen a Choreo backend JWT for a client-credentials call yet. Set `clientIdClaim`, `applicationClaim` and `applicationValue` to match.
 3. Add the client id to `directoryClientIds` in people-app's config for that environment.
 4. On the Amplify side, set `PEOPLEDIRECTORYURL`, `PEOPLEDIRECTORYTOKENURL`, `PEOPLEDIRECTORYCLIENTID` and `PEOPLEDIRECTORYCLIENTSECRET`.
 
