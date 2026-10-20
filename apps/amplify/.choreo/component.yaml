@@ -92,6 +92,18 @@ configurations:
         connectionRef:
           name: amplify-jobs
           key: ServiceURL
+    - name: BAL_CONFIG_VAR_CAMPAIGNLINKORIGINS
+      valueFrom:
+        configForm:
+          displayName: Allowed post-link origins (comma separated; prod = LinkedIn only, dev may add the mock's www URL)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_ROSTERCACHESECONDS
+      valueFrom:
+        configForm:
+          displayName: Team roster cache TTL in seconds (default 259200 = 3 days; leave empty for the default)
+          type: string
+          required: false
     - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYURL
       valueFrom:
         configForm:

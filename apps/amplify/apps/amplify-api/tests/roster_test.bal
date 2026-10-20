@@ -28,7 +28,10 @@ final DirectoryRecord[] & readonly DIRECTORY = [
     // Same sub-team name under another team: a different team.
     {workEmail: "barbara@wso2.com", team: "Engineering", subTeam: "Support"},
     // No team at all: left out.
-    {workEmail: "nobody@wso2.com", team: (), subTeam: ()}
+    {workEmail: "nobody@wso2.com", team: (), subTeam: ()},
+    // No email (null or missing): skipped, and the rest of the directory still works.
+    {workEmail: (), team: "Customer Success", subTeam: "Forward Deployed Engineering"},
+    {team: "Customer Success", subTeam: "Forward Deployed Engineering"}
 ];
 
 @test:Config
@@ -62,3 +65,12 @@ function testNoRosterWithoutTeamOrDirectoryRow() {
     test:assertEquals(rosterFrom(index, "nobody@wso2.com"), ());
     test:assertEquals(rosterFrom(index, "stranger@wso2.com"), ());
 }
+
+@test:Config
+function testRowsWithoutEmailDontBreakTheDirectory() returns error? {
+    json raw = [{workEmail: "ada@wso2.com", team: "T", subTeam: "S"}, {workEmail: (), team: "T", subTeam: "S"},
+        {firstName: "No email at all", team: "T", subTeam: "S"}];
+    DirectoryRecord[] rows = check raw.cloneWithType();
+    test:assertEquals(rosterFrom(indexDirectory(rows), "ada@wso2.com")?.emails, ["ada@wso2.com"]);
+}
+

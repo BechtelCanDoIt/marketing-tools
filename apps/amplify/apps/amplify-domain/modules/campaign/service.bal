@@ -16,6 +16,7 @@
 
 import amplify_common.types;
 
+import ballerina/lang.regexp;
 import ballerina/time;
 
 // ---- Derived status -------------------------------------------------------------------------------
@@ -65,7 +66,7 @@ public isolated function newCampaign(CampaignDraft draft, CampaignPolicy policy,
     }
     string title = check validTitle(draft.title);
     string categoryCode = check validCategory(draft.categoryCode);
-    string? resourceUrl = check optionalHttps(draft.resourceUrl, "Resource URL");
+    string? resourceUrl = check postLink(draft.resourceUrl, policy.postLinkOrigins);
     string? imageUrl = check optionalHttps(draft.imageUrl, "Image URL");
     time:Utc opensAt = draft.opensAt ?: now;
     time:Utc closesAt = draft.closesAt ?: types:addDays(opensAt, policy.defaultWindowDays);
@@ -224,6 +225,49 @@ isolated function validCategory(string raw) returns string|types:DomainError {
         return types:domainError(types:ERR_INVALID_CAMPAIGN, "Category is required");
     }
     return code;
+}
+
+# A post link, if given, must use one of the allowed origins. Every employee's card links to it, so a
+# foreign host would be a phishing link with WSO2's name on it.
+#
+# + raw - Link as sent
+# + origins - Allowed origins, lowercase `scheme://host[:port]`
+# + return - The trimmed link, `()` when none was sent, or `INVALID_CAMPAIGN`
+isolated function postLink(string? raw, string[] origins) returns string?|types:DomainError {
+    string? value = types:trimToNil(raw);
+    if value is () {
+        return ();
+    }
+    string? origin = originOf(value);
+    if origin is () || origins.indexOf(origin) is () || value.length() > types:EVIDENCE_URL_MAX_LENGTH {
+        return types:domainError(types:ERR_INVALID_CAMPAIGN, "Post URL must be a LinkedIn link");
+    }
+    return value;
+}
+
+# `scheme://host[:port]`, lowercase, or `()` for anything that isn't a plain http(s) URL: no credentials
+# (`user@host`), no whitespace.
+#
+# + url - URL
+# + return - The origin, or `()`
+isolated function originOf(string url) returns string? {
+    if re `.*\s.*`.isFullMatch(url) {
+        return ();
+    }
+    regexp:Groups? g = re `^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#]+)`.findGroups(url);
+    if g is () || g.length() < 3 {
+        return ();
+    }
+    regexp:Span? scheme = g[1];
+    regexp:Span? authority = g[2];
+    if scheme is () || authority is () || authority.substring().includes("@") {
+        return ();
+    }
+    string s = scheme.substring().toLowerAscii();
+    if s != "https" && s != "http" {
+        return ();
+    }
+    return string `${s}://${authority.substring().toLowerAscii()}`;
 }
 
 isolated function optionalHttps(string? raw, string label) returns string?|types:DomainError {

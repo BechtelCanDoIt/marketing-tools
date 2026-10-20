@@ -37,6 +37,24 @@ import ballerina/time;
 
 # The WSO2 company page; campaigns must point at its resources.
 configurable string wso2OrganizationUrn = "urn:li:organization:1477";
+# Origins a campaign's post link may use, comma separated (`scheme://host[:port]`). LinkedIn only in prod;
+# dev and demo environments add the mock's www origin.
+configurable string campaignLinkOrigins = "https://www.linkedin.com,https://linkedin.com";
+
+final string[] & readonly postLinkOrigins = linkOrigins(campaignLinkOrigins);
+
+# Parses `campaignLinkOrigins`. Empty (an unset descriptor value arrives as "") means LinkedIn only, never
+# "nothing allowed".
+#
+# + raw - Comma-separated origins
+# + return - Lowercase origins
+isolated function linkOrigins(string raw) returns string[] & readonly {
+    string[] parsed = from string o in re `,`.split(raw)
+        let string t = o.trim().toLowerAscii()
+        where t != ""
+        select t;
+    return parsed.length() > 0 ? parsed.cloneReadOnly() : campaign:DEFAULT_POST_LINK_ORIGINS;
+}
 
 isolated function actorOf(auth:Principal p, string? correlationId) returns store:Actor =>
     {actorId: p.employeeId, roles: p.roles, correlationId};
@@ -72,7 +90,8 @@ isolated function registerCampaign(auth:Principal p, string? correlationId, Camp
             tags: body.tags,
             opensAt: check parseTime(body.opensAt, "opensAt"),
             closesAt: check parseTime(body.closesAt, "closesAt")
-        }, {wso2OrganizationUrn, defaultWindowDays: settings.defaultWindowDays}, p.employeeId, shareNow, now);
+        }, {wso2OrganizationUrn, defaultWindowDays: settings.defaultWindowDays, postLinkOrigins}, p.employeeId,
+                shareNow, now);
         string run = shareNow ? triggerJobs("/runs", correlationId) : "NOT_REQUESTED";
         return <http:Created>{body: {campaign: campaignDto(c, now), run}};
     } on fail error e {

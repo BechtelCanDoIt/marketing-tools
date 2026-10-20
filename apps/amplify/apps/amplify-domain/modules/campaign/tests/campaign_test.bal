@@ -199,3 +199,33 @@ function deleteArchivesAndArchivedIsFrozen() returns error? {
     test:assertEquals(code(archiveCampaign(repo, c.id, T0)), types:ERR_CAMPAIGN_ARCHIVED);
     test:assertEquals(code(updateCampaign(repo, c.id, {title: "x"}, T0)), types:ERR_CAMPAIGN_ARCHIVED);
 }
+
+@test:Config
+function testPostLinkMustBeLinkedIn() returns error? {
+    CampaignDraft d = draft();
+    foreach string ok in ["https://www.linkedin.com/feed/update/urn:li:share:7123/",
+            "https://LinkedIn.com/posts/wso2_x-activity-1-y", "  https://www.linkedin.com/posts/a  "] {
+        d.resourceUrl = ok;
+        Campaign c = check newCampaign(d, POLICY, "id", "m", T0);
+        test:assertEquals(c.resourceUrl, ok.trim(), ok);
+    }
+    foreach string bad in ["https://evil.example/?x=urn:li:share:1", "https://www.linkedin.com.evil.example/p",
+            "https://www.linkedin.com@evil.example/p", "http://www.linkedin.com/feed/update/urn:li:share:1",
+            "javascript:alert(1)", "urn:li:share:7123", "https://www.linkedin.com/posts/a b"] {
+        d.resourceUrl = bad;
+        test:assertEquals(code(newCampaign(d, POLICY, "id", "m", T0)), types:ERR_INVALID_CAMPAIGN, bad);
+    }
+    d.resourceUrl = ();
+    test:assertEquals((check newCampaign(d, POLICY, "id", "m", T0)).resourceUrl, (), "a link is optional");
+}
+
+@test:Config
+function testPostLinkOriginsAreConfigurable() returns error? {
+    // Dev and demos: the mock LinkedIn's origin is allowed only where it's listed.
+    CampaignDraft d = draft();
+    d.resourceUrl = "http://localhost:19091/feed/update/urn:li:share:7123/";
+    test:assertEquals(code(newCampaign(d, POLICY, "id", "m", T0)), types:ERR_INVALID_CAMPAIGN);
+    CampaignPolicy withMock = {wso2OrganizationUrn: WSO2_ORG,
+        postLinkOrigins: [...DEFAULT_POST_LINK_ORIGINS, "http://localhost:19091"]};
+    test:assertEquals((check newCampaign(d, withMock, "id", "m", T0)).resourceUrl, d.resourceUrl);
+}

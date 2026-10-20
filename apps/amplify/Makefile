@@ -1,6 +1,6 @@
 # Local stack (plan M8a). Run from apps/amplify.
 #   make up       build images, generate local/.env + dev JWT keys on first run, start the stack
-#   make seed     rerun Amplify DB Migrate (migrations + seeds, idempotent)
+#   make seed     rebuild and rerun Amplify DB Migrate (migrations + seeds, idempotent)
 #   make e2e      end-to-end smoke test against the running stack (scripts/e2e-local.sh)
 #   make down     stop and remove containers AND volumes
 #   make check    descriptor drift + log hygiene (no PII/tokens/commentary in log calls) + transaction gate (R-13)
@@ -30,7 +30,7 @@ up: env
 	$(COMPOSE) up -d --build --wait
 
 seed: env
-	$(COMPOSE) run --rm amplify-db-migrate
+	$(COMPOSE) run --rm --build amplify-db-migrate
 
 e2e:
 	scripts/e2e-local.sh

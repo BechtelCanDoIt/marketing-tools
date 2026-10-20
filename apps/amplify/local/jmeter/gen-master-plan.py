@@ -63,7 +63,8 @@ MODULES = [
     dict(group="common", threads="common.threads", default=2, samplers=[
         s("common/health", "GET", "/health", API),
         s("common/unauthenticated", "GET", "/me", API, codes=(401,)),
-        s("common/problem-not-found", "GET", "/campaigns/does-not-exist", API, EMP, codes=(404,)),
+        # A well-formed id that matches nothing: 404 problem details. (A malformed id is 400, per openapi.yaml.)
+        s("common/problem-not-found", "GET", "/campaigns/00000000-0000-7000-8000-000000000000", API, EMP, codes=(404,)),
     ]),
     dict(group="jobs", threads="jobs.threads", default=2, samplers=[
         s("jobs/health", "GET", "/health", JOBS),
@@ -71,7 +72,7 @@ MODULES = [
     ]),
     # Idempotent maintenance (partition upkeep). Runs at 1 thread by default.
     dict(group="jobs-maintenance", threads="jobs.maintenance.threads", default=1, samplers=[
-        s("jobs/partitions", "POST", "/maintenance/partitions", JOBS, codes=(200, 202, 204)),
+        s("jobs/partitions", "POST", "/maintenance/partitions", JOBS, codes=(200, 201, 202, 204)),
     ]),
     # Opt-in (RUN_JOBS=1 in run.sh): drains the outbox, so it posts to LinkedIn and chat-stub.
     dict(group="jobs-run", threads="jobs.run.threads", default=0, samplers=[

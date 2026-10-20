@@ -83,7 +83,11 @@ function testFreshRunThenIdempotentRerun() returns error? {
 
     // Seeds landed.
     int rules = check db->queryRow(`SELECT count(*)::int FROM scoring.point_rule`);
-    test:assertEquals(rules, 6);
+    test:assertEquals(rules, 11, "S001's six rules plus S005's five pilot versions (no SHARE_COMMENTARY)");
+    // The rule in force now is the pilot value (S005), not S001's.
+    int repostNow = check db->queryRow(`SELECT points FROM scoring.point_rule WHERE action = 'REPOST'
+        AND effective_from <= now() ORDER BY effective_from DESC LIMIT 1`);
+    test:assertEquals(repostNow, 2);
     string topN = check db->queryRow(`SELECT value::text FROM config.app_setting WHERE key = 'leaderboard.top_n'`);
     test:assertEquals(topN, "3");
     string retention = check db->queryRow(`SELECT value::text FROM config.app_setting WHERE key = 'audit.retention_months'`);
