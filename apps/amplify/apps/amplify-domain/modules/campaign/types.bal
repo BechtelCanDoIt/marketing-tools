@@ -34,6 +34,9 @@ public const int TAG_MAX_LENGTH = 50;
 # Default active window in days when `closesAt` isn't given (C7, `campaign.default_window_days`).
 public const int DEFAULT_WINDOW_DAYS = 30;
 
+# Where a campaign's post link may point: LinkedIn only. Dev and demo environments add the mock's origin.
+public final string[] & readonly DEFAULT_POST_LINK_ORIGINS = ["https://www.linkedin.com", "https://linkedin.com"];
+
 # Campaign aggregate (`campaign.campaign` + `campaign.campaign_tag`): one WSO2 company-page resource to amplify.
 public type Campaign record {|
     # UUIDv7
@@ -128,6 +131,8 @@ public type CampaignPolicy record {|
     types:OrganizationUrn wso2OrganizationUrn;
     # `campaign.default_window_days`
     int defaultWindowDays = DEFAULT_WINDOW_DAYS;
+    # Origins (`scheme://host[:port]`, lowercase) a post link may use; the link is shown on every employee's card
+    string[] postLinkOrigins = DEFAULT_POST_LINK_ORIGINS;
 |};
 
 # Persistence port for the `campaign` schema. M3 implements it with SQL; tests use an in-memory one.

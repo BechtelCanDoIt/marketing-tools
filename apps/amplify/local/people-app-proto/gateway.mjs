@@ -1,7 +1,7 @@
 // Local prototype only: stands in for the Choreo gateway in front of people-app.
 //
 //   POST /token            OAuth2 client credentials (form or Basic auth) -> opaque access token
-//   any other request      Bearer <that token>  ->  x-jwt-assertion {azp, sub = client id}  ->  people-app
+//   any other request      Bearer <that token>  ->  x-jwt-assertion {azp, sub = client id, aut = APPLICATION}  ->  people-app
 //
 // The assertion is unsigned: people-app only decodes it (the real gateway signs it). Clients come from
 // CLIENTS="id:secret,id2:secret2". No user tokens here; call people-app directly for those.
@@ -46,7 +46,7 @@ http
     }
     const now = Math.floor(Date.now() / 1000);
     const assertion = `${b64url({ alg: "RS256", typ: "JWT" })}.${b64url({
-      iss: "people-proto-gateway", sub: clientId, azp: clientId, aud: "people-app", iat: now, exp: now + 900,
+      iss: "people-proto-gateway", sub: clientId, azp: clientId, aut: "APPLICATION", aud: "people-app", iat: now, exp: now + 900,
     })}.unsigned`;
     const headers = { ...req.headers, "x-jwt-assertion": assertion, host: UPSTREAM.host };
     delete headers.authorization;

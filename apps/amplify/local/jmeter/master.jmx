@@ -512,7 +512,7 @@
 <stringProp name="HTTPSampler.port">${__P(api.port,9090)}</stringProp>
 <stringProp name="HTTPSampler.protocol">http</stringProp>
 <stringProp name="HTTPSampler.contentEncoding"></stringProp>
-<stringProp name="HTTPSampler.path">/campaigns/does-not-exist</stringProp>
+<stringProp name="HTTPSampler.path">/campaigns/00000000-0000-7000-8000-000000000000</stringProp>
 <stringProp name="HTTPSampler.method">GET</stringProp>
 <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
 <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
@@ -642,8 +642,8 @@
 <stringProp name="HTTPSampler.response_timeout">10000</stringProp>
 </HTTPSamplerProxy>
 <hashTree>
-<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status 200|202|204" enabled="true">
-<collectionProp name="Asserion.test_strings"><stringProp name="49586">200|202|204</stringProp></collectionProp>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status 200|201|202|204" enabled="true">
+<collectionProp name="Asserion.test_strings"><stringProp name="49586">200|201|202|204</stringProp></collectionProp>
 <stringProp name="Assertion.custom_message"></stringProp>
 <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
 <boolProp name="Assertion.assume_success">true</boolProp>

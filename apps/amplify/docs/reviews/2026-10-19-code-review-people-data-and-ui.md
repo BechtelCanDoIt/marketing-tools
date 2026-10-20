@@ -49,3 +49,14 @@ Clean: a token with an email never reaches the new branch; unlisted clients can'
 2. **A3** and **M1 + A9** (null email): small, and each can break or abuse what every employee sees.
 3. **M2 with M3** (refresh off the request path, ETag on membership): the one structural fix, shared with the integration-boundary review.
 4. **A1, A2, M5, M6**, then the Lows and test gaps.
+
+## Status (2026-10-19, later)
+
+| ID | Status |
+|---|---|
+| B1 | **Fixed** (people-ops-suite PR): a service token must also be issued to an application (`aut = APPLICATION`, configurable) and carry no `email` or `groups`. Tests for an email-less user token with a listed `azp`, with `APPLICATION_USER`, with no marker and with `groups`. 7 tests; prototype 12/12 |
+| B2 | **Fixed**: the route matches two segments exactly (encoded slash and extra segments get 403) |
+| A3 | **Fixed** in both places: amplify-api only accepts post links on allowed origins (`campaignLinkOrigins`, LinkedIn by default; Compose adds the mock for local demos), domain-tested; One WSO2 checks the same list (`ONE_WSO2_AMPLIFY_POST_LINK_ORIGINS`) before sending, before rendering a card link, and before following the LinkedIn sign-in redirect (also covers A5's redirect half) |
+| M1, A9 | **Fixed**: directory rows without a work email are skipped on both sides instead of breaking everything |
+| M2, M3 | **Accepted**: teams change once or twice a year, so the 3-day TTL (`ROSTERCACHESECONDS`, now settable in Choreo) is enough; the refresh herd and the membership-blind ETag clear within the TTL |
+| Others | Open |

@@ -309,7 +309,7 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
     string b = check newEmployee(apiDb, "rank-b");
     string po = check newEmployee(apiDb, "po");
     scoring:PointRule[] rules = check (new scoring:PgPointRuleRepository(jobsDb)).all();
-    test:assertEquals(rules.length(), 6, "seeded rules");
+    test:assertEquals(rules.length(), 11, "seeded rules: S001 plus the five S005 pilot versions");
     scoring:PgLedgerRepository jobsLedger = new (jobsDb);
     string campaignId = types:newUuidV7();
     time:Utc now = time:utcNow();
@@ -329,8 +329,9 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
     if sa is () || sb is () {
         test:assertFail("standings missing");
     }
-    test:assertEquals(sa.totalPoints, 12);
-    test:assertEquals(sb.totalPoints, 5);
+    // Pilot values in force since 2026-10-19 (seed S005): repost with commentary 5, plain repost 2.
+    test:assertEquals(sa.totalPoints, 5);
+    test:assertEquals(sb.totalPoints, 2);
     test:assertTrue(sa.rank < sb.rank);
     // The next better total on the shared board (other tests leave standings behind, so it isn't
     // necessarily `a`'s).
@@ -347,7 +348,7 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
     scoring:PgLedgerRepository apiLedger = new (apiDb, poActor(po));
     types:LedgerEntry rev = check scoring:reverseEntry(apiLedger, award.entry.reference, "Deleted share", po, "req-1",
             time:utcNow());
-    test:assertEquals(rev.points, -12);
+    test:assertEquals(rev.points, -5);
     types:LedgerEntry|error again = scoring:reverseEntry(apiLedger, award.entry.reference, "Again", po, "req-2",
             time:utcNow());
     assertCode(again, types:ERR_ALREADY_REVERSED);
@@ -370,7 +371,7 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
     // A full rebuild from the ledger gives the same totals.
     _ = check recognition:rebuild(jobsDb);
     recognition:Standing? rebuilt = check recognition:standingOf(jobsDb, b);
-    test:assertEquals(rebuilt is () ? -1 : rebuilt.totalPoints, 5);
+    test:assertEquals(rebuilt is () ? -1 : rebuilt.totalPoints, 2);
     check apiDb.close();
     check jobsDb.close();
 }

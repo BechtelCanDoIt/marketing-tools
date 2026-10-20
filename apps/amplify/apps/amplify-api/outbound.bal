@@ -281,8 +281,9 @@ type Roster record {|
 # The fields of a directory row Amplify reads. Open: the row carries more (names, photo, manager), which
 # is ignored and never kept.
 type DirectoryRecord record {
-    # Work email
-    string workEmail;
+    # Work email. Optional: one row without it (a contractor, a placeholder) is skipped, not a reason to
+    # reject the whole directory.
+    string? workEmail = ();
     # Team
     string? team = ();
     # Sub-team
@@ -312,7 +313,7 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
     map<string> teamNames = {};
     map<string[]> members = {};
     foreach DirectoryRecord r in records {
-        string email = r.workEmail.trim().toLowerAscii();
+        string email = (r.workEmail ?: "").trim().toLowerAscii();
         string team = (r.team ?: "").trim();
         string subTeam = (r.subTeam ?: "").trim();
         if email == "" || (team == "" && subTeam == "") {
