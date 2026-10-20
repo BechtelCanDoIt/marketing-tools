@@ -51,6 +51,7 @@ type RunConfig record {|
     string sharePageBaseUrl;
     string chatSpace;
     string? cardAvatarUrl = ();
+    string? defaultImageUrl = ();
 |};
 
 # App settings a run reads once (`config.app_setting`).

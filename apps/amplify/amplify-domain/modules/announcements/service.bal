@@ -110,9 +110,10 @@ public isolated function retryAnnouncement(Announcement announcement) returns An
 # + campaign - Campaign fields
 # + sharePageBaseUrl - One WSO2 share page base, for example `https://one.wso2.com/amplify/campaigns`
 # + avatarUrl - Public HTTPS Amplify avatar for the card header, or `()`
+# + defaultImageUrl - Public HTTPS image used when the campaign's own image is missing or unusable, or `()`
 # + return - cardsV2 JSON, or a domain error
-public isolated function buildCard(CampaignCardSource campaign, string sharePageBaseUrl, string? avatarUrl = ())
-        returns json|types:DomainError {
+public isolated function buildCard(CampaignCardSource campaign, string sharePageBaseUrl, string? avatarUrl = (),
+        string? defaultImageUrl = ()) returns json|types:DomainError {
     string base = sharePageBaseUrl.endsWith("/") ? sharePageBaseUrl.substring(0, sharePageBaseUrl.length() - 1)
         : sharePageBaseUrl;
     return googlechat:buildCampaignCard({
@@ -122,7 +123,8 @@ public isolated function buildCard(CampaignCardSource campaign, string sharePage
         imageUrl: campaign.imageUrl,
         sharePageUrl: string `${base}/${campaign.campaignId}`,
         isPriority: campaign.isPriority,
-        avatarUrl
+        avatarUrl,
+        defaultImageUrl
     });
 }
 
