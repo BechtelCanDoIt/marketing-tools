@@ -105,10 +105,11 @@ public isolated function retryAnnouncement(Announcement announcement) returns An
     return queued;
 }
 
-# Builds the Club card: image, title, summary and an Amplify button to the campaign's share page in One WSO2.
+# Builds the Club card: image, title, summary and an Amplify button that opens One WSO2's Celebrate page with
+# the campaign's share dialog (`?share=<campaignId>`).
 #
 # + campaign - Campaign fields
-# + sharePageBaseUrl - One WSO2 share page base, for example `https://one.wso2.com/amplify/campaigns`
+# + sharePageBaseUrl - One WSO2 Celebrate page URL, for example `https://one.wso2.com/amplify/celebrate`
 # + avatarUrl - Public HTTPS Amplify avatar for the card header, or `()`
 # + defaultImageUrl - Public HTTPS image used when the campaign's own image is missing or unusable, or `()`
 # + return - cardsV2 JSON, or a domain error
@@ -121,7 +122,7 @@ public isolated function buildCard(CampaignCardSource campaign, string sharePage
         title: campaign.title,
         summary: campaign.summary,
         imageUrl: campaign.imageUrl,
-        sharePageUrl: string `${base}/${campaign.campaignId}`,
+        sharePageUrl: string `${base}${base.includes("?") ? "&" : "?"}share=${campaign.campaignId}`,
         isPriority: campaign.isPriority,
         avatarUrl,
         defaultImageUrl

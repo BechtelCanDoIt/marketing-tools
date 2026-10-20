@@ -107,7 +107,7 @@ function webhook200StoresMessageAndThreadName() returns error? {
     test:assertTrue(s.lastQuery.includes("REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD"));
     json card = check s.lastBody.cardsV2;
     string cardJson = card.toJsonString();
-    test:assertTrue(cardJson.includes(string `https://one.wso2.com/amplify/campaigns/${cid}`), "openLink");
+    test:assertTrue(cardJson.includes(string `https://one.wso2.com/amplify/celebrate?share=${cid}`), "openLink");
     test:assertTrue(cardJson.includes("\"imageType\":\"CIRCLE\""), "header avatar");
     test:assertTrue(cardJson.includes("\"altText\""), "image altText");
     var a = check w.mem.announcement(cid);
