@@ -36,7 +36,7 @@ public const string CARD_SUBTITLE = "WSO2 Amplify · new post to share";
 public const string CARD_SUBTITLE_PRIORITY = "WSO2 Amplify · priority post";
 
 # What the Club card shows for one campaign (domains S5): image, title, summary, and an openLink button to
-# the campaign's share page in One WSO2 (incoming webhooks can't take button clicks).
+# One WSO2's Celebrate page with the campaign's share dialog open (incoming webhooks can't take button clicks).
 public type CampaignCard record {|
     # Campaign id, used for the card id and thread key
     string campaignId;
@@ -46,12 +46,15 @@ public type CampaignCard record {|
     string? summary = ();
     # Public HTTPS image URL; the image widget is left out when it's missing or not public HTTPS
     string? imageUrl = ();
-    # HTTPS link to the share page in One WSO2
+    # HTTPS link to One WSO2 Celebrate with this campaign's share dialog (`/amplify/celebrate?share=<id>`)
     string sharePageUrl;
     # Priority flag changes the subtitle
     boolean isPriority = false;
     # Public HTTPS Amplify avatar for the header; left out when missing or not public HTTPS
     string? avatarUrl = ();
+    # Public HTTPS image shown when `imageUrl` is missing or not public HTTPS; the image widget is left out
+    # when neither qualifies
+    string? defaultImageUrl = ();
 |};
 
 # Thread key for a campaign's announcement (`announcement.thread_key`).
@@ -74,8 +77,8 @@ public isolated function buildCampaignCard(CampaignCard card) returns json|types
     }
     title = truncate(title, CARD_TITLE_MAX_LENGTH);
     json[] widgets = [];
-    string? imageUrl = card.imageUrl;
-    if imageUrl is string && isPublicHttpsUrl(imageUrl) {
+    string? imageUrl = pickImage(card.imageUrl, card.defaultImageUrl);
+    if imageUrl is string {
         widgets.push({image: {imageUrl, altText: title}});
     }
     string? summary = types:trimToNil(card.summary);
@@ -103,6 +106,17 @@ public isolated function buildCampaignCard(CampaignCard card) returns json|types
             }
         ]
     };
+}
+
+// The campaign's own image when Chat can fetch it, else the default image, else none.
+isolated function pickImage(string? imageUrl, string? defaultImageUrl) returns string? {
+    if imageUrl is string && isPublicHttpsUrl(imageUrl) {
+        return imageUrl;
+    }
+    if defaultImageUrl is string && isPublicHttpsUrl(defaultImageUrl) {
+        return defaultImageUrl;
+    }
+    return ();
 }
 
 isolated function header(string title, boolean isPriority, string? avatarUrl) returns json {

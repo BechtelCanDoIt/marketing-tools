@@ -311,3 +311,31 @@ function webhookBadResponseBodyAndBreakerState() returns error? {
     }
     test:assertEquals(result.detail(), {code: "BAD_RESPONSE", httpStatus: 200, retryable: false});
 }
+
+const string DEFAULT_IMAGE = "https://media.wso2.com/amplify-default.png";
+
+@test:Config
+function cardUsesTheDefaultImageWhenThePostHasNone() returns error? {
+    foreach string? url in [(), "", "http://x.com/a.png", "https://intranet/a.png", "https://localhost/a.png"] {
+        json card = check buildCampaignCard({campaignId: "c1", title: "T", imageUrl: url,
+            sharePageUrl: "https://a.com/s", defaultImageUrl: DEFAULT_IMAGE});
+        test:assertTrue(card.toJsonString().includes(string `"image":{"imageUrl":"${DEFAULT_IMAGE}", "altText":"T"}`),
+            "default image for " + url.toString());
+    }
+}
+
+@test:Config
+function cardKeepsThePostImageOverTheDefault() returns error? {
+    json card = check buildCampaignCard({campaignId: "c1", title: "T", imageUrl: "https://media.wso2.com/leader.png",
+        sharePageUrl: "https://a.com/s", defaultImageUrl: DEFAULT_IMAGE});
+    string text = card.toJsonString();
+    test:assertTrue(text.includes("https://media.wso2.com/leader.png"));
+    test:assertFalse(text.includes(DEFAULT_IMAGE));
+}
+
+@test:Config
+function cardLeavesImageOutWhenTheDefaultIsUnusable() returns error? {
+    json card = check buildCampaignCard({campaignId: "c1", title: "T", sharePageUrl: "https://a.com/s",
+        defaultImageUrl: "http://localhost/default.png"});
+    test:assertFalse(card.toJsonString().includes("\"image\""));
+}

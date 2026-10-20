@@ -100,7 +100,7 @@ Every setting is a Ballerina `configurable`, set through `BAL_CONFIG_VAR_<NAME>`
 | `LINKEDINIDTOKENVALIDATION` | ✓ | | | | `false` (`LINKEDIN_ID_TOKEN_VALIDATION`; the mock issues no ID token). `LINKEDINJWKSURL` / `LINKEDINOIDCISSUER` default to LinkedIn's |
 | `TOKENKEYS`, `TOKENCURRENTKEYID` | ✓ | ✓ | | ✓ (keys) | `local-1:<random base64 32 bytes>`, `local-1` |
 | `CHATWEBHOOKURL` | | ✓ | | ✓ | chat-stub URL (or the dev test space) |
-| `CHATSPACE`, `CHATCARDAVATARURL`, `SHAREPAGEBASEURL` | | ✓ | | | `dev-test`, empty, One WSO2 campaigns page |
+| `CHATSPACE`, `CHATCARDAVATARURL`, `SHAREPAGEBASEURL` | | ✓ | | | `dev-test`, empty, One WSO2 Celebrate page |
 | `CHATALLOWINSECUREHTTP` | | ✓ | | | `true` (local only, plain-http stub) |
 
 Scheduler: `DSN` (secret, its own database/user). Mock LinkedIn: `LISTENERHOST=0.0.0.0`, `WWWBASEURL`, `CLIENTID`, `CLIENTSECRET` (secret), `ENABLEMOCKADMIN`, and `BAL_CONFIG_DATA` for `redirectUris`. Tuning knobs with safe defaults (run batch sizes, timeouts, breakers, LinkedIn ceilings) are in each component's `config.bal`; set them the same way when needed.

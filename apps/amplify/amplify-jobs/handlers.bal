@@ -156,7 +156,8 @@ isolated function handleCampaignRegistered(HandlerContext ctx, events:CampaignRe
     }
 
     json|types:DomainError card = announcements:buildCard({campaignId: c.id, title: c.title, summary: c.summary,
-        imageUrl: c.imageUrl, isPriority: c.isPriority}, ctx.config.sharePageBaseUrl, ctx.config.cardAvatarUrl);
+        imageUrl: c.imageUrl, isPriority: c.isPriority}, ctx.config.sharePageBaseUrl, ctx.config.cardAvatarUrl,
+        ctx.config.defaultImageUrl);
     if card is types:DomainError {
         check ctx.store.saveAnnouncement(check announcements:markFailed(queued, card.message(), ctx.now), []);
         return failed(string `card rejected: ${card.message()}`);

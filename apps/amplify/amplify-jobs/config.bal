@@ -67,6 +67,11 @@ configurable string chatWebhookUrl = "";
 configurable boolean chatAllowInsecureHttp = false;
 # Public HTTPS Amplify avatar shown in the card header. Empty = header without an avatar.
 configurable string chatCardAvatarUrl = "";
+# Public HTTPS image (PNG or JPEG; Chat doesn't render SVG) for cards whose post has no image or an unusable one.
+# The image is `amplify-jobs/img/WSO2-Amplify-Poster-Default.png`, served through its raw GitHub URL pinned to a
+# commit (Chat fetches it anonymously, so a Drive link won't work). The original is in the Amplify Demo shared chat
+# space. Empty = such cards go out without an image.
+configurable string chatDefaultImageUrl = "";
 # Space label stored on `announcement.space`: `club` or `dev-test`.
 configurable string chatSpace = "club";
 # Per-call timeout, seconds.
@@ -75,8 +80,8 @@ configurable decimal chatTimeoutSeconds = 10;
 configurable resilience:HttpResilience chatResilience = {};
 # Least time between two posts to the space, seconds (Chat quota: 1 request/second per space).
 configurable decimal chatMinIntervalSeconds = 1;
-# One WSO2 share page base; the card button opens `<base>/<campaignId>`.
-configurable string sharePageBaseUrl = "https://one.wso2.com/amplify/campaigns";
+# One WSO2 Celebrate page URL; the card button opens `<url>?share=<campaignId>`, which shows that post's share dialog.
+configurable string sharePageBaseUrl = "https://one.wso2.com/amplify/celebrate";
 
 // ---- Token keys ----------------------------------------------------------------------------------------
 
