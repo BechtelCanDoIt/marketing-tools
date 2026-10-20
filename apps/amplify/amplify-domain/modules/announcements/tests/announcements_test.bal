@@ -57,11 +57,11 @@ function sentFailedAndRetry() returns error? {
 @test:Config
 function cardLinksToOneWso2SharePage() returns error? {
     json card = check buildCard({campaignId: "c1", title: "T", summary: (), imageUrl: (), isPriority: false},
-            "https://one.wso2.com/amplify/campaigns/", "https://media.wso2.com/amplify-avatar.png");
+            "https://one.wso2.com/amplify/celebrate/", "https://media.wso2.com/amplify-avatar.png");
     json[] cards = <json[]>check card.cardsV2;
     json[] sections = <json[]>check cards[0].card.sections;
     json[] widgets = <json[]>check sections[0].widgets;
     json[] buttons = <json[]>check widgets[0].buttonList.buttons;
-    test:assertEquals(check buttons[0].onClick.openLink.url, "https://one.wso2.com/amplify/campaigns/c1");
+    test:assertEquals(check buttons[0].onClick.openLink.url, "https://one.wso2.com/amplify/celebrate?share=c1");
     test:assertEquals(check cards[0].card.header.imageUrl, "https://media.wso2.com/amplify-avatar.png");
 }

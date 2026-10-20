@@ -100,5 +100,5 @@ configurations:
     - name: BAL_CONFIG_VAR_SHAREPAGEBASEURL
       valueFrom:
         configForm:
-          displayName: One WSO2 share page base URL
+          displayName: One WSO2 Celebrate page URL (card button adds ?share=<campaignId>)
           type: string
