@@ -13,13 +13,12 @@ apps/amplify/
 ├── compose.yaml · Makefile       # full local stack (M8a): make up / seed / e2e / down
 ├── .choreo/component.yaml        # Choreo descriptor of amplify-api (its Docker context is this folder, ADR-027)
 ├── .dockerignore · .gitignore
-├── apps/
-│   ├── amplify-common/           # shared library (ADR-020): types, events, crypto, linkedin, googlechat
-│   ├── amplify-domain/           # shared library (ADR-021): bounded contexts + PostgreSQL repositories + store
-│   ├── amplify-api/              # published API (behind the API proxy): /health, /ready
-│   ├── amplify-jobs/             # worker: POST /runs, POST /maintenance/partitions, POST /maintenance/rebuild-recognition, /health
-│   ├── amplify-scheduler/        # pinned akorn/scheduler image (UID 10014): calls amplify-jobs on schedule (ADR-026)
-│   └── amplify-database/         # Amplify DB Migrate runner + migrations/ + seed/ + checks/
+├── amplify-common/           # shared library (ADR-020): types, events, crypto, linkedin, googlechat
+├── amplify-domain/           # shared library (ADR-021): bounded contexts + PostgreSQL repositories + store
+├── amplify-api/              # published API (behind the API proxy): /health, /ready
+├── amplify-jobs/             # worker: POST /runs, POST /maintenance/partitions, POST /maintenance/rebuild-recognition, /health
+├── amplify-scheduler/        # pinned akorn/scheduler image (UID 10014): calls amplify-jobs on schedule (ADR-026)
+├── amplify-database/         # Amplify DB Migrate runner + migrations/ + seed/ + checks/
 ├── local/                        # .env.example, dev-jwt/ (ADR-023), chat-stub/
 ├── scripts/                      # test-all.sh, e2e-local.sh, load-test.sh (+ load/), check-descriptors.sh, check-logs-pii.sh, it-scheduler.sh, lint-openapi-names.sh
 └── docs/migrations/              # dated behavior/schema change notes
@@ -30,7 +29,7 @@ apps/amplify/
 `amplify-api` and `amplify-jobs` depend on `amplify-common` and `amplify-domain` from the local Ballerina repository, so publish them first, in that order:
 
 ```sh
-cd apps/amplify-common && bal pack && bal push --repository=local
+cd amplify-common && bal pack && bal push --repository=local
 cd ../amplify-domain && bal pack && bal push --repository=local
 cd ../amplify-api && bal build && bal test
 ```
@@ -40,10 +39,10 @@ Database: migrations, seeds and the integration-test recipe against PostgreSQL 1
 Docker images build from a clean checkout (the shared packages are packed inside the build stage). Each component has its own Docker context, because Choreo reads `<context>/.choreo/component.yaml` ([ADR-027](../../../../architecture/decisions/ADR-027-per-component-docker-contexts.md)):
 
 ```sh
-docker build -f apps/amplify-api/Dockerfile -t amplify-api .
-docker build -f amplify-jobs/Dockerfile -t amplify-jobs apps
-docker build -t amplify-database apps/amplify-database
-docker build -t amplify-scheduler apps/amplify-scheduler
+docker build -f amplify-api/Dockerfile -t amplify-api .
+docker build -f amplify-jobs/Dockerfile -t amplify-jobs .
+docker build -t amplify-database amplify-database
+docker build -t amplify-scheduler amplify-scheduler
 ```
 
 ## Local stack
@@ -135,8 +134,8 @@ Which tests use the mock:
 
 | Tests | LinkedIn double |
 |---|---|
-| amplify-api unit | in-process `FakeLinkedIn` (`apps/amplify-api/tests/read_fakes.bal`); never calls the mock |
-| amplify-jobs unit | in-process `FakeLinkedIn` (`apps/amplify-jobs/tests/fakes.bal`) |
+| amplify-api unit | in-process `FakeLinkedIn` (`amplify-api/tests/read_fakes.bal`); never calls the mock |
+| amplify-jobs unit | in-process `FakeLinkedIn` (`amplify-jobs/tests/fakes.bal`) |
 | amplify-common unit | its own HTTP stub on 18210 to check the exact wire format (headers, payload) |
 | amplify-domain | no LinkedIn calls |
 | amplify-jobs IT (`integration`, `db-down-it`) | **real `mock_linkedin`** on 19190/19191, started by `scripts/test-all.sh` |

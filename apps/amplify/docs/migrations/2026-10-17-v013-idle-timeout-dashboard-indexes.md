@@ -1,6 +1,6 @@
 # V013: idle-in-transaction limit for the app roles, dashboard indexes, lock order on the SQL side (2026-10-17)
 
-Script: `apps/amplify-database/migrations/V013__idle_timeout_dashboard_indexes.sql`. Round 2 of the deep
+Script: `amplify-database/migrations/V013__idle_timeout_dashboard_indexes.sql`. Round 2 of the deep
 review (`docs/reviews/2026-10-17-round2-handoffs.md`): domain review H-3b and H-4, round 2 items 9, 11 and
 12.6, and the R-13 write-up (`docs/reviews/2026-10-17-r13-transaction-race.md`).
 
@@ -134,11 +134,11 @@ After (all four candidate indexes present; the planner used two):
 
 ## Changed files
 
-- `apps/amplify-database/migrations/V013__idle_timeout_dashboard_indexes.sql` (new)
-- `apps/amplify-database/tests/v013_test.bal` (new: role settings, both indexes, and the SQL half of the
+- `amplify-database/migrations/V013__idle_timeout_dashboard_indexes.sql` (new)
+- `amplify-database/tests/v013_test.bal` (new: role settings, both indexes, and the SQL half of the
   lock-order check: no function takes `4242101`, the three recognition functions take `1634561133` and
   document the order)
-- `apps/amplify-database/migrations/README.md`, `docs/migrations/README.md` (script list)
+- `amplify-database/migrations/README.md`, `docs/migrations/README.md` (script list)
 
 ## Verify
 

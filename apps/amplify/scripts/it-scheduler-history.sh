@@ -18,7 +18,7 @@
 #
 # Scheduler job-history retention test (ADR-026 gap, deep review 2026-10-17). Starts postgres:18 + the
 # pinned akorn/scheduler image (UID 10014, read-only) on a throwaway network, puts 40-day-old and 1-day-old
-# rows into job_history, installs apps/amplify-scheduler/history-retention.sql exactly as the compose
+# rows into job_history, installs amplify-scheduler/history-retention.sql exactly as the compose
 # `scheduler-retention` one-shot does (twice: idempotent), lets the scheduler run a job so IT writes a
 # history row, and checks the old rows are gone and the recent ones kept. Then removes everything.
 # Needs Docker, curl and openssl; host port AMPLIFY_IT_SCHEDULER_HISTORY_PORT (default 18183).
@@ -82,7 +82,7 @@ SQL
 # Install exactly as compose's scheduler-retention one-shot does, twice (idempotent).
 for _ in 1 2; do
   docker run --rm --network "$NAME" -e PGHOST="$NAME-db" -e PGUSER=scheduler -e PGDATABASE=scheduler \
-    -e PGPASSWORD="$DB_PASSWORD" -v "$HERE/apps/amplify-scheduler/history-retention.sql:/retention.sql:ro" \
+    -e PGPASSWORD="$DB_PASSWORD" -v "$HERE/amplify-scheduler/history-retention.sql:/retention.sql:ro" \
     --entrypoint sh "$PG_IMAGE" -c 'for i in $(seq 1 60); do
       psql -tAc "SELECT to_regclass('"'"'job_history'"'"')" | grep -q job_history &&
       exec psql -v ON_ERROR_STOP=1 -q -f /retention.sql; sleep 2; done; echo "job_history never appeared"; exit 1'

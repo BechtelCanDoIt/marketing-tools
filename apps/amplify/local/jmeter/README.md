@@ -1,6 +1,6 @@
 # JMeter performance suite
 
-One master test plan (`master.jmx`) that covers the Ballerina modules under `apps/`, with p95 and p99 per module and per endpoint. Runs against the local Compose stack, the same stack `scripts/load-test.sh` (k6) uses.
+One master test plan (`master.jmx`) that covers the Ballerina modules in this folder, with p95 and p99 per module and per endpoint. Runs against the local Compose stack, the same stack `scripts/load-test.sh` (k6) uses.
 
 ## Scope
 

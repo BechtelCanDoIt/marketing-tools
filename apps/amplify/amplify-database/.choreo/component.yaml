@@ -1,7 +1,7 @@
 # Amplify DB Migrate (amplify-database). Choreo Manual Task, Dockerfile buildpack. No endpoint.
-# Docker context: apps/amplify/apps/amplify-database  |  Dockerfile: apps/amplify/apps/amplify-database/Dockerfile
+# Docker context: apps/amplify/amplify-database  |  Dockerfile: apps/amplify/amplify-database/Dockerfile
 # Choreo reads this file from <docker context>/.choreo/component.yaml, so every component has its own context
-# (ADR-027). Keep endpoints and env names in sync with apps/amplify/apps/amplify-database/workload.yaml (scripts/check-descriptors.sh).
+# (ADR-027). Keep endpoints and env names in sync with apps/amplify/amplify-database/workload.yaml (scripts/check-descriptors.sh).
 # Console steps (connections, secrets, visibility): docs/runbooks/choreo-deploy.md.
 schemaVersion: "1.2"
 configurations:
