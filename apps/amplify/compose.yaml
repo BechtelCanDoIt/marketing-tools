@@ -77,6 +77,8 @@ services:
       BAL_CONFIG_VAR_LINKEDINIDTOKENVALIDATION: ${LINKEDIN_ID_TOKEN_VALIDATION:-false}
       # Team rosters (D13) = people-stub by default: edit local/people-stub/directory.json.
       BAL_CONFIG_VAR_PEOPLEDIRECTORYURL: ${PEOPLE_DIRECTORY_URL:-http://people-stub:9096/employees/basic-info}
+      # Post links: LinkedIn, plus the mock's browser-facing origin for local demos.
+      BAL_CONFIG_VAR_CAMPAIGNLINKORIGINS: ${CAMPAIGN_LINK_ORIGINS:-https://www.linkedin.com,https://linkedin.com,http://localhost:19091}
       # Set by local/people-app-proto/run.sh to try the real people-app behind a gateway stand-in.
       BAL_CONFIG_VAR_PEOPLEDIRECTORYTOKENURL: ${PEOPLE_DIRECTORY_TOKEN_URL:-}
       BAL_CONFIG_VAR_PEOPLEDIRECTORYCLIENTID: ${PEOPLE_DIRECTORY_CLIENT_ID:-}

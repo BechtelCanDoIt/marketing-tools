@@ -44,6 +44,10 @@ configurations:
       value: ""
     - name: BAL_CONFIG_VAR_SCHEDULERJOBSURL
       value: ""
+    - name: BAL_CONFIG_VAR_CAMPAIGNLINKORIGINS
+      value: ""
+    - name: BAL_CONFIG_VAR_ROSTERCACHESECONDS
+      value: "259200"
     - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYURL
       value: ""
     - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYTOKENURL
