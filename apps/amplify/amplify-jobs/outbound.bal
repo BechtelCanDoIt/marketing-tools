@@ -108,5 +108,6 @@ isolated function runConfig() returns RunConfig => {
     linkedinMaxPostsPerDay,
     sharePageBaseUrl,
     chatSpace,
-    cardAvatarUrl: chatCardAvatarUrl.trim() == "" ? () : chatCardAvatarUrl.trim()
+    cardAvatarUrl: chatCardAvatarUrl.trim() == "" ? () : chatCardAvatarUrl.trim(),
+    defaultImageUrl: chatDefaultImageUrl.trim() == "" ? () : chatDefaultImageUrl.trim()
 };

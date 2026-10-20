@@ -67,6 +67,9 @@ configurable string chatWebhookUrl = "";
 configurable boolean chatAllowInsecureHttp = false;
 # Public HTTPS Amplify avatar shown in the card header. Empty = header without an avatar.
 configurable string chatCardAvatarUrl = "";
+# Public HTTPS image (PNG or JPEG; Chat doesn't render SVG) for cards whose post has no image or an unusable one.
+# Empty = such cards go out without an image.
+configurable string chatDefaultImageUrl = "";
 # Space label stored on `announcement.space`: `club` or `dev-test`.
 configurable string chatSpace = "club";
 # Per-call timeout, seconds.

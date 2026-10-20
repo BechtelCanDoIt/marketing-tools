@@ -52,5 +52,7 @@ configurations:
       value: ""
     - name: BAL_CONFIG_VAR_CHATCARDAVATARURL
       value: ""
+    - name: BAL_CONFIG_VAR_CHATDEFAULTIMAGEURL
+      value: ""
     - name: BAL_CONFIG_VAR_SHAREPAGEBASEURL
       value: ""
