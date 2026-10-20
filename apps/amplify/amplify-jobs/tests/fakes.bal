@@ -605,7 +605,7 @@ final RunConfig & readonly TEST_CONFIG = {
     deferSeconds: 900,
     linkedinMaxPostsPerRun: 50,
     linkedinMaxPostsPerDay: 1000,
-    sharePageBaseUrl: "https://one.wso2.com/amplify/campaigns",
+    sharePageBaseUrl: "https://one.wso2.com/amplify/celebrate",
     chatSpace: "dev-test"
 };
 

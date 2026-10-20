@@ -91,8 +91,14 @@ configurations:
           displayName: Chat card avatar URL (https)
           type: string
           required: false
+    - name: BAL_CONFIG_VAR_CHATDEFAULTIMAGEURL
+      valueFrom:
+        configForm:
+          displayName: Chat card default image URL (public https PNG/JPEG; used when a post has no usable image)
+          type: string
+          required: false
     - name: BAL_CONFIG_VAR_SHAREPAGEBASEURL
       valueFrom:
         configForm:
-          displayName: One WSO2 share page base URL
+          displayName: One WSO2 Celebrate page URL (card button adds ?share=<campaignId>)
           type: string

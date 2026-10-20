@@ -120,7 +120,8 @@ services:
       # Lets only the plain-http stub URL through; a real webhook is https. Never set in Choreo.
       BAL_CONFIG_VAR_CHATALLOWINSECUREHTTP: "true"
       BAL_CONFIG_VAR_CHATCARDAVATARURL: ${GOOGLE_CHAT_AVATAR_URL:-}
-      BAL_CONFIG_VAR_SHAREPAGEBASEURL: ${AMPLIFY_SHARE_PAGE_BASE_URL:-https://one.wso2.com/amplify/campaigns}
+      BAL_CONFIG_VAR_CHATDEFAULTIMAGEURL: ${GOOGLE_CHAT_DEFAULT_IMAGE_URL:-}
+      BAL_CONFIG_VAR_SHAREPAGEBASEURL: ${AMPLIFY_SHARE_PAGE_BASE_URL:-https://one.wso2.com/amplify/celebrate}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9091/ready >/dev/null"]
       interval: 5s
