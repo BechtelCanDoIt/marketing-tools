@@ -8,7 +8,7 @@
 #   make load-test k6 against the running stack: 1k employees / 50k ledger rows, p95 < 50 ms target
 #   make up PROFILE=apim   also start WSO2 API Manager (pending the non-prod Asgardeo org)
 
-COMPOSE := docker compose --env-file local/.env $(if $(PROFILE),--profile $(PROFILE))
+COMPOSE := scripts/compose.sh $(if $(PROFILE),--profile $(PROFILE))
 
 .PHONY: env up down seed e2e logs ps check test-all load-test
 

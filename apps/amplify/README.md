@@ -69,7 +69,7 @@ make down    # stop and REMOVE volumes
 | postgres, amplify-db-migrate, amplify-jobs, scheduler, scheduler-db, chat-stub | none | Compose network only. Scheduler UI: `docker compose --env-file local/.env exec amplify-api wget -qO- http://scheduler:8080/jobs` |
 | apim (`make up PROFILE=apim`) | `127.0.0.1:9443`, `8243` | Optional WSO2 API Manager 4.7.0. **Pending the non-prod Asgardeo org** (key manager); steps in `compose.yaml`. Until then the default profile is the supported one |
 
-To point a local One WSO2 at it, use `http://localhost:9090` with a dev JWT forwarded as `x-jwt-assertion`, and `LINKEDIN_REDIRECT_URI` (default `http://localhost:3000/amplify/linkedin/callback`) as its callback page.
+To point a local One WSO2 at it, use `http://localhost:9090` with a dev JWT forwarded as `x-jwt-assertion`, and `LINKEDIN_REDIRECT_URI` (default `http://localhost:3000/amplify/connect/callback`) as its callback page.
 
 ## Configuration
 
@@ -94,7 +94,7 @@ Every setting is a Ballerina `configurable`, set through `BAL_CONFIG_VAR_<NAME>`
 | `PEOPLEDIRECTORYTOKENURL`, `PEOPLEDIRECTORYCLIENTID`, `PEOPLEDIRECTORYCLIENTSECRET` | ✓ | | | | unset. OAuth2 client credentials for the people-app API (Choreo connection) |
 | `LINKEDINCLIENTID` | ✓ | ✓ | | | `amplify-local` (mock) |
 | `LINKEDINCLIENTSECRET` | ✓ | | | ✓ | random, shared with the mock |
-| `LINKEDINREDIRECTURI` | ✓ | | | | `http://localhost:3000/amplify/linkedin/callback` |
+| `LINKEDINREDIRECTURI` | ✓ | | | | `http://localhost:3000/amplify/connect/callback` |
 | `LINKEDINAPIBASEURL`, `LINKEDINAUTHBASEURL` | ✓ | ✓ | | | `http://mock-linkedin:9090`, `http://mock-linkedin:9091` |
 | `LINKEDINAUTHORIZEBASEURL` | ✓ | | | | `http://localhost:19091` (browser-facing; local only, empty = `LINKEDINAUTHBASEURL`) |
 | `LINKEDINIDTOKENVALIDATION` | ✓ | | | | `false` (`LINKEDIN_ID_TOKEN_VALIDATION`; the mock issues no ID token). `LINKEDINJWKSURL` / `LINKEDINOIDCISSUER` default to LinkedIn's |
@@ -109,24 +109,26 @@ Deploying to Choreo: [docs/runbooks/choreo-deploy.md](../../../../docs/runbooks/
 
 ### LinkedIn: mock or real
 
-There's no mode switch. amplify-api and amplify-jobs talk to whatever LinkedIn base URLs and app credentials they're given, so mock vs real is only configuration. Locally, set these in `local/.env`, then `make down && make up`.
+One switch in `local/.env`: **`LINKEDIN_USE_MOCK`**. `true` (the default) sends amplify-api and amplify-jobs to the `mock-linkedin` container. `false` sends them to real LinkedIn with your own non-prod app. `scripts/compose.sh` turns the flag into the right `LINKEDIN_*` values (Compose can't branch on a boolean), and `make`, `make e2e`, the load tests and JMeter all go through it. When you run Compose by hand, use `scripts/compose.sh up -d --build` instead of `docker compose --env-file local/.env up -d --build`, so the switch applies. It prints which mode it picked.
 
-| `local/.env` | Mock (default) | Real LinkedIn |
+| `local/.env` | `LINKEDIN_USE_MOCK=true` | `LINKEDIN_USE_MOCK=false` |
 |---|---|---|
-| `LINKEDIN_API_BASE_URL` | `http://mock-linkedin:9090` | `https://api.linkedin.com` |
-| `LINKEDIN_OAUTH_BASE_URL` | `http://mock-linkedin:9091` | `https://www.linkedin.com` |
-| `LINKEDIN_AUTHORIZE_BASE_URL` (browser-facing) | `http://localhost:19091` | `https://www.linkedin.com`, or leave it empty (`LINKEDIN_AUTHORIZE_BASE_URL=`) to reuse the OAuth base |
-| `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | made-up values shared with the mock | your LinkedIn developer app's values |
-| `LINKEDIN_REDIRECT_URI` | `http://localhost:3000/amplify/linkedin/callback` | exactly a redirect URI registered on that app |
-| `LINKEDIN_ID_TOKEN_VALIDATION` | `false` | `true` to check LinkedIn's ID token (`iss`, `aud`, `exp`, signature against LinkedIn's JWKS) |
+| API / OAuth base URLs | `http://mock-linkedin:9090` / `:9091` | `https://api.linkedin.com` / `https://www.linkedin.com` |
+| Browser authorization base | `http://localhost:19091` | empty (reuses the OAuth base) |
+| Client id and secret | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` (made-up, shared with the mock) | `LINKEDIN_REAL_CLIENT_ID`, `LINKEDIN_REAL_CLIENT_SECRET` (your app; required) |
+| ID-token validation | off | on, unless `LINKEDIN_REAL_ID_TOKEN_VALIDATION=false` (checks `iss`, `aud`, `exp` and the signature against LinkedIn's JWKS) |
+| `LINKEDIN_REDIRECT_URI` | `http://localhost:3000/amplify/connect/callback` | exactly a redirect URI registered on your app |
+| `WSO2_ORGANIZATION_URN` | `urn:li:organization:1477` (WSO2's page) | the company page your test posts belong to, `urn:li:organization:<id>`; keep One WSO2's `ONE_WSO2_AMPLIFY_LINKEDIN_ORG_URN` in `public/config.js` the same |
+
+Change the flag, then `scripts/compose.sh up -d --no-deps amplify-api amplify-jobs` (or `make up`) to apply it.
 
 Before you switch:
 
 - **Use a non-prod LinkedIn app and a test member account.** With real credentials, a share from your laptop publishes to that member's real feed.
 - **The app needs two products:** "Sign In with LinkedIn using OpenID Connect" and "Share on LinkedIn" (scopes `openid profile w_member_social`). Register your exact callback URL on it. amplify-api refuses a redirect URI that isn't `https://`, except plain `http://` with `ENVIRONMENT=local`.
 - **Keep the real secret out of Git.** `local/.env` is gitignored (`local/*.env`); `local/.env.example` is not, so never put real values there.
-- **The mock container still starts** (Compose depends on it) and receives the same client values. That's harmless locally.
-- **The e2e script only works against the mock.** It scripts the mock's sign-in page. Switch back to the mock before `make e2e` or `make test-all`.
+- **The mock container still starts** (Compose depends on it), but only ever gets the made-up mock credentials, never your real app's. That's harmless locally.
+- **The e2e script only works against the mock.** It scripts the mock's sign-in page and refuses to run when `LINKEDIN_USE_MOCK=false`. Set it back to `true` before `make e2e` or `make test-all`.
 
 In Choreo it's the same settings per environment. Dev uses the LinkedIn Mock component, and prod uses `https://api.linkedin.com` / `https://www.linkedin.com` with the prod app (see [choreo-deploy.md](../../../../docs/runbooks/choreo-deploy.md) C2 and C6). The go-live check is that no LinkedIn Mock URL is set in prod.
 

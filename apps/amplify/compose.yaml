@@ -66,8 +66,9 @@ services:
       BAL_CONFIG_VAR_RECONCILEDELAYSECONDS: "5"
       # LinkedIn = mock-linkedin by default. The server reaches it by service name; the browser by the published
       # port. To use real LinkedIn, see README "LinkedIn: mock or real".
-      BAL_CONFIG_VAR_LINKEDINCLIENTID: ${LINKEDIN_CLIENT_ID:?}
-      BAL_CONFIG_VAR_LINKEDINCLIENTSECRET: ${LINKEDIN_CLIENT_SECRET:?}
+      # Mock credentials by default; scripts/compose.sh sets LINKEDIN_APP_* when LINKEDIN_USE_MOCK=false.
+      BAL_CONFIG_VAR_LINKEDINCLIENTID: ${LINKEDIN_APP_CLIENT_ID:-${LINKEDIN_CLIENT_ID:?}}
+      BAL_CONFIG_VAR_LINKEDINCLIENTSECRET: ${LINKEDIN_APP_CLIENT_SECRET:-${LINKEDIN_CLIENT_SECRET:?}}
       BAL_CONFIG_VAR_LINKEDINREDIRECTURI: ${LINKEDIN_REDIRECT_URI:?}
       BAL_CONFIG_VAR_LINKEDINAPIBASEURL: ${LINKEDIN_API_BASE_URL:-http://mock-linkedin:9090}
       BAL_CONFIG_VAR_LINKEDINAUTHBASEURL: ${LINKEDIN_OAUTH_BASE_URL:-http://mock-linkedin:9091}
@@ -75,6 +76,8 @@ services:
       BAL_CONFIG_VAR_LINKEDINAUTHORIZEBASEURL: ${LINKEDIN_AUTHORIZE_BASE_URL-http://localhost:19091}
       # The mock issues no ID token, so this only makes sense against real LinkedIn.
       BAL_CONFIG_VAR_LINKEDINIDTOKENVALIDATION: ${LINKEDIN_ID_TOKEN_VALIDATION:-false}
+      # The company page posts must belong to. Default = WSO2's page; local/.env can point at a test page.
+      BAL_CONFIG_VAR_WSO2ORGANIZATIONURN: ${WSO2_ORGANIZATION_URN:-urn:li:organization:1477}
       # Team rosters (D13) = people-stub by default: edit local/people-stub/directory.json.
       BAL_CONFIG_VAR_PEOPLEDIRECTORYURL: ${PEOPLE_DIRECTORY_URL:-http://people-stub:9096/employees/basic-info}
       # Post links: LinkedIn, plus the mock's browser-facing origin for local demos.
@@ -108,7 +111,7 @@ services:
     environment:
       <<: *db-common
       BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_JOBS_DB_PASSWORD:?}
-      BAL_CONFIG_VAR_LINKEDINCLIENTID: ${LINKEDIN_CLIENT_ID:?}
+      BAL_CONFIG_VAR_LINKEDINCLIENTID: ${LINKEDIN_APP_CLIENT_ID:-${LINKEDIN_CLIENT_ID:?}}
       BAL_CONFIG_VAR_LINKEDINAPIBASEURL: ${LINKEDIN_API_BASE_URL:-http://mock-linkedin:9090}
       BAL_CONFIG_VAR_LINKEDINAUTHBASEURL: ${LINKEDIN_OAUTH_BASE_URL:-http://mock-linkedin:9091}
       BAL_CONFIG_VAR_TOKENKEYS: ${TOKEN_ENCRYPTION_KEY_ID:?}:${TOKEN_ENCRYPTION_KEY:?}
