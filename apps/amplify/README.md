@@ -102,6 +102,9 @@ Every setting is a Ballerina `configurable`, set through `BAL_CONFIG_VAR_<NAME>`
 | `CHATWEBHOOKURL` | | ✓ | | ✓ | chat-stub URL (or the dev test space) |
 | `CHATSPACE`, `CHATCARDAVATARURL`, `SHAREPAGEBASEURL` | | ✓ | | | `dev-test`, empty, One WSO2 Celebrate page |
 | `CHATALLOWINSECUREHTTP` | | ✓ | | | `true` (local only, plain-http stub) |
+| `AMPLIFYONNOVERA`, `AMPLIFYONWEBHOOK` | | ✓ | | | `true`, `false` (`AMPLIFY_ON_NOVERA`, `AMPLIFY_ON_WEBHOOK`): which channels announce a campaign. Novera is primary, the webhook best effort |
+| `NOVERANOTIFYURL`, `NOVERATOKENURL`, `NOVERACLIENTID`, `NOVERASCOPES` | | ✓ | | | empty (Novera's `POST /internal/notifications` through its Choreo gateway, the token endpoint, the subscribed application, optional scopes) |
+| `NOVERACLIENTSECRET` | | ✓ | | ✓ | empty (that application's secret) |
 
 Scheduler: `DSN` (secret, its own database/user). Mock LinkedIn: `LISTENERHOST=0.0.0.0`, `WWWBASEURL`, `CLIENTID`, `CLIENTSECRET` (secret), `ENABLEMOCKADMIN`, and `BAL_CONFIG_DATA` for `redirectUris`. Tuning knobs with safe defaults (run batch sizes, timeouts, breakers, LinkedIn ceilings) are in each component's `config.bal`; set them the same way when needed.
 

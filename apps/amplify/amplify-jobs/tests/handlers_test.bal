@@ -61,7 +61,7 @@ function aPanicInsideARunReleasesTheFlagAndTheLock() returns error? {
 // ---- CampaignRegistered ----------------------------------------------------------------------------
 
 @test:Config
-function campaignRegisteredDefersWithoutAChatWebhook() returns error? {
+function campaignRegisteredDefersWithoutAnyAnnouncementChannel() returns error? {
     World w = harness();
     w.deps.chat = ();
     string cid = types:newUuidV7();
@@ -69,7 +69,77 @@ function campaignRegisteredDefersWithoutAChatWebhook() returns error? {
     int id = w.queue.enqueue(events:CAMPAIGN_REGISTERED, registered(cid));
     RunReport r = check run(w);
     test:assertEquals(r.deferred, 1);
-    test:assertEquals(w.queue.statusOf(id), ["PENDING", 0, "Google Chat webhook not configured"]);
+    test:assertEquals(w.queue.statusOf(id), ["PENDING", 0,
+        "no announcement channel: Novera and the Google Chat webhook are off or not configured"]);
+}
+
+@test:Config
+function campaignRegisteredThroughNoveraOnlySendsNoClubCard() returns error? {
+    World w = harness();
+    FakeNovera novera = new;
+    w.deps.chat = ();
+    w.deps.novera = novera;
+    string cid = types:newUuidV7();
+    w.mem.putCampaign(openCampaign(cid, time:utcNow()));
+    int id = w.queue.enqueue(events:CAMPAIGN_REGISTERED, registered(cid));
+    _ = check run(w);
+    test:assertEquals(novera.sent(), 1);
+    test:assertEquals(w.queue.statusOf(id)[0], "DONE");
+    var a = check w.mem.announcement(cid);
+    test:assertTrue(a !is () && a.space == "novera" && a.sentAt !is (), "announced, space labelled novera");
+}
+
+@test:Config
+function campaignRegisteredWithBothChannelsPostsOnceEachAndNoveraDrivesRetry() returns error? {
+    World w = harness();
+    FakeNovera novera = new;
+    w.deps.novera = novera;
+    string cid = types:newUuidV7();
+    w.mem.putCampaign(openCampaign(cid, time:utcNow()));
+    int id = w.queue.enqueue(events:CAMPAIGN_REGISTERED, registered(cid));
+
+    novera.setMode("503");
+    RunReport retried = check run(w);
+    test:assertEquals(retried.retried, 1, "a Novera 503 retries the row");
+    test:assertEquals(w.chat.postCount(), 0, "the webhook waits for Novera, so a retry cannot double-post it");
+
+    novera.setMode("ok");
+    w.queue.makeAllDue();
+    _ = check run(w);
+    test:assertEquals(novera.sent(), 1);
+    test:assertEquals(w.chat.postCount(), 1);
+    test:assertEquals(w.queue.statusOf(id)[0], "DONE");
+}
+
+@test:Config
+function aClubWebhookFailureAfterNoveraAcceptedDoesNotRetryTheAnnouncement() returns error? {
+    World w = harness();
+    FakeNovera novera = new;
+    w.deps.novera = novera;
+    w.chat.setMode("429");
+    string cid = types:newUuidV7();
+    w.mem.putCampaign(openCampaign(cid, time:utcNow()));
+    int id = w.queue.enqueue(events:CAMPAIGN_REGISTERED, registered(cid));
+    _ = check run(w);
+    test:assertEquals(novera.sent(), 1);
+    test:assertEquals(w.queue.statusOf(id)[0], "DONE", "no retry, so Novera never gets the same card twice");
+}
+
+@test:Config
+function aRefusedNoveraAnnouncementFailsWithoutRetry() returns error? {
+    World w = harness();
+    FakeNovera novera = new;
+    novera.setMode("400");
+    w.deps.chat = ();
+    w.deps.novera = novera;
+    string cid = types:newUuidV7();
+    w.mem.putCampaign(openCampaign(cid, time:utcNow()));
+    int id = w.queue.enqueue(events:CAMPAIGN_REGISTERED, registered(cid));
+    RunReport r = check run(w);
+    test:assertEquals(r.failed, 1);
+    test:assertEquals(w.queue.statusOf(id)[0], "FAILED");
+    var a = check w.mem.announcement(cid);
+    test:assertTrue(a !is () && a.failedAt !is (), "FAILED, so the admin retry can re-queue it");
 }
 
 @test:Config

@@ -19,3 +19,9 @@
 
 # Module name, used in log context.
 public const string MODULE = "announcements";
+
+# Novera notification `source` for Amplify (1-40 lowercase letters, digits or hyphens).
+public const string NOVERA_SOURCE = "amplify";
+# Novera's limits for `title` and `body`, in characters.
+const int NOVERA_LINE_MAX = 300;
+const int NOVERA_BODY_MAX = 5000;

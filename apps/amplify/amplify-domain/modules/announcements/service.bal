@@ -135,3 +135,32 @@ isolated function ensureQueued(Announcement announcement) returns types:DomainEr
     }
     return ();
 }
+
+# Builds the Novera notification for a campaign. Text is cut to Novera's field limits instead of rejected, so a
+# long title never blocks an announcement.
+#
+# + campaign - Campaign
+# + sharePageBaseUrl - One WSO2 Celebrate page; the link adds `?share=<campaignId>`
+# + iconUrl - Icon beside the title, kept only when it is https
+# + return - The notification
+public isolated function buildNoveraNotification(CampaignCardSource campaign, string sharePageBaseUrl,
+        string? iconUrl = ()) returns NoveraNotification {
+    string base = sharePageBaseUrl.endsWith("/") ? sharePageBaseUrl.substring(0, sharePageBaseUrl.length() - 1)
+        : sharePageBaseUrl;
+    string? summary = campaign.summary;
+    string body = summary is () || summary.trim() == "" ? "A new post is ready to share." : summary.trim();
+    NoveraNotification n = {
+        'source: NOVERA_SOURCE,
+        title: cutTo(campaign.title.trim(), NOVERA_LINE_MAX),
+        subtitle: campaign.isPriority ? "Amplify · Priority" : "Amplify",
+        body: cutTo(body, NOVERA_BODY_MAX),
+        link: {url: string `${base}${base.includes("?") ? "&" : "?"}share=${campaign.campaignId}`,
+            label: "Share it"}
+    };
+    if iconUrl is string && iconUrl.startsWith("https://") {
+        n.iconUrl = iconUrl;
+    }
+    return n;
+}
+
+isolated function cutTo(string text, int max) returns string => text.length() <= max ? text : text.substring(0, max);

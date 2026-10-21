@@ -72,6 +72,27 @@ configurable string chatCardAvatarUrl = "";
 # commit (Chat fetches it anonymously, so a Drive link won't work). The original is in the Amplify Demo shared chat
 # space. Empty = such cards go out without an image.
 configurable string chatDefaultImageUrl = "";
+# Announce shares through Novera (feat/amplify_on_novera). Read from `AMPLIFY_ON_NOVERA` in local/.env, default true.
+# Not acted on yet: the Novera sender does not exist, so nothing branches on this.
+configurable boolean amplifyOnNovera = true;
+# Announce shares through the Google Chat webhook above (`AMPLIFY_ON_WEBHOOK`, default false). Not acted on yet: the
+# webhook client is still built whenever `chatWebhookUrl` is set, so announcements keep flowing until Novera lands.
+configurable boolean amplifyOnWebhook = false;
+// ---- Novera (Google Chat assistant) ---------------------------------------------------------------
+
+# Novera's `POST /internal/notifications` URL (the Choreo gateway URL of Novera's API). Empty = Novera not configured.
+configurable string noveraNotifyUrl = "";
+# OAuth token endpoint for the client-credentials grant (an application subscribed to Novera's API).
+configurable string noveraTokenUrl = "";
+# Client id of that application.
+configurable string noveraClientId = "";
+# Client secret of that application (Choreo secret; never logged).
+configurable string noveraClientSecret = "";
+# Comma-separated scopes for the token; empty = none.
+configurable string noveraScopes = "";
+# Seconds before a Novera call (token or notification) gives up.
+configurable decimal noveraTimeoutSeconds = 10;
+
 # Space label stored on `announcement.space`: `club` or `dev-test`.
 configurable string chatSpace = "club";
 # Per-call timeout, seconds.

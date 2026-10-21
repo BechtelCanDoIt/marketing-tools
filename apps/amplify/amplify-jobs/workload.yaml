@@ -56,3 +56,20 @@ configurations:
       value: ""
     - name: BAL_CONFIG_VAR_SHAREPAGEBASEURL
       value: ""
+    - name: BAL_CONFIG_VAR_NOVERANOTIFYURL
+      value: ""
+    - name: BAL_CONFIG_VAR_NOVERATOKENURL
+      value: ""
+    - name: BAL_CONFIG_VAR_NOVERACLIENTID
+      value: ""
+    - name: BAL_CONFIG_VAR_NOVERACLIENTSECRET
+      valueFrom:
+        secretRef:
+          name: amplify-jobs-secrets
+          key: BAL_CONFIG_VAR_NOVERACLIENTSECRET
+    - name: BAL_CONFIG_VAR_NOVERASCOPES
+      value: ""
+    - name: BAL_CONFIG_VAR_AMPLIFYONNOVERA
+      value: "true"
+    - name: BAL_CONFIG_VAR_AMPLIFYONWEBHOOK
+      value: "false"

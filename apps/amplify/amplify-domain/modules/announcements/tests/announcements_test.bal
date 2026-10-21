@@ -65,3 +65,28 @@ function cardLinksToOneWso2SharePage() returns error? {
     test:assertEquals(check buttons[0].onClick.openLink.url, "https://one.wso2.com/amplify/celebrate?share=c1");
     test:assertEquals(check cards[0].card.header.imageUrl, "https://media.wso2.com/amplify-avatar.png");
 }
+
+@test:Config
+function noveraNotificationLinksToTheSharePageAndKeepsOnlyAnHttpsIcon() {
+    NoveraNotification n = buildNoveraNotification(
+            {campaignId: "c1", title: "T", summary: "S", imageUrl: (), isPriority: true},
+            "https://one.wso2.com/amplify/celebrate/", "https://media.wso2.com/amplify-avatar.png");
+    test:assertEquals(n.'source, "amplify");
+    test:assertEquals(n.link.url, "https://one.wso2.com/amplify/celebrate?share=c1");
+    test:assertEquals(n.subtitle, "Amplify · Priority");
+    test:assertEquals(n.iconUrl, "https://media.wso2.com/amplify-avatar.png");
+    test:assertFalse(buildNoveraNotification({campaignId: "c1", title: "T", summary: (), imageUrl: (),
+            isPriority: false}, "https://x.example", "http://insecure.example/a.png").hasKey("iconUrl"));
+}
+
+@test:Config
+function noveraNotificationCutsToNoveraLimitsAndFillsAnEmptySummary() {
+    string long = string:'join("", from int i in 0 ..< 6000 select "x");
+    NoveraNotification n = buildNoveraNotification(
+            {campaignId: "c1", title: long, summary: long, imageUrl: (), isPriority: false}, "https://x.example");
+    test:assertEquals(n.title.length(), 300);
+    test:assertEquals(n.body.length(), 5000);
+    NoveraNotification blank = buildNoveraNotification(
+            {campaignId: "c1", title: "T", summary: "  ", imageUrl: (), isPriority: false}, "https://x.example");
+    test:assertEquals(blank.body, "A new post is ready to share.");
+}
