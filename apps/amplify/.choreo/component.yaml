@@ -153,6 +153,13 @@ configurations:
         configForm:
           displayName: LinkedIn OAuth base URL
           type: string
+    # The company page a registered post must belong to (default WSO2's page, urn:li:organization:1477).
+    - name: BAL_CONFIG_VAR_WSO2ORGANIZATIONURN
+      valueFrom:
+        configForm:
+          displayName: LinkedIn company page URN (urn:li:organization:<id>)
+          type: string
+          required: false
     # ID-token validation on connect (off by default; turn on once a real LinkedIn app returns the ID token).
     - name: BAL_CONFIG_VAR_LINKEDINIDTOKENVALIDATION
       valueFrom:

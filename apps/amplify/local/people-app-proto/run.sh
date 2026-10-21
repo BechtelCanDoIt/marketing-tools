@@ -38,7 +38,7 @@ MYSQL_IMAGE=mysql:8.0@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196
 NODE_IMAGE=node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
 # glibc, not alpine: netty's native TLS library doesn't load on musl/aarch64.
 JRE_IMAGE=eclipse-temurin:21-jre@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99
-COMPOSE=(docker compose --project-directory "$ROOT" --env-file "$ROOT/local/.env")
+COMPOSE=("$ROOT/scripts/compose.sh")
 
 mysql_q() { docker exec -i -e MYSQL_PWD="$MYSQL_PASSWORD" people-proto-mysql mysql -uroot "$@"; }
 
