@@ -26,7 +26,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 K6_IMAGE="${K6_IMAGE:-grafana/k6:1.0.0@sha256:f21270290d702cbf0a7d6ba5d7ed100b63bcb233b558b885ed787547b3488279}"
-COMPOSE=(docker compose --env-file local/.env)
+COMPOSE=(scripts/compose.sh)
 NETWORK="${NETWORK:-wso2-amplify_internal}"
 work="$PWD/local/.load"; rm -rf "$work"; mkdir -p "$work"; trap 'rm -rf "$work"' EXIT  # under the project: Docker Desktop may not share $TMPDIR
 
