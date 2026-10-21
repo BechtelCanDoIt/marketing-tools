@@ -176,6 +176,7 @@ isolated function processRow(Deps deps, store:OutboxRow row, RunSettings setting
         settings,
         config: deps.config,
         chat: deps.chat,
+        novera: deps.novera,
         linkedIn: deps.linkedIn,
         cipher: deps.cipher,
         budget,

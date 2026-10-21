@@ -24,6 +24,7 @@ import amplify_common.linkedin;
 
 final linkedin:LinkedInAdapter? linkedInAdapter = check newLinkedInAdapter();
 final WebhookChat? webhookChat = check newWebhookChat();
+final NoveraClient? noveraClient = check newNoveraClient();
 final crypto:TokenCipher? tokenCipher = check newTokenCipher();
 
 isolated function newLinkedInAdapter() returns linkedin:LinkedInAdapter?|error {
@@ -43,12 +44,27 @@ isolated function newLinkedInAdapter() returns linkedin:LinkedInAdapter?|error {
 }
 
 isolated function newWebhookChat() returns WebhookChat?|error {
-    if chatWebhookUrl.trim() == "" {
+    // AMPLIFY_ON_WEBHOOK off: no webhook client, so announcements never reach the space even if a URL is set.
+    if !amplifyOnWebhook || chatWebhookUrl.trim() == "" {
         return ();
     }
     return new WebhookChat(check new googlechat:WebhookClient({webhookUrl: chatWebhookUrl,
         allowInsecureHttp: chatAllowInsecureHttp, timeoutSeconds: chatTimeoutSeconds, resilience: chatResilience}),
         chatSpace, chatMinIntervalSeconds);
+}
+
+isolated function newNoveraClient() returns NoveraClient?|error {
+    // AMPLIFY_ON_NOVERA off, or the URL, token endpoint or credentials not set: Novera is not configured.
+    if !amplifyOnNovera || noveraNotifyUrl.trim() == "" || noveraTokenUrl.trim() == "" || noveraClientId == ""
+            || noveraClientSecret == "" {
+        return ();
+    }
+    string[] scopes = from string scope in re `,`.split(noveraScopes)
+        let string trimmed = scope.trim()
+        where trimmed != ""
+        select trimmed;
+    return check new NoveraClient(noveraNotifyUrl, noveraTokenUrl, noveraClientId, noveraClientSecret, scopes,
+        noveraTimeoutSeconds);
 }
 
 isolated function newTokenCipher() returns crypto:TokenCipher?|error {
@@ -73,10 +89,12 @@ isolated function newTokenCipher() returns crypto:TokenCipher?|error {
 isolated function breakerStates() returns map<string> {
     linkedin:LinkedInAdapter? li = linkedInAdapter;
     WebhookChat? chat = webhookChat;
+    NoveraClient? novera = noveraClient;
     return {
         database: dbBreaker.state(),
         linkedinApi: li is () ? "NOT_CONFIGURED" : li.breakers()["api"] ?: "CLOSED",
-        googleChat: chat is () ? "NOT_CONFIGURED" : chat.breaker()
+        googleChat: chat is () ? "NOT_CONFIGURED" : chat.breaker(),
+        novera: novera is () ? "NOT_CONFIGURED" : novera.breaker()
     };
 }
 
@@ -89,6 +107,7 @@ isolated function productionDeps(PgRunStore db, PgRunLock lockDb) returns Deps =
     runStore: db,
     runLock: lockDb,
     chat: webhookChat,
+    novera: noveraClient,
     linkedIn: linkedInAdapter,
     cipher: tokenCipher,
     config: runConfig(),

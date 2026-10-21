@@ -42,6 +42,7 @@ type HandlerContext record {|
     RunSettings settings;
     RunConfig config;
     ChatPort? chat;
+    NoveraPort? novera = ();
     linkedin:ProviderAdapter? linkedIn;
     crypto:TokenCipher? cipher;
     LinkedInBudget budget;
@@ -124,9 +125,13 @@ isolated function handleCampaignRegistered(HandlerContext ctx, events:CampaignRe
     if !ctx.settings.announcementsEnabled {
         return deferFor(ctx.config.deferSeconds, "announcements.enabled is off");
     }
+    // Novera (AMPLIFY_ON_NOVERA) is the primary channel when it is on: its outcome drives retry and failure.
+    // The Club webhook (AMPLIFY_ON_WEBHOOK) is then best effort, so a retry never posts the same card twice.
+    NoveraPort? novera = ctx.novera;
     ChatPort? chat = ctx.chat;
-    if chat is () {
-        return deferFor(ctx.config.deferSeconds, "Google Chat webhook not configured");
+    if novera is () && chat is () {
+        return deferFor(ctx.config.deferSeconds,
+            "no announcement channel: Novera and the Google Chat webhook are off or not configured");
     }
     campaign:Campaign? c = check ctx.store.campaign(event.campaignId);
     if c is () {
@@ -144,7 +149,8 @@ isolated function handleCampaignRegistered(HandlerContext ctx, events:CampaignRe
     announcements:Announcement? existing = check ctx.store.announcement(c.id);
     announcements:Announcement queued;
     if existing is () {
-        queued = check announcements:queueAnnouncement((), c.id, ctx.row.id, chat.space(), ctx.now);
+        string space = novera is () ? (<ChatPort>chat).space() : NOVERA_SPACE;
+        queued = check announcements:queueAnnouncement((), c.id, ctx.row.id, space, ctx.now);
         check ctx.store.insertAnnouncement(queued);
     } else {
         announcements:AnnouncementStatus current = announcements:announcementStatus(existing);
@@ -155,26 +161,70 @@ isolated function handleCampaignRegistered(HandlerContext ctx, events:CampaignRe
         queued = current == announcements:FAILED ? check announcements:retryAnnouncement(existing) : existing;
     }
 
-    json|types:DomainError card = announcements:buildCard({campaignId: c.id, title: c.title, summary: c.summary,
-        imageUrl: c.imageUrl, isPriority: c.isPriority}, ctx.config.sharePageBaseUrl, ctx.config.cardAvatarUrl,
-        ctx.config.defaultImageUrl);
-    if card is types:DomainError {
-        check ctx.store.saveAnnouncement(check announcements:markFailed(queued, card.message(), ctx.now), []);
-        return failed(string `card rejected: ${card.message()}`);
+    announcements:CampaignCardSource campaignSource = {campaignId: c.id, title: c.title, summary: c.summary,
+        imageUrl: c.imageUrl, isPriority: c.isPriority};
+    string messageName;
+    string? threadName = ();
+
+    if novera is NoveraPort {
+        NoveraError? rejected = novera.notify(announcements:buildNoveraNotification(campaignSource,
+            ctx.config.sharePageBaseUrl, ctx.config.cardAvatarUrl), ctx.correlationId);
+        if rejected is NoveraError {
+            string note = string `Novera ${rejected.detail().code} (HTTP ${rejected.detail().httpStatus.toString()})`;
+            if rejected.detail().retryable && !ctx.finalAttempt {
+                return retryLater(note);
+            }
+            check ctx.store.saveAnnouncement(check announcements:markFailed(queued, note, ctx.now), []);
+            return failed(note);
+        }
+        // Novera answers 202 before it sends, so there is no Chat message name: a stable marker stands in.
+        messageName = string `${NOVERA_SPACE}:${c.id}`;
+        if chat is ChatPort {
+            string? note = postClubCard(ctx, chat, campaignSource, queued.threadKey);
+            if note is string {
+                log:printWarn("Club webhook card failed after Novera accepted the announcement; not retried",
+                    detail = note, correlationId = ctx.correlationId);
+            }
+        }
+    } else {
+        // Webhook only.
+        json|types:DomainError card = announcements:buildCard(campaignSource, ctx.config.sharePageBaseUrl,
+            ctx.config.cardAvatarUrl, ctx.config.defaultImageUrl);
+        if card is types:DomainError {
+            check ctx.store.saveAnnouncement(check announcements:markFailed(queued, card.message(), ctx.now), []);
+            return failed(string `card rejected: ${card.message()}`);
+        }
+        googlechat:ChatMessage|googlechat:ChatError sent = (<ChatPort>chat).post(card, queued.threadKey,
+            ctx.correlationId);
+        if sent is googlechat:ChatError {
+            string note = string `Google Chat ${sent.detail().code} (HTTP ${sent.detail().httpStatus.toString()})`;
+            if sent.detail().retryable && !ctx.finalAttempt {
+                return retryLater(note);
+            }
+            check ctx.store.saveAnnouncement(check announcements:markFailed(queued, note, ctx.now), []);
+            return failed(note);
+        }
+        messageName = sent.name;
+        threadName = sent.threadName;
     }
 
-    googlechat:ChatMessage|googlechat:ChatError sent = chat.post(card, queued.threadKey, ctx.correlationId);
-    if sent is googlechat:ChatError {
-        string note = string `Google Chat ${sent.detail().code} (HTTP ${sent.detail().httpStatus.toString()})`;
-        if sent.detail().retryable && !ctx.finalAttempt {
-            return retryLater(note);
-        }
-        check ctx.store.saveAnnouncement(check announcements:markFailed(queued, note, ctx.now), []);
-        return failed(note);
-    }
-    announcements:Announcement done = check announcements:markSent(queued, sent.name, ctx.now, sent.threadName);
+    announcements:Announcement done = check announcements:markSent(queued, messageName, ctx.now, threadName);
     check ctx.store.saveAnnouncement(done, [announcements:campaignAnnouncedEvent(done)]);
     return {kind: DONE, note: "announced"};
+}
+
+# Posts the Club card as the secondary channel.
+#
+# + return - Why it failed, or `()` when it went out
+isolated function postClubCard(HandlerContext ctx, ChatPort chat, announcements:CampaignCardSource campaignSource,
+        string threadKey) returns string? {
+    json|types:DomainError card = announcements:buildCard(campaignSource, ctx.config.sharePageBaseUrl,
+        ctx.config.cardAvatarUrl, ctx.config.defaultImageUrl);
+    if card is types:DomainError {
+        return string `card rejected: ${card.message()}`;
+    }
+    googlechat:ChatMessage|googlechat:ChatError sent = chat.post(card, threadKey, ctx.correlationId);
+    return sent is googlechat:ChatError ? string `Google Chat ${sent.detail().code}` : ();
 }
 
 // ---- RepostRequested → LinkedIn (C1, B9, B14) ------------------------------------------------------

@@ -16,3 +16,6 @@
 
 # Component name used in logs and probe bodies.
 const string COMPONENT = "amplify-jobs";
+
+# Space label stored on `announcement.space` for announcements sent through Novera.
+const string NOVERA_SPACE = "novera";
