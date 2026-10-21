@@ -43,7 +43,7 @@ EMPLOYEES="${EMPLOYEES:-200}"
 SEED="${SEED:-1}"
 RUN_JOBS="${RUN_JOBS:-0}"
 P95_TARGET_MS="${P95_TARGET_MS:-50}"
-COMPOSE=(docker compose --env-file local/.env)
+COMPOSE=(scripts/compose.sh)
 
 die() { echo "error: $*" >&2; exit 1; }
 

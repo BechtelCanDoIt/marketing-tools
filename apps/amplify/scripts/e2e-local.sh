@@ -23,7 +23,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 API="${API:-http://localhost:9090}"
-COMPOSE=(docker compose --env-file local/.env)
+COMPOSE=(scripts/compose.sh)
+# The e2e scripts the mock's sign-in page, so it can't run against real LinkedIn.
+case "$(sed -n 's/^LINKEDIN_USE_MOCK=//p' local/.env | tail -1 | tr '[:upper:]' '[:lower:]')" in
+  false | 0 | no) echo "e2e needs the mock: set LINKEDIN_USE_MOCK=true in local/.env and restart the stack" >&2; exit 1 ;;
+esac
+# Posts must belong to the page amplify-api is configured with (local/.env, default WSO2's page).
+ORG_URN=$(sed -n 's/^WSO2_ORGANIZATION_URN=//p' local/.env | tail -1)
+ORG_URN=${ORG_URN:-urn:li:organization:1477}
 MINT=local/dev-jwt/mint-dev-jwt.sh
 RUN_ID="$(date +%s)"
 # One fixed employee: the mock signs every authorization in as the same LinkedIn member, and a member URN
@@ -79,8 +86,8 @@ call "$ADMIN_JWT" PUT /admin/settings \
 
 step "register campaign"
 TITLE="E2E campaign ${RUN_ID}"
-campaign=$(call "$ADMIN_JWT" POST /campaigns "$(jq -nc --arg t "$TITLE" --arg u "urn:li:share:${RUN_ID}" '{
-  resourceUrn: $u, ownerUrn: "urn:li:organization:1477", title: $t, summary: "Local e2e smoke test",
+campaign=$(call "$ADMIN_JWT" POST /campaigns "$(jq -nc --arg t "$TITLE" --arg u "urn:li:share:${RUN_ID}" --arg o "$ORG_URN" '{
+  resourceUrn: $u, ownerUrn: $o, title: $t, summary: "Local e2e smoke test",
   resourceUrl: "https://www.linkedin.com/feed/update/\($u)", categoryCode: "PRODUCT", tags: ["e2e"]}')")
 CAMPAIGN_ID=$(jq -r '.campaign.id // .id' <<<"$campaign")
 echo "campaign $CAMPAIGN_ID"
