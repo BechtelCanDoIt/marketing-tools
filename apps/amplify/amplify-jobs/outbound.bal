@@ -64,7 +64,7 @@ isolated function newNoveraClient() returns NoveraClient?|error {
         where trimmed != ""
         select trimmed;
     return check new NoveraClient(noveraNotifyUrl, noveraTokenUrl, noveraClientId, noveraClientSecret, scopes,
-        noveraTimeoutSeconds);
+        noveraTimeoutSeconds, allowInsecureHttp = noveraAllowInsecureHttp);
 }
 
 isolated function newTokenCipher() returns crypto:TokenCipher?|error {

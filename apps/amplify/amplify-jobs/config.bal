@@ -92,6 +92,8 @@ configurable string noveraClientSecret = "";
 configurable string noveraScopes = "";
 # Seconds before a Novera call (token or notification) gives up.
 configurable decimal noveraTimeoutSeconds = 10;
+# Local stack only: accept a plain-http notify URL (the `local/novera-mock`). Never set in Choreo.
+configurable boolean noveraAllowInsecureHttp = false;
 
 # Space label stored on `announcement.space`: `club` or `dev-test`.
 configurable string chatSpace = "club";

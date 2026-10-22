@@ -139,12 +139,14 @@ services:
       BAL_CONFIG_VAR_AMPLIFYONWEBHOOK: ${AMPLIFY_ON_WEBHOOK:-false}
       # Novera (Google Chat assistant): the Choreo gateway URL of its POST /internal/notifications and the
       # client-credentials application subscribed to it. Empty = Novera not configured (announcements defer
-      # unless the webhook is on). There is no local Novera stub; point these at a dev Novera to try it.
+      # unless the webhook is on). Local try-out: run local/novera-mock (node server.mjs, :3003) and see docs/HowToTestLocally/TestNovera.md.
       BAL_CONFIG_VAR_NOVERANOTIFYURL: ${NOVERA_NOTIFY_URL:-}
       BAL_CONFIG_VAR_NOVERATOKENURL: ${NOVERA_TOKEN_URL:-}
       BAL_CONFIG_VAR_NOVERACLIENTID: ${NOVERA_CLIENT_ID:-}
       BAL_CONFIG_VAR_NOVERACLIENTSECRET: ${NOVERA_CLIENT_SECRET:-}
       BAL_CONFIG_VAR_NOVERASCOPES: ${NOVERA_SCOPES:-}
+      # Local only: accept an http notify URL (local/novera-mock). Never set in Choreo.
+      BAL_CONFIG_VAR_NOVERAALLOWINSECUREHTTP: ${NOVERA_ALLOW_INSECURE_HTTP:-false}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9091/ready >/dev/null"]
       interval: 5s
