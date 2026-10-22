@@ -63,3 +63,11 @@ public type Standing record {|
     # Last activity
     time:Utc? lastActivityAt;
 |};
+
+# One person's points, for grouping by team or business unit.
+public type EmailPoints record {|
+    # Email, lowercase
+    string email;
+    # Points
+    int totalPoints;
+|};

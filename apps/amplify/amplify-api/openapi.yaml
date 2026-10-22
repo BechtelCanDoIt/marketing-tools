@@ -585,6 +585,68 @@ paths:
         "400": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
+  /leaderboard/people:
+    get:
+      tags: [S4 Recognition]
+      operationId: getLeaderboardPeople
+      x-roles: [EMP, PO, MKT, SLT, ADM]
+      description: "People ranked within the whole company, a business unit (BU) or a team. Open to every employee (ADR-035). `BU` and `TEAM` default to the caller's own when `bu` / `team` is omitted; the team key is the opaque `key` from `/headcount` or `/leaderboard/groups`. Membership comes from the people directory, so `BU` and `TEAM` answer 503 `DEPENDENCY_UNAVAILABLE` when it has never loaded."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+        - {$ref: "#/components/parameters/Period"}
+        - {name: scope, in: query, schema: {type: string, enum: [COMPANY, BU, TEAM], default: COMPANY}}
+        - {name: bu, in: query, schema: {type: string, maxLength: 100}}
+        - {name: team, in: query, schema: {type: string, maxLength: 200}}
+        - {name: q, in: query, schema: {type: string, maxLength: 100}}
+        - {$ref: "#/components/parameters/Page"}
+        - {$ref: "#/components/parameters/Size"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LeaderboardPeople"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /leaderboard/groups:
+    get:
+      tags: [S4 Recognition]
+      operationId: getLeaderboardGroups
+      x-roles: [EMP, PO, MKT, SLT, ADM]
+      description: "All teams (or one BU's teams), or all BUs, ranked against each other by the sum of their members' points. Open to every employee (ADR-035). Teams with no points are listed with 0. Participation is people with points over the employee count (`/headcount`). People the directory doesn't place are summed in `unassigned`, never dropped."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+        - {$ref: "#/components/parameters/Period"}
+        - {name: by, in: query, schema: {type: string, enum: [TEAM, BU], default: TEAM}}
+        - {name: bu, in: query, description: "Only the teams in this BU (by=TEAM only)", schema: {type: string, maxLength: 100}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LeaderboardGroups"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /headcount:
+    get:
+      tags: [S4 Recognition]
+      operationId: getHeadcount
+      x-roles: [EMP, PO, MKT, SLT, ADM]
+      description: "Current employee count, overall and by BU and team, counted from the people directory (everyone it returns with a work email). Kept in memory for `headcountCacheSeconds` (7 days); when that runs out the directory is read again, and a failed read keeps serving the last count. Never stored in the database."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Headcount"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
   /me/points:
     get:
       tags: [S4 Recognition]
@@ -1250,6 +1312,99 @@ components:
                 properties:
                   canAdjust: {type: boolean}
                   canReverse: {type: boolean}
+    LeaderboardPeople:
+      type: object
+      required: [period, scope, page, size, total, summary, entries]
+      properties:
+        period: {type: string}
+        scope: {type: string, enum: [COMPANY, BU, TEAM]}
+        businessUnit: {type: string, nullable: true}
+        team: {type: string, nullable: true, description: "Team key (BU and TEAM scopes)"}
+        teamName: {type: string, nullable: true}
+        page: {type: integer}
+        size: {type: integer}
+        total: {type: integer}
+        summary:
+          type: object
+          required: [participants]
+          properties:
+            headcount: {type: integer, nullable: true, description: "Employees in the scope, from the cached count; null when the directory never loaded on the company view"}
+            participants: {type: integer, description: "People in the scope with points"}
+        entries:
+          type: array
+          items:
+            type: object
+            required: [employeeId, displayName, email, points, rank, scopeRank]
+            properties:
+              employeeId: {type: string}
+              displayName: {type: string}
+              email: {type: string}
+              points: {type: integer}
+              rank: {type: integer, description: "Company rank"}
+              scopeRank: {type: integer, description: "Rank within the scope (equals rank on the company view)"}
+              previousRank: {type: integer, nullable: true}
+              lastActivityAt: {type: string, format: date-time, nullable: true}
+    LeaderboardGroups:
+      type: object
+      required: [period, by, asOf, totals, entries, unassigned]
+      properties:
+        period: {type: string}
+        by: {type: string, enum: [TEAM, BU]}
+        businessUnit: {type: string, nullable: true}
+        asOf: {type: string, format: date-time, description: "When the employee count was taken"}
+        totals:
+          type: object
+          required: [headcount, participants, points]
+          properties:
+            headcount: {type: integer}
+            participants: {type: integer}
+            points: {type: integer}
+        entries:
+          type: array
+          items:
+            type: object
+            required: [rank, key, name, points, participants, headcount, participationRate]
+            properties:
+              rank: {type: integer, description: "Dense rank, ties share a rank"}
+              key: {type: string, description: "Opaque team key, or the BU name"}
+              name: {type: string}
+              businessUnit: {type: string, nullable: true}
+              points: {type: integer}
+              participants: {type: integer}
+              headcount: {type: integer}
+              participationRate: {type: number, description: "participants / headcount, 3 decimals"}
+        unassigned:
+          type: object
+          required: [participants, points]
+          description: People with points the directory doesn't place in a team or BU
+          properties:
+            participants: {type: integer}
+            points: {type: integer}
+    Headcount:
+      type: object
+      required: [asOf, cacheSeconds, total, businessUnits, teams]
+      properties:
+        asOf: {type: string, format: date-time, description: "When the directory was read"}
+        cacheSeconds: {type: integer}
+        total: {type: integer}
+        businessUnits:
+          type: array
+          items:
+            type: object
+            required: [name, headcount]
+            properties:
+              name: {type: string}
+              headcount: {type: integer}
+        teams:
+          type: array
+          items:
+            type: object
+            required: [key, name, headcount]
+            properties:
+              key: {type: string}
+              name: {type: string}
+              businessUnit: {type: string, nullable: true}
+              headcount: {type: integer}
     PointsHistory:
       type: object
       required: [employeeId, page, size, total, items]

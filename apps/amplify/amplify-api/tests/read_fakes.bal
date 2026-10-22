@@ -77,6 +77,9 @@ function setDirectory(string mode) {
     lock {
         directoryCache = ();
     }
+    lock {
+        headcountCache = ();
+    }
 }
 
 function takeDirectoryFetches() returns int {
@@ -93,6 +96,16 @@ function expireDirectoryCache() {
         [DirectoryIndex & readonly, decimal]? hit = directoryCache;
         if hit is [DirectoryIndex & readonly, decimal] {
             directoryCache = [hit[0], hit[1] - rosterCacheSeconds - 1d];
+        }
+    }
+}
+
+# Ages the cached employee count past `headcountCacheSeconds`, as if a week went by.
+function expireHeadcountCache() {
+    lock {
+        [HeadcountSnapshot & readonly, decimal]? hit = headcountCache;
+        if hit is [HeadcountSnapshot & readonly, decimal] {
+            headcountCache = [hit[0], hit[1] - headcountCacheSeconds - 1d];
         }
     }
 }
@@ -117,8 +130,8 @@ service /people/employees/basic\-info on jwksListener {
             return {teamName: "Rivers", members: [{name: "Bob Jones bob@wso2.com"}]};
         }
         json[] rows = from string m in RIVERS
-            select {workEmail: m.toUpperAscii(), firstName: "R", team: "Rivers", subTeam: ()};
-        rows.push({workEmail: "rv-noteam@wso2.com", firstName: "N", team: (), subTeam: ()});
+            select {workEmail: m.toUpperAscii(), firstName: "R", team: "Rivers", subTeam: (), businessUnit: "Water"};
+        rows.push({workEmail: "rv-noteam@wso2.com", firstName: "N", team: (), subTeam: (), businessUnit: "Land"});
         return rows;
     }
 }
@@ -201,6 +214,13 @@ isolated function mockTeamPageOf(string period, string[]? emails, string? q, rec
         }
     }
     return {items, total: rows.length()};
+}
+
+@test:Mock {functionName: "pointsByEmailOf"}
+isolated function mockPointsByEmailOf(string period) returns recognition:EmailPoints[]|error {
+    check dbGate();
+    return from recognition:Standing s in STANDINGS
+        select {email: s.email, totalPoints: s.totalPoints};
 }
 
 @test:Mock {functionName: "monthlyPoints"}

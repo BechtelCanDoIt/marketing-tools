@@ -73,6 +73,12 @@ final readonly & map<SettingRule> EDITABLE_SETTINGS = {
     [SETTING_AUDIT_RETENTION]: {kind: "int", min: 60, max: 120},
     [SETTING_SHARING_ENABLED]: {kind: "boolean"},
     [SETTING_ANNOUNCEMENTS_ENABLED]: {kind: "boolean"},
+    [SETTING_TARGET_CONNECTED_PCT]: {kind: "int", min: 1, max: 100},
+    [SETTING_MAX_EXPIRED_PCT]: {kind: "int", min: 0, max: 100},
+    [SETTING_TARGET_SHARE_SUCCESS_PCT]: {kind: "int", min: 1, max: 100},
+    [SETTING_TARGET_PRIORITY_REACH_PCT]: {kind: "int", min: 1, max: 100},
+    [SETTING_TARGET_ACTIVE_30D]: {kind: "int", min: 1, max: 100000},
+    [SETTING_TARGET_REPOSTS_PER_WEEK]: {kind: "int", min: 1, max: 1000000},
     [SETTING_RUN_SCHEDULE]: {kind: "schedule", min: minRunIntervalSeconds},
     [SETTING_RUN_ENABLED]: {kind: "boolean"},
     [SETTING_MAINTENANCE_SCHEDULE]: {kind: "schedule", min: 3600}
