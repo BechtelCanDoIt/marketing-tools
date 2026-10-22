@@ -586,6 +586,24 @@ paths:
         "400": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
+  /leaderboard/top:
+    get:
+      tags: [S4 Recognition]
+      operationId: getLeaderboardTop
+      x-roles: [EMP, PO, MKT, SLT, ADM]
+      description: "The Celebrate top three and the caller's own position, company wide. The scope is the `leaderboard.top_scope` setting: `WEEK` (default) covers the current calendar week, Monday 00:00 UTC to the next Monday, summed from the points ledger; `ALL` is the all-time standings. Weekly totals are shared by every caller and kept in memory for 2 hours (`topBoardCacheSeconds`), so the first caller after they run out loads them and the rest reuse them; a failed reload serves the previous totals of the same week. `me` comes from the same totals, so it matches the top three (ADR-037)."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+      responses:
+        "200":
+          description: OK
+          headers:
+            Cache-Control: {schema: {type: string}, description: "private, max-age=60"}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LeaderboardTop"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
   /leaderboard/people:
     get:
       tags: [S4 Recognition]
@@ -1308,6 +1326,28 @@ components:
         createdAt: {type: string, format: date-time}
         status: {type: string, nullable: true, enum: [HELD, PAID]}
 
+    LeaderboardTop:
+      type: object
+      required: [period, topN, generatedAt, company, me]
+      properties:
+        period: {type: string, enum: [WEEK, ALL]}
+        weekStart: {type: string, format: date-time, nullable: true, description: "Monday 00:00 UTC; null for ALL"}
+        weekEnd: {type: string, format: date-time, nullable: true, description: "The next Monday 00:00 UTC; null for ALL"}
+        topN: {type: integer}
+        generatedAt: {type: string, format: date-time, description: "When the weekly totals were read (up to 2 hours ago)"}
+        company:
+          type: array
+          items:
+            type: object
+            required: [employeeId, displayName, email, points, rank]
+            properties:
+              employeeId: {type: string}
+              displayName: {type: string}
+              email: {type: string}
+              points: {type: integer}
+              rank: {type: integer}
+              previousRank: {type: integer, nullable: true}
+        me: {$ref: "#/components/schemas/PersonalStanding"}
     Leaderboard:
       type: object
       required: [period, topN, generatedAt, company, me, teamStatus]

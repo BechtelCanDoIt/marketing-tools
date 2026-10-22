@@ -496,6 +496,15 @@ service http:InterceptableService / on apiListener {
             returns http:Response|ProblemResponse|error =>
         okJson(groupBoard(cid(ctx), period, 'by, bu, sort, dir));
 
+    # The Celebrate top three and the caller's own position. Company wide, for the scope in
+    # `leaderboard.top_scope` (this calendar week by default). The weekly totals are shared by every caller
+    # and kept for 2 hours.
+    #
+    # + ctx - Request context
+    # + return - The board, or problem details
+    resource function get leaderboard/top(http:RequestContext ctx) returns http:Response|ProblemResponse|error =>
+        topBoard(check principalOf(ctx), cid(ctx));
+
     # Current employee count, overall and by business unit and team. Counted from the people directory and
     # kept for a week.
     #
