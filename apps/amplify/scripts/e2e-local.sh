@@ -18,6 +18,7 @@
 # Local end-to-end smoke test (plan M8a) against `make up`. DEV-ONLY: uses ADR-023 dev JWTs.
 #   register campaign -> scheduler fires amplify-run -> jobs POST /runs -> chat-stub got the card
 #   -> connect LinkedIn via mock OAuth (scripted redirect) -> share -> run -> points -> leaderboard
+#   -> dashboards (real HTTP, real database): role gating, the repost just made shows on every board
 # Needs: curl, jq, docker compose. Exits non-zero on the first failed step.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -132,6 +133,33 @@ call "$EMP_JWT" GET /me/points | jq -c .
 on_board() { call "$EMP_JWT" GET /leaderboard | grep -q "$EMP_EMAIL"; }
 wait_for 30 "employee on the leaderboard" on_board
 call "$EMP_JWT" GET /leaderboard | jq -c '.personal // .'
+
+step "dashboards: role gating, then the numbers behind the share above"
+# A plain employee is refused every board; an amplify_* role reads them (ADR-036).
+for board in operations campaigns participation glance scorecard; do
+  code=$(curl -sS -o /dev/null -w '%{http_code}' -H "x-jwt-assertion: $EMP_JWT" "$API/dashboards/$board")
+  [[ "$code" == 403 ]] || fail "employee GET /dashboards/$board -> $code (want 403)"
+done
+echo "ok: plain employee gets 403 on all five boards"
+SLT_JWT="$($MINT token e2e-slt slt.e2e@wso2.com amplify_slt)"
+ops=$(call "$SLT_JWT" GET /dashboards/operations)
+echo "$ops" | jq -e --arg c "$CAMPAIGN_ID" '[.campaigns[] | select(.campaignId == $c and .reposts >= 1)] | length == 1' >/dev/null \
+  || fail "operations board does not show the e2e campaign with its repost"
+echo "$ops" | jq -e '.kpis.reposts7d >= 1 and .kpis.peopleConnected >= 1 and .kpis.pointsThisWeek >= 0' >/dev/null \
+  || fail "operations kpis are wrong: $(echo "$ops" | jq -c .kpis)"
+call "$SLT_JWT" GET "/dashboards/campaigns?campaignId=$CAMPAIGN_ID" \
+  | jq -e --arg c "$CAMPAIGN_ID" '.selected.campaignId == $c and .selected.reposts >= 1 and (.selected.byDay | length) == 7' >/dev/null \
+  || fail "campaign board does not detail the e2e campaign"
+call "$SLT_JWT" GET /dashboards/participation | jq -e '.funnel.connected >= 1 and .funnel.reposted >= 1' >/dev/null \
+  || fail "participation funnel does not count the sharer"
+call "$SLT_JWT" GET /dashboards/glance | jq -e '.reposts.thisMonth >= 1 and (.weekly | length) == 8' >/dev/null \
+  || fail "glance numbers are wrong"
+call "$SLT_JWT" GET /dashboards/scorecard | jq -e '(.measures | length) == 7 and all(.measures[]; .status == "ON_TRACK" or .status == "WATCH")' >/dev/null \
+  || fail "scorecard is not seven measures with a status"
+call "$EMP_JWT" GET "/leaderboard/groups?by=TEAM&sort=participation&dir=desc" | jq -e '.entries | type == "array"' >/dev/null \
+  || fail "group leaderboard failed"
+call "$EMP_JWT" GET /headcount | jq -e '.total >= 1' >/dev/null || fail "headcount failed"
+echo "ok: dashboards, group boards and headcount answer from the real database"
 
 step "restore run.schedule -> @every 5m"
 version=$(call "$ADMIN_JWT" GET /admin/settings | jq -r '.settings[] | select(.key == "run.schedule") | .version')

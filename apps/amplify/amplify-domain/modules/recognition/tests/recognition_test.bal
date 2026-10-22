@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/test;
+import ballerina/time;
 
 function totals() returns EmployeeTotal[] => [
     total("e1", "Avery", 100),
@@ -55,4 +56,15 @@ function myTeamRanksWithinTheTeam() {
     Standing[] company = rankStandings(PERIOD_ALL, totals());
     Standing[] team = teamStandings(PERIOD_ALL, company, ["DEVON@wso2.com", "emery@wso2.com"]);
     test:assertEquals(team.map(r => [r.employeeId, r.rank]), [["e4", 1], ["e5", 2]]);
+}
+
+@test:Config
+function weekStartsOnMondayUtc() {
+    // 2026-10-22 is a Thursday; its week began Monday 2026-10-19.
+    time:Utc monday = checkpanic time:utcFromString("2026-10-19T00:00:00Z");
+    test:assertEquals(weekStartOf(checkpanic time:utcFromString("2026-10-22T16:22:57Z")), monday);
+    test:assertEquals(weekStartOf(monday), monday, "Monday 00:00 starts its own week");
+    test:assertEquals(weekStartOf(checkpanic time:utcFromString("2026-10-25T23:59:59Z")), monday, "Sunday night is still that week");
+    test:assertEquals(weekStartOf(checkpanic time:utcFromString("2026-10-26T00:00:00Z")),
+        checkpanic time:utcFromString("2026-10-26T00:00:00Z"), "the next Monday starts a new week");
 }

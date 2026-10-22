@@ -54,6 +54,9 @@ configurable string peopleDirectoryClientSecret = "";
 # How long the team index is reused, seconds (default 3 days: teams change, but rarely). Memory only,
 # never written to the database.
 configurable decimal rosterCacheSeconds = 259200;
+# How long the employee count is reused, seconds (default 7 days). Memory only, never written to the
+# database. When it runs out the directory is fetched again, whatever age the team index has.
+configurable decimal headcountCacheSeconds = 604800;
 
 final http:Client? peopleDirectoryClient = check newBreakerClient(peopleDirectoryUrl, peopleDirectoryTimeoutSeconds,
         peopleDirectoryAuth());
@@ -288,6 +291,8 @@ type DirectoryRecord record {
     string? team = ();
     # Sub-team
     string? subTeam = ();
+    # Business unit (BU), the level above team
+    string? businessUnit = ();
 };
 
 # Everyone's team, built from one directory response.
@@ -298,13 +303,24 @@ type DirectoryIndex record {|
     map<string> teamNames;
     # Team key to member emails, lowercase
     map<string[]> members;
+    # Lowercase email to business unit name (people without one are left out)
+    map<string> buOf;
+    # Business unit name to member emails, lowercase
+    map<string[]> buMembers;
+    # Team key to its business unit, as the directory states it (the key carries it, so a team is never
+    # guessed into a BU)
+    map<string> teamBu;
+    # Everyone the directory returned with a work email, whether or not they have a team
+    int total;
 |};
 
 # The cached index and when it was built (monotonic seconds).
 isolated [DirectoryIndex & readonly, decimal]? directoryCache = ();
 
 # Groups the directory by team: the sub-team, or the team when a person has no sub-team. The key carries
-# the team too, so two teams with a same-named sub-team stay apart. People with neither are left out.
+# the business unit and the team, so two teams with a same-named sub-team stay apart, and a team's BU is
+# always the one the directory gives its members, never worked out. People with neither team nor sub-team
+# are left out of teams (they still count toward the headcount and their BU).
 #
 # + records - Directory rows
 # + return - The index
@@ -312,21 +328,37 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
     map<string> teamOf = {};
     map<string> teamNames = {};
     map<string[]> members = {};
+    map<string> buOf = {};
+    map<string[]> buMembers = {};
+    map<string> teamBu = {};
+    map<boolean> seen = {};
     foreach DirectoryRecord r in records {
         string email = (r.workEmail ?: "").trim().toLowerAscii();
-        string team = (r.team ?: "").trim();
-        string subTeam = (r.subTeam ?: "").trim();
-        if email == "" || (team == "" && subTeam == "") {
+        if email == "" || seen.hasKey(email) {
             continue;
         }
-        string key = string `${team}/${subTeam}`;
+        seen[email] = true;
+        string team = (r.team ?: "").trim();
+        string subTeam = (r.subTeam ?: "").trim();
+        string bu = (r.businessUnit ?: "").trim();
+        if bu != "" {
+            buOf[email] = bu;
+            string[] buList = buMembers[bu] ?: [];
+            buList.push(email);
+            buMembers[bu] = buList;
+        }
+        if team == "" && subTeam == "" {
+            continue;
+        }
+        string key = string `${bu}/${team}/${subTeam}`;
         teamOf[email] = key;
         teamNames[key] = subTeam != "" ? subTeam : team;
+        teamBu[key] = bu;
         string[] list = members[key] ?: [];
         list.push(email);
         members[key] = list;
     }
-    return {teamOf, teamNames, members}.cloneReadOnly();
+    return {teamOf, teamNames, members, buOf, buMembers, teamBu, total: seen.length()}.cloneReadOnly();
 }
 
 # The viewer's roster from the index.
@@ -402,4 +434,96 @@ isolated function fetchDirectory(string? correlationId) returns (DirectoryIndex 
         return error("People directory answered a malformed body");
     }
     return indexDirectory(records);
+}
+
+// ---- Employee count (headcount) ------------------------------------------------------------------------
+
+# Employees in one business unit.
+type BusinessUnitCount record {|
+    # Business unit name
+    string name;
+    # Employees
+    int headcount;
+|};
+
+# Employees in one team.
+type TeamCount record {|
+    # Opaque team key (`team/subTeam`), what the board endpoints take as `team`
+    string key;
+    # Team name (the sub-team, or the team when there is no sub-team)
+    string name;
+    # Business unit most of the team sits in, `()` when the directory names none
+    string? businessUnit;
+    # Employees
+    int headcount;
+|};
+
+# The employee count and where it was counted from.
+type HeadcountSnapshot record {|
+    # Everyone the directory returned with a work email
+    int total;
+    # By business unit, largest first
+    BusinessUnitCount[] businessUnits;
+    # By team, largest first
+    TeamCount[] teams;
+    # When the directory was read (UTC)
+    string asOf;
+|};
+
+# The employee count and when it was taken (monotonic seconds).
+isolated [HeadcountSnapshot & readonly, decimal]? headcountCache = ();
+
+# Counts a directory index.
+#
+# + index - Directory index
+# + asOf - When the directory was read
+# + return - The snapshot
+isolated function headcountOf(DirectoryIndex index, time:Utc asOf) returns HeadcountSnapshot & readonly {
+    BusinessUnitCount[] businessUnits = from var [name, emails] in index.buMembers.entries()
+        let int n = emails.length()
+        order by n descending, name ascending
+        select {name, headcount: n};
+    TeamCount[] teams = from var [key, emails] in index.members.entries()
+        let int n = emails.length()
+        let string name = index.teamNames[key] ?: key
+        let string bu = index.teamBu[key] ?: ""
+        order by n descending, name ascending, key ascending
+        select {key, name, businessUnit: bu == "" ? () : bu, headcount: n};
+    return {total: index.total, businessUnits, teams, asOf: time:utcToString(asOf)}.cloneReadOnly();
+}
+
+# The employee count: reused for `headcountCacheSeconds`, then counted again from a fresh directory call
+# (which also refreshes the team index). A failed refresh keeps serving the last count.
+#
+# + correlationId - Correlation id
+# + return - The count, or an error when it was never counted and the directory is unavailable
+isolated function headcountSnapshot(string? correlationId) returns (HeadcountSnapshot & readonly)|error {
+    decimal now = time:monotonicNow();
+    (HeadcountSnapshot & readonly)? stale = ();
+    lock {
+        [HeadcountSnapshot & readonly, decimal]? hit = headcountCache;
+        if hit is [HeadcountSnapshot & readonly, decimal] {
+            if now - hit[1] < headcountCacheSeconds {
+                return hit[0];
+            }
+            stale = hit[0];
+        }
+    }
+    (DirectoryIndex & readonly)|error fresh = fetchDirectory(correlationId);
+    if fresh is error {
+        if stale is HeadcountSnapshot & readonly {
+            log:printWarn("People directory refresh failed; using the cached employee count",
+                    reason = fresh.message(), correlationId = correlationId);
+            return stale;
+        }
+        return fresh;
+    }
+    HeadcountSnapshot & readonly snapshot = headcountOf(fresh, time:utcNow());
+    lock {
+        directoryCache = [fresh, now];
+    }
+    lock {
+        headcountCache = [snapshot, now];
+    }
+    return snapshot;
 }

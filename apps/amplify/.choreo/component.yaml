@@ -104,6 +104,54 @@ configurations:
           displayName: Team roster cache TTL in seconds (default 259200 = 3 days; leave empty for the default)
           type: string
           required: false
+    - name: BAL_CONFIG_VAR_TOPBOARDCACHESECONDS
+      valueFrom:
+        configForm:
+          displayName: Celebrate top three cache TTL in seconds (default 7200 = 2 hours) (leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_HEADCOUNTCACHESECONDS
+      valueFrom:
+        configForm:
+          displayName: Employee count cache TTL in seconds (default 604800 = 7 days) (leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_SCORECARDTARGETCONNECTEDPCT
+      valueFrom:
+        configForm:
+          displayName: Scorecard: employees connected, % of headcount (default 25) (leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_SCORECARDMAXEXPIREDPCT
+      valueFrom:
+        configForm:
+          displayName: Scorecard: expired connections, % of connected, a ceiling (default 5) (leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_SCORECARDTARGETSHARESUCCESSPCT
+      valueFrom:
+        configForm:
+          displayName: Scorecard: share success rate, % (default 98) (leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_SCORECARDTARGETPRIORITYREACHPCT
+      valueFrom:
+        configForm:
+          displayName: Scorecard: a campaign reaches people at this % of connected (default 25) (leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_SCORECARDTARGETACTIVE30D
+      valueFrom:
+        configForm:
+          displayName: Scorecard: people active in the last 30 days (default 100) (leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_SCORECARDTARGETREPOSTSPERWEEK
+      valueFrom:
+        configForm:
+          displayName: Scorecard: reposts in the last 7 days (default 150) (leave empty for the default)
+          type: string
+          required: false
     - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYURL
       valueFrom:
         configForm:
