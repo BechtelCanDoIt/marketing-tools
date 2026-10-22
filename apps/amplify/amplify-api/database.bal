@@ -302,6 +302,12 @@ isolated function teamPageOf(string period, string[]? emails, string? q, recogni
     }
 }
 
+isolated function pointsByEmailOf(string period) returns recognition:EmailPoints[]|error {
+    retry<resilience:TransientDbRetry> (dbReadRetries) {
+        return check recognition:pointsByEmail(check db(), period);
+    }
+}
+
 isolated function monthlyPoints(types:EmployeeId employeeId) returns recognition:MonthPoints[]|error {
     retry<resilience:TransientDbRetry> (dbReadRetries) {
         return check recognition:monthlyPointsOf(check db(), employeeId);

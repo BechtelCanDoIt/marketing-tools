@@ -466,6 +466,83 @@ service http:InterceptableService / on apiListener {
             returns http:Response|ProblemResponse|error =>
         leaderboard(check principalOf(ctx), cid(ctx), period, ifNoneMatch);
 
+    # People ranked within the company, a business unit or a team. Open to every employee (ADR-035).
+    #
+    # + ctx - Request context
+    # + period - Period
+    # + scope - `COMPANY` (default), `BU` or `TEAM`
+    # + bu - BU name for `BU` (default the caller's own)
+    # + team - Team key for `TEAM` (default the caller's own)
+    # + q - Name search
+    # + page - Zero-based page
+    # + size - Page size
+    # + return - The page, or problem details
+    resource function get leaderboard/people(http:RequestContext ctx, string period = "ALL", string scope = "COMPANY",
+            string? bu = (), string? team = (), string? q = (), int page = 0, int size = 25)
+            returns http:Response|ProblemResponse|error =>
+        okJson(peopleBoard(check principalOf(ctx), cid(ctx), period, scope, bu, team, q, page, size));
+
+    # Teams or business units ranked against each other. Open to every employee (ADR-035).
+    #
+    # + ctx - Request context
+    # + period - Period
+    # + 'by - `TEAM` (default) or `BU`
+    # + bu - Limit `TEAM` to one BU
+    # + sort - `rank` (default), `name`, `points`, `participants`, `headcount`, `participation`
+    # + dir - `asc` (default) or `desc`
+    # + return - The board, or problem details
+    resource function get leaderboard/groups(http:RequestContext ctx, string period = "ALL", string 'by = "TEAM",
+            string? bu = (), string sort = "rank", string dir = "asc")
+            returns http:Response|ProblemResponse|error =>
+        okJson(groupBoard(cid(ctx), period, 'by, bu, sort, dir));
+
+    # Current employee count, overall and by business unit and team. Counted from the people directory and
+    # kept for a week.
+    #
+    # + ctx - Request context
+    # + return - The count, or problem details
+    resource function get headcount(http:RequestContext ctx) returns http:Response|ProblemResponse|error =>
+        okJson(headcountView(cid(ctx)));
+
+    // ---- S6 Dashboards (PO, Marketing, SLT, Admin; ADR-036) ----------------------------------------
+
+    # Operations board.
+    #
+    # + ctx - Request context
+    # + return - The board, or problem details
+    resource function get dashboards/operations(http:RequestContext ctx)
+            returns http:Response|ProblemResponse|error => dashboardOperations(cid(ctx));
+
+    # Campaign performance board.
+    #
+    # + ctx - Request context
+    # + days - Look-back, 1-90 (default 30)
+    # + campaignId - The campaign to detail (default: the one with the most reposts)
+    # + return - The board, or problem details
+    resource function get dashboards/campaigns(http:RequestContext ctx, int days = 30, string? campaignId = ())
+            returns http:Response|ProblemResponse|error => dashboardCampaigns(cid(ctx), days, campaignId);
+
+    # Participation funnel numbers.
+    #
+    # + ctx - Request context
+    # + return - The board, or problem details
+    resource function get dashboards/participation(http:RequestContext ctx)
+            returns http:Response|ProblemResponse|error => dashboardParticipation(cid(ctx));
+
+    # At a glance.
+    #
+    # + ctx - Request context
+    # + return - The board, or problem details
+    resource function get dashboards/glance(http:RequestContext ctx)
+            returns http:Response|ProblemResponse|error => dashboardGlance(cid(ctx));
+
+    # Scorecard.
+    #
+    # + ctx - Request context
+    # + return - The board, or problem details
+    resource function get dashboards/scorecard(http:RequestContext ctx)
+            returns http:Response|ProblemResponse|error => dashboardScorecard(cid(ctx));
+
     # Own points, rank and monthly history.
     #
     # + ctx - Request context
