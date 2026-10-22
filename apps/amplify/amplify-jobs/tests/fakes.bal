@@ -777,3 +777,37 @@ isolated class PublishedTodayRunStore {
 
     isolated function forRow(string correlationId, int topN) returns Store => self.inner.forRow(correlationId, topN);
 }
+
+isolated class FakeNovera {
+    *NoveraPort;
+
+    private string mode = "ok";
+    private int count = 0;
+
+    isolated function setMode(string mode) {
+        lock {
+            self.mode = mode;
+        }
+    }
+
+    isolated function sent() returns int {
+        lock {
+            return self.count;
+        }
+    }
+
+    isolated function notify(announcements:NoveraNotification notification, string? correlationId)
+            returns NoveraError? {
+        lock {
+            if self.mode == "503" {
+                return noveraError("UNAVAILABLE", "down", 503, true);
+            }
+            if self.mode == "400" {
+                return noveraError("REJECTED", "bad", 400, false);
+            }
+            self.count += 1;
+        }
+    }
+
+    isolated function breaker() returns string => "CLOSED";
+}

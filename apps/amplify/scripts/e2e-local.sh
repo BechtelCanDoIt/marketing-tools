@@ -29,6 +29,11 @@ COMPOSE=(scripts/compose.sh)
 case "$(sed -n 's/^LINKEDIN_USE_MOCK=//p' local/.env | tail -1 | tr '[:upper:]' '[:lower:]')" in
   false | 0 | no) echo "e2e needs the mock: set LINKEDIN_USE_MOCK=true in local/.env and restart the stack" >&2; exit 1 ;;
 esac
+# The card check below reads the chat-stub, which only the Club webhook path posts to.
+case "$(sed -n 's/^AMPLIFY_ON_WEBHOOK=//p' local/.env | tail -1 | tr '[:upper:]' '[:lower:]')" in
+  true | 1 | yes) ;;
+  *) echo "e2e needs the webhook path: set AMPLIFY_ON_WEBHOOK=true in local/.env and restart the stack" >&2; exit 1 ;;
+esac
 # Posts must belong to the page amplify-api is configured with (local/.env, default WSO2's page).
 ORG_URN=$(sed -n 's/^WSO2_ORGANIZATION_URN=//p' local/.env | tail -1)
 ORG_URN=${ORG_URN:-urn:li:organization:1477}

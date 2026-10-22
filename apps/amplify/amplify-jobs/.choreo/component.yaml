@@ -102,3 +102,45 @@ configurations:
         configForm:
           displayName: One WSO2 Celebrate page URL (card button adds ?share=<campaignId>)
           type: string
+    - name: BAL_CONFIG_VAR_NOVERANOTIFYURL
+      valueFrom:
+        configForm:
+          displayName: Novera notifications URL (the gateway URL of POST /internal/notifications, https)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_NOVERATOKENURL
+      valueFrom:
+        configForm:
+          displayName: Novera token endpoint (client-credentials grant)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_NOVERACLIENTID
+      valueFrom:
+        configForm:
+          displayName: Novera application client id
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_NOVERACLIENTSECRET
+      valueFrom:
+        configForm:
+          displayName: Novera application client secret
+          type: secret
+          required: false
+    - name: BAL_CONFIG_VAR_NOVERASCOPES
+      valueFrom:
+        configForm:
+          displayName: Novera token scopes (comma-separated, optional)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_AMPLIFYONNOVERA
+      valueFrom:
+        configForm:
+          displayName: Announce shares through Novera (true or false; default true)
+          type: boolean
+          required: false
+    - name: BAL_CONFIG_VAR_AMPLIFYONWEBHOOK
+      valueFrom:
+        configForm:
+          displayName: Announce shares through the Google Chat webhook (true or false; default false)
+          type: boolean
+          required: false
