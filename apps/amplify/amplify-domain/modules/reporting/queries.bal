@@ -93,8 +93,10 @@ public type CategoryCount record {|
     string code;
     # Label
     string label;
-    # Active engagements
+    # Active engagements (reposts plus reposts with comments)
     int reposts;
+    # Of those, with the employee's own commentary
+    int repostsWithCommentary;
 |};
 
 # People at each step of the participation funnel.
@@ -283,8 +285,9 @@ public isolated function repostsByDay(postgresql:Client db, string campaignId, i
 # + return - Categories with reposts, most first, or an error
 public isolated function repostsByCategory(postgresql:Client db, time:Utc since) returns CategoryCount[]|error {
     string s = time:utcToString(since);
-    stream<record {|string code; string label; int n;|}, error?> rows = db->query(`
-        SELECT c.category_code AS code, COALESCE(cat.label, c.category_code) AS label, count(*)::int AS n
+    stream<record {|string code; string label; int n; int commented;|}, error?> rows = db->query(`
+        SELECT c.category_code AS code, COALESCE(cat.label, c.category_code) AS label, count(*)::int AS n,
+               count(*) FILTER (WHERE e.action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY'))::int AS commented
         FROM sharing.engagement_v e
         JOIN campaign.campaign c ON c.id = e.campaign_id
         LEFT JOIN campaign.category cat ON cat.code = c.category_code
@@ -292,7 +295,7 @@ public isolated function repostsByCategory(postgresql:Client db, time:Utc since)
         GROUP BY c.category_code, cat.label
         ORDER BY n DESC, label`);
     return from var r in rows
-        select {code: r.code, label: r.label, reposts: r.n};
+        select {code: r.code, label: r.label, reposts: r.n, repostsWithCommentary: r.commented};
 }
 
 # People at each step of the participation funnel.

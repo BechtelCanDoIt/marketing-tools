@@ -1607,11 +1607,12 @@ components:
           type: array
           items:
             type: object
-            required: [code, label, reposts]
+            required: [code, label, reposts, repostsWithCommentary]
             properties:
               code: {type: string}
               label: {type: string}
-              reposts: {type: integer}
+              reposts: {type: integer, description: "Active engagements: reposts plus reposts with comments"}
+              repostsWithCommentary: {type: integer, description: "Of those, with the employee's own commentary"}
     DashboardParticipation:
       type: object
       required: [asOf, funnel]

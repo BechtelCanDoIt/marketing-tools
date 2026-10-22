@@ -118,8 +118,8 @@ function testPostPerformanceBoardSelectsAndFilters() returns error? {
     json[] byDay = <json[]>check body.selected.byDay;
     test:assertEquals(byDay.length(), 7);
     test:assertEquals(check byDay[0], {day: 1, reposts: 30});
-    test:assertEquals(check body.byCategory, [{code: "PRODUCT", label: "Product", reposts: 45},
-        {code: "EVENT", label: "Event", reposts: 10}]);
+    test:assertEquals(check body.byCategory, [{code: "PRODUCT", label: "Product", reposts: 45, repostsWithCommentary: 12},
+        {code: "EVENT", label: "Event", reposts: 10, repostsWithCommentary: 0}]);
 
     json wide = check (check send("GET", "/dashboards/campaigns?days=90", (), token)).getJsonPayload();
     test:assertEquals((<json[]>check wide.campaigns).length(), 4, "90 days reaches the old campaign");
