@@ -813,7 +813,7 @@ paths:
       tags: [S6 Dashboards]
       operationId: getDashboardScorecard
       x-roles: [PO, MKT, SLT, ADM]
-      description: "Scorecard: seven measures against their targets (`scorecard.*` settings, ADR-035). Cached 60 s."
+      description: "Scorecard: seven measures against their targets (`scorecard*` configuration, ADR-036). Cached 60 s."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
       responses:
@@ -1513,7 +1513,7 @@ components:
         sentAt: {type: string, format: date-time, nullable: true}
     DashboardCampaignRow:
       type: object
-      required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts]
+      required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, repostsWithCommentary]
       properties:
         campaignId: {type: string}
         title: {type: string}
@@ -1523,7 +1523,8 @@ components:
         status: {type: string, enum: [SCHEDULED, OPEN, CLOSED, ARCHIVED]}
         opensAt: {type: string, format: date-time}
         closesAt: {type: string, format: date-time}
-        reposts: {type: integer, description: "Active engagements recorded against the post"}
+        reposts: {type: integer, description: "Active engagements recorded against the campaign"}
+        repostsWithCommentary: {type: integer, description: "Of those, reposts with the employee's own commentary"}
         announcement: {$ref: "#/components/schemas/DashboardAnnouncement"}
     DashboardOperations:
       type: object
@@ -1574,7 +1575,7 @@ components:
         selected:
           type: object
           nullable: true
-          required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, first24Hours, announcement, byDay]
+          required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, repostsWithCommentary, first24Hours, announcement, byDay]
           properties:
             campaignId: {type: string}
             title: {type: string}
@@ -1584,6 +1585,7 @@ components:
             opensAt: {type: string, format: date-time}
             closesAt: {type: string, format: date-time}
             reposts: {type: integer}
+            repostsWithCommentary: {type: integer}
             shareOfConnected: {type: number, nullable: true, description: "reposts / people connected, 3 decimals"}
             first24Hours: {type: integer}
             announcement: {$ref: "#/components/schemas/DashboardAnnouncement"}

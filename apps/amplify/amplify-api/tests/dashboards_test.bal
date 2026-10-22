@@ -86,6 +86,8 @@ function testOperationsBoardNumbers() returns error? {
     test:assertEquals(check body.shareHealth.published, 57);
     json[] campaigns = <json[]>check body.campaigns;
     test:assertEquals(campaigns.length(), 4);
+    test:assertEquals(check campaigns[0].repostsWithCommentary, 12, "reposts with the employee's own commentary");
+    test:assertEquals(check campaigns[1].repostsWithCommentary, 0);
     test:assertEquals(check campaigns[0].announcement, {status: "SENT", attempts: (), sentAt: "2025-10-20T22:40:00Z"});
     test:assertEquals(check campaigns[1].announcement.attempts, 3, "the retry the worker is on");
     test:assertEquals(check campaigns[2].announcement.status, "NONE", "no announcement row yet");
@@ -177,13 +179,18 @@ function testScorecardStatusesAgainstTargets() returns error? {
     test:assertEquals(check (check measureOf(body, "active30Days")).status, "WATCH");
     test:assertEquals((check (check measureOf(body, "repostsPerWeek")).target).toString(), "150.0");
 
-    // The targets are settings: lower the lines and the same numbers pass.
-    setSetting("scorecard.target_active_30d", 20);
-    json lowered = check (check send("GET", "/dashboards/scorecard", (), check boardToken(auth:ROLE_SLT))).getJsonPayload();
-    json active = check measureOf(lowered, "active30Days");
+    // The targets are configuration: lower the lines and the same numbers pass.
+    Targets lowered = {targetConnectedPct: 25, maxExpiredPct: 5, targetShareSuccessPct: 98, targetPriorityReachPct: 25,
+        targetActive30d: 20, targetRepostsPerWeek: 150};
+    json low = scorecard(fixedSnapshot(), 4, lowered);
+    json active = check measureOf(low, "active30Days");
     test:assertEquals((check active.target).toString(), "20.0");
     test:assertEquals(check active.status, "ON_TRACK");
-    clearSettings();
+    test:assertEquals(scorecardTargets(), {targetConnectedPct: 25, maxExpiredPct: 5, targetShareSuccessPct: 98,
+        targetPriorityReachPct: 25, targetActive30d: 100, targetRepostsPerWeek: 150}, "unset configuration = the defaults");
+    test:assertEquals(orDefault(0, 25), 25, "a zero or negative value falls back");
+    test:assertEquals(orDefault(-3, 25), 25);
+    test:assertEquals(orDefault(40, 25), 40);
 
     // Nothing to measure is On track with a note; a missing employee count is Watch.
     Snapshot quiet = fixedSnapshot();

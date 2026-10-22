@@ -46,7 +46,7 @@ function testShippedScriptsAreWellFormed() returns error? {
     test:assertTrue(migrations.length() >= 12);
     test:assertEquals(migrations[0], "V001__schemas_roles.sql");
     string[] seeds = check listScripts("seed", SEED_FILE);
-    test:assertEquals(seeds.length(), 6);
+    test:assertEquals(seeds.length(), 5);
     test:assertEquals(versionOf("V012__x.sql"), "V012__x");
 }
 

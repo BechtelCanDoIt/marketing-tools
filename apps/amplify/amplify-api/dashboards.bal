@@ -26,6 +26,57 @@ import ballerina/http;
 import ballerina/log;
 import ballerina/time;
 
+// ---- Scorecard targets: configuration, never the database -------------------------------------------
+// Set per environment (local/.env, Choreo configs); a missing or non-positive value uses the default.
+
+# Employees connected, % of headcount (default 25).
+configurable int scorecardTargetConnectedPct = 25;
+# Expired connections, % of connected: a ceiling (default 5).
+configurable int scorecardMaxExpiredPct = 5;
+# Shares published / (published + failed) over 7 days, % (default 98).
+configurable int scorecardTargetShareSuccessPct = 98;
+# A campaign counts as reaching people at this % of connected (default 25).
+configurable int scorecardTargetPriorityReachPct = 25;
+# People with an engagement in the last 30 days (default 100).
+configurable int scorecardTargetActive30d = 100;
+# Reposts in the last 7 days (default 150).
+configurable int scorecardTargetRepostsPerWeek = 150;
+
+# The scorecard lines in force.
+type Targets record {|
+    # Employees connected, % of headcount
+    int targetConnectedPct;
+    # Expired connections, % of connected (ceiling)
+    int maxExpiredPct;
+    # Share success, %
+    int targetShareSuccessPct;
+    # Reach threshold, % of connected
+    int targetPriorityReachPct;
+    # Active people, 30 days
+    int targetActive30d;
+    # Reposts, 7 days
+    int targetRepostsPerWeek;
+|};
+
+# A configured value, or its default when it is zero or negative.
+#
+# + v - Configured value
+# + dflt - Default
+# + return - The value to use
+isolated function orDefault(int v, int dflt) returns int => v > 0 ? v : dflt;
+
+# The targets from configuration (zero and negative values fall back to the defaults; the expired ceiling may be 0).
+#
+# + return - The targets
+isolated function scorecardTargets() returns Targets => {
+    targetConnectedPct: orDefault(scorecardTargetConnectedPct, 25),
+    maxExpiredPct: scorecardMaxExpiredPct >= 0 ? scorecardMaxExpiredPct : 5,
+    targetShareSuccessPct: orDefault(scorecardTargetShareSuccessPct, 98),
+    targetPriorityReachPct: orDefault(scorecardTargetPriorityReachPct, 25),
+    targetActive30d: orDefault(scorecardTargetActive30d, 100),
+    targetRepostsPerWeek: orDefault(scorecardTargetRepostsPerWeek, 150)
+};
+
 # Employee count for the boards, `()` when the people directory has never loaded (a board still renders).
 #
 # + correlationId - Correlation id
@@ -68,6 +119,7 @@ isolated function dashboardCampaignJson(reporting:CampaignRow p, map<reporting:D
     opensAt: ts(p.opensAt),
     closesAt: ts(p.closesAt),
     reposts: p.reposts,
+    repostsWithCommentary: p.repostsWithCommentary,
     announcement: announcementOf(delivery, p.campaignId)
 };
 
@@ -151,6 +203,7 @@ isolated function campaignsBoard(Snapshot s, int days, reporting:CategoryCount[]
             opensAt: ts(p.opensAt),
             closesAt: ts(p.closesAt),
             reposts: p.reposts,
+            repostsWithCommentary: p.repostsWithCommentary,
             shareOfConnected: ratio(p.reposts, connected),
             first24Hours: byDay[0],
             announcement: announcementOf(s.delivery, p.campaignId),
@@ -212,9 +265,9 @@ isolated function reach(Snapshot s, int thresholdPct, boolean priorityOnly) retu
 #
 # + s - Snapshot
 # + headcount - Employee count or `()`
-# + targets - Settings (the reach threshold)
+# + targets - Targets (the reach threshold)
 # + return - Body
-isolated function glanceBoard(Snapshot s, int? headcount, Settings targets) returns json {
+isolated function glanceBoard(Snapshot s, int? headcount, Targets targets) returns json {
     var [reached, live] = reach(s, targets.targetPriorityReachPct, false);
     reporting:CampaignRow? best = ();
     foreach reporting:CampaignRow p in s.campaigns {
@@ -255,9 +308,9 @@ isolated function measure(string key, string label, string unit, decimal value, 
 #
 # + s - Snapshot
 # + headcount - Employee count or `()`
-# + t - Settings (the targets)
+# + t - Targets
 # + return - Body
-isolated function scorecard(Snapshot s, int? headcount, Settings t) returns json {
+isolated function scorecard(Snapshot s, int? headcount, Targets t) returns json {
     reporting:ConnectionBreakdown c = s.connections;
     int connected = c.active + c.expiring + c.expired + c.revoked;
     int attempts = s.shares.published + s.shares.failed;
@@ -353,8 +406,7 @@ isolated function dashboardParticipation(string? correlationId) returns http:Res
 isolated function dashboardGlance(string? correlationId) returns http:Response|ProblemResponse|error {
     do {
         Snapshot s = check snapshot();
-        Settings settings = check loadSettings();
-        return boardResponse(glanceBoard(s, headcountOrNil(correlationId), settings));
+        return boardResponse(glanceBoard(s, headcountOrNil(correlationId), scorecardTargets()));
     } on fail error e {
         return failure(e, correlationId, "At a glance board");
     }
@@ -363,8 +415,7 @@ isolated function dashboardGlance(string? correlationId) returns http:Response|P
 isolated function dashboardScorecard(string? correlationId) returns http:Response|ProblemResponse|error {
     do {
         Snapshot s = check snapshot();
-        Settings settings = check loadSettings();
-        return boardResponse(scorecard(s, headcountOrNil(correlationId), settings));
+        return boardResponse(scorecard(s, headcountOrNil(correlationId), scorecardTargets()));
     } on fail error e {
         return failure(e, correlationId, "Scorecard");
     }

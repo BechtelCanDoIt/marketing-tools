@@ -53,6 +53,8 @@ public type CampaignRow record {|
     time:Utc closesAt;
     # Active engagements recorded against the campaign
     int reposts;
+    # Of those, reposts with the employee's own commentary (`REPOST_COMMENTARY`, `SHARE_COMMENTARY`)
+    int repostsWithCommentary;
 |};
 
 # Connections by derived state.
@@ -166,12 +168,15 @@ public isolated function campaignRows(postgresql:Client db, int days, int 'limit
         time:Utc opens_at;
         time:Utc closes_at;
         int reposts;
+        int with_commentary;
     |}, error?> rows = db->query(`
         SELECT c.id::text AS id, c.title, c.category_code, COALESCE(cat.label, c.category_code) AS category_label,
-               c.is_priority, c.status, c.opens_at, c.closes_at, COALESCE(e.n, 0)::int AS reposts
+               c.is_priority, c.status, c.opens_at, c.closes_at, COALESCE(e.n, 0)::int AS reposts, COALESCE(e.c, 0)::int AS with_commentary
         FROM campaign.campaign_v c
         LEFT JOIN campaign.category cat ON cat.code = c.category_code
-        LEFT JOIN (SELECT campaign_id, count(*) AS n FROM sharing.engagement_v WHERE status = 'ACTIVE'
+        LEFT JOIN (SELECT campaign_id, count(*) AS n,
+                          count(*) FILTER (WHERE action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY')) AS c
+                   FROM sharing.engagement_v WHERE status = 'ACTIVE'
                    GROUP BY campaign_id) e ON e.campaign_id = c.id
         WHERE c.archived_at IS NULL AND c.status IN ('OPEN', 'CLOSED')
           AND (c.status = 'OPEN' OR c.opens_at >= CAST(${since} AS timestamptz))
@@ -187,7 +192,8 @@ public isolated function campaignRows(postgresql:Client db, int days, int 'limit
             status: r.status,
             opensAt: r.opens_at,
             closesAt: r.closes_at,
-            reposts: r.reposts
+            reposts: r.reposts,
+            repostsWithCommentary: r.with_commentary
         };
 }
 

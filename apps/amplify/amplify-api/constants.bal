@@ -103,15 +103,6 @@ const string SETTING_AUDIT_RETENTION = "audit.retention_months";
 const string SETTING_SHARING_ENABLED = "sharing.enabled";
 const string SETTING_ANNOUNCEMENTS_ENABLED = "announcements.enabled";
 
-// ---- Scorecard targets (config.app_setting; the scorecard's On track / Watch lines, architecture/solution/Phase 1/po-dashboard.md) ----
-
-const string SETTING_TARGET_CONNECTED_PCT = "scorecard.target_connected_pct";
-const string SETTING_MAX_EXPIRED_PCT = "scorecard.max_expired_pct";
-const string SETTING_TARGET_SHARE_SUCCESS_PCT = "scorecard.target_share_success_pct";
-const string SETTING_TARGET_PRIORITY_REACH_PCT = "scorecard.target_priority_reach_pct";
-const string SETTING_TARGET_ACTIVE_30D = "scorecard.target_active_30d";
-const string SETTING_TARGET_REPOSTS_PER_WEEK = "scorecard.target_reposts_per_week";
-
 // ---- M6b: schedule settings pushed to the scheduler (ADR-026) -------------------------------------
 
 const string SETTING_RUN_SCHEDULE = "run.schedule";

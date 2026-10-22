@@ -89,26 +89,36 @@ function testRepostsAndPostsFeedTheBoards() returns error? {
             types:newUuidV7(), time:utcNow());
     check (new sharing:PgShareRepository(jobsDb)).recordPublish(published, req.version);
 
+    // A second person reposts with their own words.
+    string emp2 = check newEmployee(apiDb, "rptcomment");
+    sharing:ConnectionSnapshot conn2 = {memberUrn: "urn:li:person:" + uniq(), usable: true};
+    sharing:ShareRequest req2 = check sharing:requestShare(new sharing:PgShareRepository(apiDb, {actorId: emp2}), snap,
+            conn2, {employeeId: emp2, kind: types:REPOST_COMMENTARY, commentary: "Worth a read"}, time:utcNow());
+    sharing:PublishResult published2 = check sharing:markPublished(req2, "urn:li:share:" + uniq(), conn2.memberUrn,
+            types:newUuidV7(), time:utcNow());
+    check (new sharing:PgShareRepository(jobsDb)).recordPublish(published2, req2.version);
+
     test:assertEquals(check reporting:repostsBetween(apiDb, time:utcAddSeconds(t0, -60), time:utcAddSeconds(t0, 3600)),
-            repostsBefore + 1);
-    test:assertEquals(check reporting:repostingPeople(apiDb), peopleBefore + 1);
+            repostsBefore + 2);
+    test:assertEquals(check reporting:repostingPeople(apiDb), peopleBefore + 2);
     reporting:ParticipationCounts funnel = check reporting:participationCounts(apiDb);
-    test:assertEquals(funnel.reposted, funnelBefore.reposted + 1);
-    test:assertEquals(funnel.active30Days, funnelBefore.active30Days + 1);
+    test:assertEquals(funnel.reposted, funnelBefore.reposted + 2);
+    test:assertEquals(funnel.active30Days, funnelBefore.active30Days + 2);
 
     reporting:CampaignRow[] campaigns = from reporting:CampaignRow p in check reporting:campaignRows(apiDb, 30, 500, time:utcNow())
         where p.campaignId == c.id
         select p;
     test:assertEquals(campaigns.length(), 1);
-    test:assertEquals(campaigns[0].reposts, 1);
+    test:assertEquals(campaigns[0].reposts, 2);
+    test:assertEquals(campaigns[0].repostsWithCommentary, 1, "one plain repost, one with commentary");
     test:assertEquals(campaigns[0].status, "OPEN");
     test:assertEquals(campaigns[0].categoryCode, "PRODUCT");
     test:assertTrue(campaigns[0].categoryLabel != "", "label joined from campaign.category");
 
     int[] byDay = check reporting:repostsByDay(apiDb, c.id, 7);
     test:assertEquals(byDay.length(), 7);
-    test:assertEquals(byDay[0], 1, "published inside the first 24 hours");
-    test:assertEquals(byDay.reduce(isolated function(int a, int b) returns int => a + b, 0), 1);
+    test:assertEquals(byDay[0], 2, "published inside the first 24 hours");
+    test:assertEquals(byDay.reduce(isolated function(int a, int b) returns int => a + b, 0), 2);
 
     reporting:CategoryCount[] cats = from reporting:CategoryCount k in
             check reporting:repostsByCategory(apiDb, time:utcAddSeconds(t0, -60))
