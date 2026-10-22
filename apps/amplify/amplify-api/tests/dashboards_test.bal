@@ -78,6 +78,9 @@ function testOperationsBoardNumbers() returns error? {
     test:assertEquals(check body.kpis.campaignsLive, 2);
     test:assertEquals(check body.kpis.campaignsLivePriority, 1);
     test:assertEquals(check body.kpis.reposts7d, 60);
+    test:assertEquals(check body.kpis.reposts7dWithCommentary, 15);
+    test:assertEquals(check body.kpis.pointsThisWeek, 120);
+    test:assertEquals(check body.kpis.pointsThisYear, 4000);
     test:assertEquals(check body.kpis.repostsPrev7d, 40);
     test:assertEquals(check body.kpis.peopleConnected, 2);
     test:assertEquals(check body.kpis.connectionsExpired, 1);

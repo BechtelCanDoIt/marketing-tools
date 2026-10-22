@@ -345,3 +345,42 @@ public isolated function pointsInMonth(postgresql:Client db, string month) retur
         SELECT COALESCE(sum(points), 0)::int FROM recognition.employee_points_monthly
         WHERE month = CAST(${month} AS date)`);
 }
+
+# Points awarded this calendar week (Monday, UTC), month and year, summed from the ledger (reversals and
+# adjustments included, so it matches the standings).
+public type PointsAwarded record {|
+    # Since Monday 00:00 UTC
+    int week;
+    # Since the 1st, UTC
+    int month;
+    # Since 1 January, UTC
+    int year;
+|};
+
+# Points awarded this week, month and year.
+#
+# + db - Client
+# + return - Sums, or an error
+public isolated function pointsAwarded(postgresql:Client db) returns PointsAwarded|error {
+    return db->queryRow(`
+        SELECT COALESCE(sum(points) FILTER (WHERE created_at >= date_trunc('week', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0)::int AS week,
+               COALESCE(sum(points) FILTER (WHERE created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0)::int AS month,
+               COALESCE(sum(points) FILTER (WHERE created_at >= date_trunc('year', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0)::int AS year
+        FROM scoring.points_ledger
+        WHERE created_at >= date_trunc('year', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`);
+}
+
+# Active reposts with the employee's own commentary in a time range.
+#
+# + db - Client
+# + from - Start, inclusive
+# + to - End, exclusive
+# + return - Count, or an error
+public isolated function commentaryRepostsBetween(postgresql:Client db, time:Utc 'from, time:Utc to) returns int|error {
+    string a = time:utcToString('from);
+    string b = time:utcToString(to);
+    return db->queryRow(`
+        SELECT count(*)::int FROM sharing.engagement_v
+        WHERE status = 'ACTIVE' AND action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY')
+          AND occurred_at >= CAST(${a} AS timestamptz) AND occurred_at < CAST(${b} AS timestamptz)`);
+}

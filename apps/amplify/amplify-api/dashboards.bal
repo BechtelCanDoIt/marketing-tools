@@ -140,10 +140,13 @@ isolated function operationsBoard(Snapshot s, int? headcount) returns json {
             campaignsLivePriority: s.live.livePriority,
             campaignsClosingWithin7Days: s.live.closingWithin7Days,
             reposts7d: s.reposts7d,
+            reposts7dWithCommentary: s.reposts7dWithCommentary,
             repostsPrev7d: s.repostsPrev7d,
             peopleConnected: connected,
             connectionsExpired: c.expired,
-            pointsThisMonth: s.pointsThisMonth,
+            pointsThisWeek: s.points.week,
+            pointsThisMonth: s.points.month,
+            pointsThisYear: s.points.year,
             peopleWithPoints: s.peopleWithPoints
         },
         campaigns: from reporting:CampaignRow p in campaigns

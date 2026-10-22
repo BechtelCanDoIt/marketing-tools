@@ -156,3 +156,22 @@ function testGroupRowsFilterTeamsByBu() {
     var [bus, _, _] = groupRows(index, snapshot, [{email: "a@wso2.com", totalPoints: 5}], "BU", ());
     test:assertEquals(bus.map(t => t.name).sort(), ["Corporate", "Product"]);
 }
+
+@test:Config
+function testGroupSortReordersButKeepsThePointsRank() returns error? {
+    GroupRow[] rows = [
+        {key: "a", name: "Alpha", businessUnit: (), points: 100, participants: 1, headcount: 50},
+        {key: "b", name: "Beta", businessUnit: (), points: 60, participants: 9, headcount: 10},
+        {key: "c", name: "Gamma", businessUnit: (), points: 80, participants: 4, headcount: 8}
+    ];
+    test:assertEquals(rankGroups(rows).map(r => checkpanic r.key), ["a", "c", "b"], "default: by rank, best first");
+    json[] byRate = rankGroups(rows, "participation", "desc");
+    test:assertEquals(byRate.map(r => checkpanic r.key), ["b", "c", "a"], "participation, highest on top");
+    test:assertEquals(byRate.map(r => checkpanic r.rank), [3, 2, 1], "the points rank doesn't change");
+    test:assertEquals(rankGroups(rows, "participation", "asc").map(r => checkpanic r.key), ["a", "c", "b"]);
+    test:assertEquals(rankGroups(rows, "name", "desc").map(r => checkpanic r.key), ["c", "b", "a"]);
+    test:assertEquals(rankGroups(rows, "headcount", "desc").map(r => checkpanic r.key), ["a", "b", "c"]);
+    test:assertEquals(rankGroups(rows, "participants", "desc").map(r => checkpanic r.key), ["b", "c", "a"]);
+    test:assertEquals(rankGroups(rows, "points", "asc").map(r => checkpanic r.key), ["b", "c", "a"]);
+    test:assertEquals(rankGroups(rows, "rank", "desc").map(r => checkpanic r.key), ["b", "c", "a"]);
+}
