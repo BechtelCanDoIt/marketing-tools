@@ -10,9 +10,11 @@ Every insert is `ON CONFLICT DO NOTHING`, so an admin's later change is never ov
   and OWN_POST_AMPLIFIED 25 (phase 3, 10 + the 15 bonus). No SHARE_COMMENTARY: no phase uses it. Likes/comments
   (phase 4) and Amplify Challenge entry/winner (PO adjustments for now) aren't rules yet.
 - `S002__categories.sql`: placeholder categories until Marketing confirms them.
-- `S003__app_settings.sql`: `leaderboard.top_n = 3`, `team.visibility = TEAM`, the six `scorecard.*` targets, `campaign.default_window_days = 30`,
+- `S003__app_settings.sql`: `leaderboard.top_n = 3`, `team.visibility = TEAM`, `campaign.default_window_days = 30`,
   `po.review_sla_hours = 48`, `posts.window_days = 14`, `connection.reminder_days = 7`,
   `connection.token_grace_days = 5`, `audit.retention_months = 60`, kill switches `sharing.enabled`,
   `announcements.enabled`.
 - `S004__scheduler_settings.sql`: `run.schedule = @every 5m`, `run.enabled = true`,
   `maintenance.schedule = 0 2 * * *` (UTC), pushed to the scheduler by amplify-api (ADR-026).
+- `S006__scorecard_targets.sql`: the six `scorecard.*` targets for the scorecard board (connected 25%, expired at most 5%,
+  share success 98%, priority reach 25%, active 100, reposts 150 a week). Starting lines for PO to tune (ADR-036).

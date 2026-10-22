@@ -29,12 +29,5 @@ VALUES ('leaderboard.top_n', '3'),                  -- B16
        ('connection.token_grace_days', '5'),        -- ADR-002, D7 open
        ('audit.retention_months', '60'),            -- B17
        ('sharing.enabled', 'true'),                 -- kill switch
-       ('announcements.enabled', 'true'),           -- kill switch
-       -- Scorecard targets: starting lines for PO to tune, not agreed numbers.
-       ('scorecard.target_connected_pct', '25'),    -- employees connected, % of headcount
-       ('scorecard.max_expired_pct', '5'),          -- expired connections, % of connected (ceiling)
-       ('scorecard.target_share_success_pct', '98'),
-       ('scorecard.target_priority_reach_pct', '25'), -- priority post reposted by this % of connected
-       ('scorecard.target_active_30d', '100'),      -- people with activity in the last 30 days
-       ('scorecard.target_reposts_per_week', '150')
+       ('announcements.enabled', 'true')            -- kill switch
 ON CONFLICT (key) DO NOTHING;
