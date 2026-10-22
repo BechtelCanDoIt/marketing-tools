@@ -168,7 +168,7 @@ isolated function handleCampaignRegistered(HandlerContext ctx, events:CampaignRe
 
     if novera is NoveraPort {
         NoveraError? rejected = novera.notify(announcements:buildNoveraNotification(campaignSource,
-            ctx.config.sharePageBaseUrl, ctx.config.cardAvatarUrl), ctx.correlationId);
+            ctx.config.sharePageBaseUrl, ctx.config.cardAvatarUrl, ctx.config.defaultImageUrl), ctx.correlationId);
         if rejected is NoveraError {
             string note = string `Novera ${rejected.detail().code} (HTTP ${rejected.detail().httpStatus.toString()})`;
             if rejected.detail().retryable && !ctx.finalAttempt {

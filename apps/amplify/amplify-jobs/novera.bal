@@ -45,12 +45,21 @@ type NoveraPort isolated object {
 };
 
 # `NoveraPort` over the Choreo gateway, with a client-credentials token from an application subscribed to
-# Novera's API.
+# Novera's API. The HTTP client is built on the first call, not in `init`: the OAuth2 client fetches its token
+# while it is built, so building it at start-up would stop amplify-jobs from starting whenever the token endpoint
+# is down. A failed build is a retryable `UNAVAILABLE` and is tried again on the next call.
 isolated class NoveraClient {
     *NoveraPort;
 
-    private final http:Client httpClient;
+    private final string baseUrl;
     private final string path;
+    private final string tokenUrl;
+    private final string clientId;
+    private final string clientSecret;
+    private final readonly & string[] scopes;
+    private final decimal timeoutSeconds;
+    private final resilience:HttpResilience & readonly settings;
+    private http:Client? httpClient = ();
 
     # + notifyUrl - Novera's `POST /internal/notifications` URL (https)
     # + tokenUrl - Token endpoint
@@ -59,25 +68,37 @@ isolated class NoveraClient {
     # + scopes - Token scopes
     # + timeoutSeconds - Per-call timeout (token and notification)
     # + settings - Breaker and pool settings
-    # + return - An error when the URL is not https or the client can't be built
+    # + allowInsecureHttp - Local stack only: accept a plain-http notify URL (the `local/novera-mock`). Never set in
+    # Choreo
+    # + return - An error when the URL is not https
     isolated function init(string notifyUrl, string tokenUrl, string clientId, string clientSecret, string[] scopes,
-            decimal timeoutSeconds, resilience:HttpResilience settings = {}) returns error? {
+            decimal timeoutSeconds, resilience:HttpResilience settings = {}, boolean allowInsecureHttp = false)
+            returns error? {
         string url = notifyUrl.trim();
-        if !url.toLowerAscii().startsWith("https://") {
+        string lower = url.toLowerAscii();
+        boolean insecureOk = allowInsecureHttp && lower.startsWith("http://");
+        if !lower.startsWith("https://") && !insecureOk {
             return error("Novera notify URL must be HTTPS");
         }
-        int pathStart = url.indexOf("/", 8) ?: url.length();
-        http:ClientConfiguration config = resilience:clientConfig(settings, timeoutSeconds);
-        http:OAuth2ClientCredentialsGrantConfig grant = {tokenUrl, clientId, clientSecret, scopes};
-        config.auth = grant;
-        self.httpClient = check new (url.substring(0, pathStart), config);
+        int pathStart = url.indexOf("/", lower.startsWith("https://") ? 8 : 7) ?: url.length();
+        self.baseUrl = url.substring(0, pathStart);
         string path = url.substring(pathStart);
         self.path = path.length() == 0 ? "/" : path;
+        self.tokenUrl = tokenUrl;
+        self.clientId = clientId;
+        self.clientSecret = clientSecret;
+        self.scopes = scopes.cloneReadOnly();
+        self.timeoutSeconds = timeoutSeconds;
+        self.settings = settings.cloneReadOnly();
     }
 
     isolated function notify(announcements:NoveraNotification notification, string? correlationId)
             returns NoveraError? {
-        http:Response|http:ClientError response = self.httpClient->post(self.path, notification.toJson(),
+        http:Client|error conn = self.connect();
+        if conn is error {
+            return noveraError("UNAVAILABLE", "Novera token endpoint unreachable", (), true);
+        }
+        http:Response|http:ClientError response = conn->post(self.path, notification.toJson(),
                 resilience:correlationHeaders(correlationId));
         if response is http:ClientError {
             return noveraError("UNAVAILABLE", "Novera call failed: no response", (), true);
@@ -95,7 +116,31 @@ isolated class NoveraClient {
         return noveraError("REJECTED", string `Novera refused the announcement with HTTP ${status}`, status, false);
     }
 
-    isolated function breaker() returns string => resilience:breakerState(self.httpClient);
+    isolated function breaker() returns string {
+        lock {
+            http:Client? conn = self.httpClient;
+            return conn is () ? "CLOSED" : resilience:breakerState(conn);
+        }
+    }
+
+    isolated function connect() returns http:Client|error {
+        lock {
+            http:Client? existing = self.httpClient;
+            if existing is http:Client {
+                return existing;
+            }
+            http:ClientConfiguration config = resilience:clientConfig(self.settings, self.timeoutSeconds);
+            http:OAuth2ClientCredentialsGrantConfig grant = {tokenUrl: self.tokenUrl, clientId: self.clientId,
+                clientSecret: self.clientSecret, scopes: self.scopes.clone()};
+            config.auth = grant;
+            // The OAuth2 client fetches its token while it is built and panics when it can't: trap it.
+            http:Client|error created = trap new (self.baseUrl, config);
+            if created is http:Client {
+                self.httpClient = created;
+            }
+            return created;
+        }
+    }
 }
 
 isolated function noveraError(string code, string message, int? httpStatus, boolean retryable) returns NoveraError =>

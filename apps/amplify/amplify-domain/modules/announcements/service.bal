@@ -142,9 +142,11 @@ isolated function ensureQueued(Announcement announcement) returns types:DomainEr
 # + campaign - Campaign
 # + sharePageBaseUrl - One WSO2 Celebrate page; the link adds `?share=<campaignId>`
 # + iconUrl - Icon beside the title, kept only when it is https
-# + return - The notification
+# + defaultImageUrl - Picture used when the campaign's own image is missing or unusable (Chat fetches it, so it
+# must be public https)
+# + return - The notification: icon, title, subtitle, picture, summary and an Amplify button, like the Club card
 public isolated function buildNoveraNotification(CampaignCardSource campaign, string sharePageBaseUrl,
-        string? iconUrl = ()) returns NoveraNotification {
+        string? iconUrl = (), string? defaultImageUrl = ()) returns NoveraNotification {
     string base = sharePageBaseUrl.endsWith("/") ? sharePageBaseUrl.substring(0, sharePageBaseUrl.length() - 1)
         : sharePageBaseUrl;
     string? summary = campaign.summary;
@@ -154,11 +156,17 @@ public isolated function buildNoveraNotification(CampaignCardSource campaign, st
         title: cutTo(campaign.title.trim(), NOVERA_LINE_MAX),
         subtitle: campaign.isPriority ? "Amplify · Priority" : "Amplify",
         body: cutTo(body, NOVERA_BODY_MAX),
-        link: {url: string `${base}${base.includes("?") ? "&" : "?"}share=${campaign.campaignId}`,
-            label: "Share it"}
+        button: {url: string `${base}${base.includes("?") ? "&" : "?"}share=${campaign.campaignId}`,
+            label: googlechat:CARD_BUTTON_TEXT}
     };
     if iconUrl is string && iconUrl.startsWith("https://") {
         n.iconUrl = iconUrl;
+    }
+    string? imageUrl = campaign.imageUrl;
+    if imageUrl is string && googlechat:isPublicHttpsUrl(imageUrl) {
+        n.imageUrl = imageUrl;
+    } else if defaultImageUrl is string && googlechat:isPublicHttpsUrl(defaultImageUrl) {
+        n.imageUrl = defaultImageUrl;
     }
     return n;
 }

@@ -72,8 +72,10 @@ public type NoveraNotification record {|
     string subtitle;
     # Body text
     string body;
-    # Where the card's link opens, and its label
-    record {|string url; string label;|} link;
     # Icon beside the title (https only), if any
     string iconUrl?;
+    # Picture under the title (public https only), if any
+    string imageUrl?;
+    # The Amplify button: opens the Celebrate page with this campaign's share dialog
+    record {|string url; string label;|} button;
 |};

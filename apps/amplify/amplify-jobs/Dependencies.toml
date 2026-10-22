@@ -50,7 +50,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "data.jsondata"
-version = "1.1.6"
+version = "1.1.7"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.object"}
@@ -484,6 +484,7 @@ modules = [
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.external_sharing"},
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.identity"},
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.recognition"},
+	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.reporting"},
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.scoring"},
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.sharing"},
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.store"}
