@@ -1258,7 +1258,7 @@ components:
       properties:
         reason: {type: string, minLength: 1, maxLength: 1000}
 
-    PointAction: {type: string, enum: [REPOST, REPOST_COMMENTARY, SHARE, SHARE_COMMENTARY, OWN_POST, OWN_POST_AMPLIFIED]}
+    PointAction: {type: string, enum: [REPOST, REPOST_COMMENTARY, SHARE, SHARE_COMMENTARY, OWN_POST, OWN_POST_AMPLIFIED, REACTION, COMMENT, CHALLENGE_ENTRY, CHALLENGE_WINNER]}
     PointRule:
       type: object
       required: [id, action, points, effectiveFrom, createdBy, createdAt, inForce]
