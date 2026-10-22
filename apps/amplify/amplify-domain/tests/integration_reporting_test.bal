@@ -257,3 +257,43 @@ function testPointsAwardedMoveWithTheLedgerInEveryWindow() returns error? {
     test:assertTrue(reversed.year >= reversed.month && reversed.month >= reversed.week, "year contains month contains week");
     check db.close();
 }
+
+@test:Config {groups: ["integration"]}
+function testSnapshotReadsEverythingInOneRepeatableReadTransaction() returns error? {
+    if !itEnabled {
+        return;
+    }
+    postgresql:Client apiDb = check api();
+    postgresql:Client jobsDb = check jobs();
+    string po = check newEmployee(apiDb, "rptsnap");
+    string emp = check newEmployee(apiDb, "rptsnapshare");
+    campaign:Campaign c = check registerCampaign(apiDb, po);
+    sharing:CampaignSnapshot snap = {id: c.id, provider: c.provider, resourceUrn: c.resourceUrn, open: true};
+    sharing:ConnectionSnapshot conn = {memberUrn: "urn:li:person:" + uniq(), usable: true};
+    sharing:ShareRequest req = check sharing:requestShare(new sharing:PgShareRepository(apiDb, {actorId: emp}), snap,
+            conn, {employeeId: emp, kind: types:REPOST_COMMENTARY, commentary: "Snapshot"}, time:utcNow());
+    sharing:PublishResult published = check sharing:markPublished(req, "urn:li:share:" + uniq(), conn.memberUrn,
+            types:newUuidV7(), time:utcNow());
+    check (new sharing:PgShareRepository(jobsDb)).recordPublish(published, req.version);
+
+    time:Utc now = time:utcNow();
+    // The statement SET TRANSACTION must be the first one in the transaction or Postgres refuses the whole read.
+    reporting:Snapshot s = check reporting:loadSnapshot(apiDb, now);
+    test:assertEquals(s.asOf, now);
+    test:assertEquals(s.live, check reporting:liveCounts(apiDb));
+    test:assertEquals(s.connections, check reporting:connectionBreakdown(apiDb));
+    test:assertEquals(s.participation, check reporting:participationCounts(apiDb));
+    test:assertEquals(s.points, check reporting:pointsAwarded(apiDb));
+    test:assertEquals(s.weekly.length(), 8);
+    test:assertTrue(s.reposts7d >= 1 && s.reposts7dWithCommentary >= 1 && s.reposts7dWithCommentary <= s.reposts7d);
+    test:assertTrue(s.repostsThisMonth >= s.reposts7dWithCommentary);
+    reporting:CampaignRow[] mine = from reporting:CampaignRow r in s.campaigns
+        where r.campaignId == c.id
+        select r;
+    test:assertEquals(mine.length(), 1, "the new campaign is in the snapshot");
+    test:assertEquals(mine[0].reposts, 1);
+    test:assertEquals(mine[0].repostsWithCommentary, 1);
+    test:assertEquals(s.shares.failedByReason.length(), 3);
+    check apiDb.close();
+    check jobsDb.close();
+}
