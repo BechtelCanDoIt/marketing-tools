@@ -222,7 +222,7 @@ isolated function campaignsBoard(Snapshot s, int days, reporting:CategoryCount[]
             select dashboardCampaignJson(p, s.delivery),
         selected: detail,
         byCategory: from reporting:CategoryCount k in categories
-            select {code: k.code, label: k.label, reposts: k.reposts}
+            select {code: k.code, label: k.label, reposts: k.reposts, repostsWithCommentary: k.repostsWithCommentary}
     };
 }
 

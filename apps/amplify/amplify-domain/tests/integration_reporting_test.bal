@@ -130,6 +130,8 @@ function testRepostsAndPostsFeedTheBoards() returns error? {
         select k;
     test:assertEquals(cats.length(), 1);
     test:assertTrue(cats[0].reposts >= 1);
+    test:assertTrue(cats[0].repostsWithCommentary >= 1 && cats[0].repostsWithCommentary <= cats[0].reposts,
+            "reposts with comments are part of the category's reposts, not on top of them");
 
     reporting:WeekCount[] weeks = check reporting:weeklyReposts(apiDb, 8);
     test:assertEquals(weeks.length(), 8, "zero-filled, one row per week");

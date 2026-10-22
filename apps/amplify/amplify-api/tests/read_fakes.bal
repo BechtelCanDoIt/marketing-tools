@@ -554,7 +554,8 @@ isolated function mockLoadSnapshot(time:Utc now) returns Snapshot|error {
 @test:Mock {functionName: "categoryCounts"}
 isolated function mockCategoryCounts(time:Utc since) returns reporting:CategoryCount[]|error {
     check dbGate();
-    return [{code: "PRODUCT", label: "Product", reposts: 45}, {code: "EVENT", label: "Event", reposts: 10}];
+    return [{code: "PRODUCT", label: "Product", reposts: 45, repostsWithCommentary: 12},
+        {code: "EVENT", label: "Event", reposts: 10, repostsWithCommentary: 0}];
 }
 
 @test:Mock {functionName: "campaignByDay"}
