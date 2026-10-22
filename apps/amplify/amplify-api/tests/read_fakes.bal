@@ -473,7 +473,8 @@ isolated function mockAnnouncementRepository(store:Actor actor) returns announce
 
 const time:Utc DASH_NOW = [1761000000, 0];
 
-isolated function dashPost(string id, string title, string cat, boolean priority, string status, int openedDaysAgo, int reposts)
+isolated function dashPost(string id, string title, string cat, boolean priority, string status, int openedDaysAgo, int reposts,
+        int withCommentary = 0)
         returns reporting:CampaignRow => {
     campaignId: id,
     title,
@@ -483,7 +484,8 @@ isolated function dashPost(string id, string title, string cat, boolean priority
     status,
     opensAt: time:utcAddSeconds(DASH_NOW, <decimal>(-86400 * openedDaysAgo)),
     closesAt: time:utcAddSeconds(DASH_NOW, <decimal>(86400 * (30 - openedDaysAgo))),
-    reposts
+    reposts,
+    repostsWithCommentary: withCommentary
 };
 
 isolated Snapshot? fakeSnapshot = ();
@@ -503,7 +505,7 @@ isolated function fixedSnapshot() returns Snapshot => {
     pointsThisMonth: 500,
     peopleWithPoints: 28,
     campaigns: [
-        dashPost("p-launch", "Launch", "PRODUCT", true, "OPEN", 3, 40),
+        dashPost("p-launch", "Launch", "PRODUCT", true, "OPEN", 3, 40, 12),
         dashPost("p-event", "Event", "EVENT", false, "OPEN", 10, 10),
         dashPost("p-old", "Old news", "PRODUCT", false, "CLOSED", 20, 5),
         dashPost("p-ancient", "Ancient", "EVENT", false, "CLOSED", 80, 99)

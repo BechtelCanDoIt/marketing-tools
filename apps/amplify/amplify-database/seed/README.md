@@ -16,5 +16,3 @@ Every insert is `ON CONFLICT DO NOTHING`, so an admin's later change is never ov
   `announcements.enabled`.
 - `S004__scheduler_settings.sql`: `run.schedule = @every 5m`, `run.enabled = true`,
   `maintenance.schedule = 0 2 * * *` (UTC), pushed to the scheduler by amplify-api (ADR-026).
-- `S006__scorecard_targets.sql`: the six `scorecard.*` targets for the scorecard board (connected 25%, expired at most 5%,
-  share success 98%, priority reach 25%, active 100, reposts 150 a week). Starting lines for PO to tune (ADR-036).
