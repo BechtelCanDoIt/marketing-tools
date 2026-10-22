@@ -72,6 +72,22 @@ public isolated function standingOf(postgresql:Client db, string employeeId, str
     return toStanding(row);
 }
 
+# Every standing's email and points for a period, the input to the team and business unit boards
+# (the people directory maps email to team; Amplify stores no org data, ADR-009). At most one row per
+# person with points, so ~830 rows.
+#
+# + db - Client
+# + periodKey - Period
+# + return - Points by email, or an error
+public isolated function pointsByEmail(postgresql:Client db, string periodKey = PERIOD_ALL)
+        returns EmailPoints[]|error {
+    stream<record {|string email; int total_points;|}, error?> rows = db->query(`
+        SELECT lower(email::text) AS email, total_points
+        FROM recognition.standing WHERE period_key = ${periodKey} AND email IS NOT NULL`);
+    return from var r in rows
+        select {email: r.email, totalPoints: r.total_points};
+}
+
 # Version of a period's standings (the ETag source).
 #
 # + db - Client

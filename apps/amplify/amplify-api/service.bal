@@ -466,6 +466,42 @@ service http:InterceptableService / on apiListener {
             returns http:Response|ProblemResponse|error =>
         leaderboard(check principalOf(ctx), cid(ctx), period, ifNoneMatch);
 
+    # People ranked within the company, a business unit or a team. Open to every employee (ADR-035).
+    #
+    # + ctx - Request context
+    # + period - Period
+    # + scope - `COMPANY` (default), `BU` or `TEAM`
+    # + bu - BU name for `BU` (default the caller's own)
+    # + team - Team key for `TEAM` (default the caller's own)
+    # + q - Name search
+    # + page - Zero-based page
+    # + size - Page size
+    # + return - The page, or problem details
+    resource function get leaderboard/people(http:RequestContext ctx, string period = "ALL", string scope = "COMPANY",
+            string? bu = (), string? team = (), string? q = (), int page = 0, int size = 25)
+            returns http:Response|ProblemResponse|error =>
+        okJson(peopleBoard(check principalOf(ctx), cid(ctx), period, scope, bu, team, q, page, size));
+
+    # Teams or business units ranked against each other. Open to every employee (ADR-035).
+    #
+    # + ctx - Request context
+    # + period - Period
+    # + 'by - `TEAM` (default) or `BU`
+    # + bu - Limit `TEAM` to one BU
+    # + return - The board, or problem details
+    resource function get leaderboard/groups(http:RequestContext ctx, string period = "ALL", string 'by = "TEAM",
+            string? bu = ())
+            returns http:Response|ProblemResponse|error =>
+        okJson(groupBoard(cid(ctx), period, 'by, bu));
+
+    # Current employee count, overall and by business unit and team. Counted from the people directory and
+    # kept for a week.
+    #
+    # + ctx - Request context
+    # + return - The count, or problem details
+    resource function get headcount(http:RequestContext ctx) returns http:Response|ProblemResponse|error =>
+        okJson(headcountView(cid(ctx)));
+
     # Own points, rank and monthly history.
     #
     # + ctx - Request context

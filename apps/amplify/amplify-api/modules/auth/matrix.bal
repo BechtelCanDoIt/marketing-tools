@@ -86,6 +86,9 @@ public final Rule[] & readonly ACTIVITY_MATRIX = [
     {method: "POST", path: "/po/points/{reference}/reverse", allowed: [PO], capability: "points.adjust", useCase: "Reason required; not already reversed"},
     // S4 Recognition
     {method: "GET", path: "/leaderboard", allowed: ALL, capability: "leaderboard.read", useCase: "Top N, personal, My Team (ADR-014)"},
+    {method: "GET", path: "/leaderboard/people", allowed: ALL, capability: "leaderboard.people.read", useCase: "Company, BU or team board; open to every employee (ADR-035)"},
+    {method: "GET", path: "/leaderboard/groups", allowed: ALL, capability: "leaderboard.groups.read", useCase: "Teams or BUs ranked; open to every employee (ADR-035)"},
+    {method: "GET", path: "/headcount", allowed: ALL, capability: "headcount.read", useCase: "Employee count from the people directory, cached 7 days (ADR-035)"},
     {method: "GET", path: "/me/points", allowed: ALL, capability: "points.read_own"},
     {method: "GET", path: "/team", allowed: ALL, capability: "team.read", useCase: "Non-PO visibility per ADR-014/ADR-019"},
     {method: "GET", path: "/team/{employeeId}/history", allowed: ALL, capability: "team.history.read", useCase: "Non-PO: the caller, or a member of the caller's roster team (any employee when team.visibility = COMPANY), else 403 TEAM_SCOPE (leaderboards.md); PO any (team.history.read_any)"},
