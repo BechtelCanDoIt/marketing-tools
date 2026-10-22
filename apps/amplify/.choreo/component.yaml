@@ -104,6 +104,12 @@ configurations:
           displayName: Team roster cache TTL in seconds (default 259200 = 3 days; leave empty for the default)
           type: string
           required: false
+    - name: BAL_CONFIG_VAR_TOPBOARDCACHESECONDS
+      valueFrom:
+        configForm:
+          displayName: Celebrate top three cache TTL in seconds (default 7200 = 2 hours) (leave empty for the default)
+          type: string
+          required: false
     - name: BAL_CONFIG_VAR_HEADCOUNTCACHESECONDS
       valueFrom:
         configForm:
