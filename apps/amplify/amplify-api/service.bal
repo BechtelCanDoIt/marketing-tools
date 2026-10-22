@@ -502,6 +502,45 @@ service http:InterceptableService / on apiListener {
     resource function get headcount(http:RequestContext ctx) returns http:Response|ProblemResponse|error =>
         okJson(headcountView(cid(ctx)));
 
+    // ---- S6 Dashboards (PO, Marketing, SLT, Admin; ADR-036) ----------------------------------------
+
+    # Operations board.
+    #
+    # + ctx - Request context
+    # + return - The board, or problem details
+    resource function get dashboards/operations(http:RequestContext ctx)
+            returns http:Response|ProblemResponse|error => dashboardOperations(cid(ctx));
+
+    # Campaign performance board.
+    #
+    # + ctx - Request context
+    # + days - Look-back, 1-90 (default 30)
+    # + campaignId - The campaign to detail (default: the one with the most reposts)
+    # + return - The board, or problem details
+    resource function get dashboards/campaigns(http:RequestContext ctx, int days = 30, string? campaignId = ())
+            returns http:Response|ProblemResponse|error => dashboardCampaigns(cid(ctx), days, campaignId);
+
+    # Participation funnel numbers.
+    #
+    # + ctx - Request context
+    # + return - The board, or problem details
+    resource function get dashboards/participation(http:RequestContext ctx)
+            returns http:Response|ProblemResponse|error => dashboardParticipation(cid(ctx));
+
+    # At a glance.
+    #
+    # + ctx - Request context
+    # + return - The board, or problem details
+    resource function get dashboards/glance(http:RequestContext ctx)
+            returns http:Response|ProblemResponse|error => dashboardGlance(cid(ctx));
+
+    # Scorecard.
+    #
+    # + ctx - Request context
+    # + return - The board, or problem details
+    resource function get dashboards/scorecard(http:RequestContext ctx)
+            returns http:Response|ProblemResponse|error => dashboardScorecard(cid(ctx));
+
     # Own points, rank and monthly history.
     #
     # + ctx - Request context

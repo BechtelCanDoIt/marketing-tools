@@ -307,7 +307,8 @@ type DirectoryIndex record {|
     map<string> buOf;
     # Business unit name to member emails, lowercase
     map<string[]> buMembers;
-    # Team key to the business unit most of its members sit in (ties: the first one seen)
+    # Team key to its business unit, as the directory states it (the key carries it, so a team is never
+    # guessed into a BU)
     map<string> teamBu;
     # Everyone the directory returned with a work email, whether or not they have a team
     int total;
@@ -317,7 +318,9 @@ type DirectoryIndex record {|
 isolated [DirectoryIndex & readonly, decimal]? directoryCache = ();
 
 # Groups the directory by team: the sub-team, or the team when a person has no sub-team. The key carries
-# the team too, so two teams with a same-named sub-team stay apart. People with neither are left out.
+# the business unit and the team, so two teams with a same-named sub-team stay apart, and a team's BU is
+# always the one the directory gives its members, never worked out. People with neither team nor sub-team
+# are left out of teams (they still count toward the headcount and their BU).
 #
 # + records - Directory rows
 # + return - The index
@@ -327,7 +330,7 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
     map<string[]> members = {};
     map<string> buOf = {};
     map<string[]> buMembers = {};
-    map<map<int>> buVotes = {};
+    map<string> teamBu = {};
     map<boolean> seen = {};
     foreach DirectoryRecord r in records {
         string email = (r.workEmail ?: "").trim().toLowerAscii();
@@ -347,29 +350,13 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
         if team == "" && subTeam == "" {
             continue;
         }
-        string key = string `${team}/${subTeam}`;
+        string key = string `${bu}/${team}/${subTeam}`;
         teamOf[email] = key;
         teamNames[key] = subTeam != "" ? subTeam : team;
+        teamBu[key] = bu;
         string[] list = members[key] ?: [];
         list.push(email);
         members[key] = list;
-        if bu != "" {
-            map<int> votes = buVotes[key] ?: {};
-            votes[bu] = (votes[bu] ?: 0) + 1;
-            buVotes[key] = votes;
-        }
-    }
-    map<string> teamBu = {};
-    foreach var [key, votes] in buVotes.entries() {
-        string best = "";
-        int most = 0;
-        foreach var [bu, n] in votes.entries() {
-            if n > most {
-                best = bu;
-                most = n;
-            }
-        }
-        teamBu[key] = best;
     }
     return {teamOf, teamNames, members, buOf, buMembers, teamBu, total: seen.length()}.cloneReadOnly();
 }
