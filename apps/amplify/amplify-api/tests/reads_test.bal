@@ -345,3 +345,131 @@ function testLeaderboardWithoutRosterConfiguredKeepsItsEtag() returns error? {
     test:assertTrue(header(res, "ETag") is string, "no roster configured is a stable answer: still revalidated");
     test:assertEquals(header(res, "Cache-Control"), "private, max-age=30");
 }
+
+// ---- /headcount, /leaderboard/groups, /leaderboard/people (ADR-035) -----------------------------------
+
+@test:Config {groups: ["reads"]}
+function testHeadcountIsCountedOnceAndKeptForAWeek() returns error? {
+    setDirectory("ok");
+    _ = takeDirectoryFetches();
+    string token = check rvToken("lb-1");
+    http:Response first = check send("GET", "/headcount", (), token);
+    test:assertEquals(first.statusCode, 200);
+    check assertShape(first, "Headcount");
+    json body = check first.getJsonPayload();
+    test:assertEquals(check body.total, 4);
+    test:assertEquals(check body.businessUnits, [{name: "Water", headcount: 3}, {name: "Land", headcount: 1}]);
+    test:assertEquals(check body.teams, [{key: "Water/Rivers/", name: "Rivers", businessUnit: "Water", headcount: 3}]);
+
+    _ = check send("GET", "/headcount", (), check rvToken("rv-b"));
+    test:assertEquals(takeDirectoryFetches(), 1, "one directory call serves every caller for the week");
+
+    // A week later the directory is read again; if it is down the last count keeps serving.
+    expireHeadcountCache();
+    lock {
+        directoryMode = "down";
+    }
+    http:Response stale = check send("GET", "/headcount", (), token);
+    test:assertEquals(stale.statusCode, 200);
+    test:assertEquals(check (check stale.getJsonPayload()).total, 4, "a failed refresh keeps the last count");
+
+    setDirectory("down");
+    http:Response none = check send("GET", "/headcount", (), token);
+    test:assertEquals(none.statusCode, 503, "never counted and the directory is down");
+    test:assertEquals(check codeIn(none), "DEPENDENCY_UNAVAILABLE");
+    setDirectory("ok");
+}
+
+@test:Config {groups: ["reads"]}
+function testGroupBoardsRankTeamsAndBusinessUnits() returns error? {
+    setDirectory("ok");
+    string token = check rvToken("lb-1");
+    http:Response teams = check send("GET", "/leaderboard/groups", (), token);
+    test:assertEquals(teams.statusCode, 200);
+    check assertShape(teams, "LeaderboardGroups");
+    check assertStandardJson(teams);
+    json body = check teams.getJsonPayload();
+    test:assertEquals(check body.'by, "TEAM");
+    test:assertEquals(check body.totals, {headcount: 3, participants: 2, points: 450});
+    json[] entries = <json[]>check body.entries;
+    test:assertEquals(entries.length(), 1);
+    test:assertEquals(check entries[0].points, 450, "rv-a 300 + rv-b 150");
+    test:assertEquals(check entries[0].participants, 2);
+    test:assertEquals(check entries[0].headcount, 3);
+    test:assertEquals(check body.unassigned, {participants: 4, points: 1200}, "lb-1, lb-2, lb-3 and rv-c aren't in the directory");
+
+    json bus = check (check send("GET", "/leaderboard/groups?by=BU", (), token)).getJsonPayload();
+    json[] buEntries = <json[]>check bus.entries;
+    test:assertEquals(buEntries.map(e => checkpanic e.name), ["Water", "Land"], "ranked by points, BUs with none listed");
+    test:assertEquals(buEntries.map(e => checkpanic e.rank), [1, 2]);
+
+    json water = check (check send("GET", "/leaderboard/groups?by=TEAM&bu=Water", (), token)).getJsonPayload();
+    test:assertEquals((<json[]>check water.entries).length(), 1);
+    json land = check (check send("GET", "/leaderboard/groups?by=TEAM&bu=Land", (), token)).getJsonPayload();
+    test:assertEquals((<json[]>check land.entries).length(), 0, "a BU with no teams");
+
+    foreach string query in ["sort=bogus", "dir=sideways", "by=bogus", "period=ALLX", "by=BU&bu=Water", "bu=" + "x".padEnd(101, "x")] {
+        http:Response bad = check send("GET", "/leaderboard/groups?" + query, (), token);
+        test:assertEquals(bad.statusCode, 400, query);
+    }
+    test:assertEquals((check send("GET", "/leaderboard/groups?bu=Nope", (), token)).statusCode, 404);
+
+    setDirectory("down");
+    http:Response down = check send("GET", "/leaderboard/groups", (), token);
+    test:assertEquals(down.statusCode, 503);
+    setDirectory("ok");
+}
+
+@test:Config {groups: ["reads"]}
+function testPeopleBoardsAreOpenToEveryEmployee() returns error? {
+    clearSettings();
+    setDirectory("ok");
+    // Company: any employee, even one the directory doesn't know, sees everyone (team.visibility doesn't gate it).
+    http:Response company = check send("GET", "/leaderboard/people", (), check rvToken("lb-3"));
+    test:assertEquals(company.statusCode, 200);
+    check assertShape(company, "LeaderboardPeople");
+    check assertStandardJson(company);
+    json body = check company.getJsonPayload();
+    test:assertEquals(check body.scope, "COMPANY");
+    test:assertEquals(check body.total, 6);
+    test:assertEquals(check body.summary.headcount, 4, "the cached employee count");
+    json[] everyone = <json[]>check body.entries;
+    test:assertEquals(everyone.map(e => checkpanic e.employeeId), ["lb-1", "lb-2", "rv-a", "lb-3", "rv-b", "rv-c"]);
+
+    // Own team by default, another team by key, own BU by default.
+    string token = check rvToken("rv-b");
+    json team = check (check send("GET", "/leaderboard/people?scope=TEAM", (), token)).getJsonPayload();
+    test:assertEquals(check team.team, "Water/Rivers/");
+    test:assertEquals(check team.teamName, "Rivers");
+    test:assertEquals(check team.businessUnit, "Water");
+    test:assertEquals((<json[]>check team.entries).map(e => checkpanic e.employeeId), ["rv-a", "rv-b"]);
+    test:assertEquals(check team.summary, {headcount: 3, participants: 2});
+    json byKey = check (check send("GET", "/leaderboard/people?scope=TEAM&team=Water%2FRivers%2F", (), check rvToken("lb-1"))).getJsonPayload();
+    test:assertEquals((<json[]>check byKey.entries).length(), 2, "a team by key, for someone outside it");
+    json bu = check (check send("GET", "/leaderboard/people?scope=BU", (), token)).getJsonPayload();
+    test:assertEquals(check bu.businessUnit, "Water");
+    test:assertEquals((<json[]>check bu.entries).length(), 2);
+    test:assertEquals(check bu.summary, {headcount: 3, participants: 2});
+
+    // Not in the directory: needs bu / team.
+    http:Response noBu = check send("GET", "/leaderboard/people?scope=BU", (), check rvToken("lb-1"));
+    test:assertEquals(noBu.statusCode, 404);
+    test:assertEquals((check send("GET", "/leaderboard/people?scope=TEAM&team=Nope", (), token)).statusCode, 404);
+    test:assertEquals((check send("GET", "/leaderboard/people?scope=BU&bu=Nope", (), token)).statusCode, 404);
+
+    foreach string query in ["scope=ALL", "sort=rank", "size=101", "size=0", "page=-1", "period=ALLX",
+            "q=" + "x".padEnd(101, "x")] {
+        http:Response bad = check send("GET", "/leaderboard/people?" + query, (), token);
+        if query == "sort=rank" {
+            test:assertEquals(bad.statusCode, 200, "unknown query names are ignored");
+        } else {
+            test:assertEquals(bad.statusCode, 400, query);
+        }
+    }
+
+    setDirectory("down");
+    test:assertEquals((check send("GET", "/leaderboard/people?scope=TEAM", (), token)).statusCode, 503);
+    test:assertEquals((check send("GET", "/leaderboard/people", (), token)).statusCode, 200,
+            "the company board needs no directory");
+    setDirectory("ok");
+}
