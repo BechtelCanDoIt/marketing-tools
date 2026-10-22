@@ -26,7 +26,8 @@ import ballerinax/postgresql;
 
 # Dashboard groups for tile 4, in display order.
 public final string[] & readonly DASHBOARD_ACTIONS = [types:REPOST, types:REPOST_COMMENTARY, types:SHARE,
-    types:SHARE_COMMENTARY, types:OWN_POST, types:OWN_POST_AMPLIFIED, types:ADJUSTMENT, types:REVERSAL];
+    types:SHARE_COMMENTARY, types:OWN_POST, types:OWN_POST_AMPLIFIED, types:REACTION, types:COMMENT,
+    types:CHALLENGE_ENTRY, types:CHALLENGE_WINNER, types:ADJUSTMENT, types:REVERSAL];
 
 # One page of ledger rows.
 public type LedgerPage record {|

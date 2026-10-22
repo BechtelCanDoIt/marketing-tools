@@ -210,7 +210,7 @@ function testM5DashboardQueriesRun() returns error? {
     transaction {
         _ = check scoring:actionRequiredCount(db);
         scoring:ActionPoints[] byAction = check scoring:pointsByAction(db, monthStart, time:utcAddSeconds(now, 60));
-        test:assertEquals(byAction.length(), 8, "every dashboard group present");
+        test:assertEquals(byAction.length(), 12, "every dashboard group present: ten priced actions plus adjustments and reversals");
         _ = check recognition:recognitionTotals(db, month + "-01", now);
         _ = check connection:connectionCounts(db);
         campaign:Campaign[] recent = check campaign:dashboardCampaigns(db, 30, 20, now);

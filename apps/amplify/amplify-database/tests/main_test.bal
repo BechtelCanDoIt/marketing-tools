@@ -43,10 +43,10 @@ function testDuplicateVersionStopsTheRun() {
 @test:Config
 function testShippedScriptsAreWellFormed() returns error? {
     string[] migrations = check listMigrations("migrations");
-    test:assertTrue(migrations.length() >= 12);
+    test:assertTrue(migrations.length() >= 14);
     test:assertEquals(migrations[0], "V001__schemas_roles.sql");
     string[] seeds = check listScripts("seed", SEED_FILE);
-    test:assertEquals(seeds.length(), 5);
+    test:assertEquals(seeds.length(), 6);
     test:assertEquals(versionOf("V012__x.sql"), "V012__x");
 }
 
