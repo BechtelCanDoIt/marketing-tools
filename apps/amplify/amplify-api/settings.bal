@@ -38,6 +38,18 @@ type Settings record {|
     int postsWindowDays = 14;
     # `connection.reminder_days`
     int reminderDays = 7;
+    # `scorecard.target_connected_pct`: employees connected, % of headcount
+    int targetConnectedPct = 25;
+    # `scorecard.max_expired_pct`: expired connections, % of connected (a ceiling)
+    int maxExpiredPct = 5;
+    # `scorecard.target_share_success_pct`
+    int targetShareSuccessPct = 98;
+    # `scorecard.target_priority_reach_pct`: a post counts as reaching people at this % of connected
+    int targetPriorityReachPct = 25;
+    # `scorecard.target_active_30d`: people with an engagement in 30 days
+    int targetActive30d = 100;
+    # `scorecard.target_reposts_per_week`
+    int targetRepostsPerWeek = 150;
     # `sharing.enabled` kill switch
     boolean sharingEnabled = true;
     # `announcements.enabled` kill switch
@@ -179,6 +191,24 @@ isolated function settingsOf(store:Setting[] rows) returns Settings {
             }
             SETTING_REMINDER_DAYS => {
                 s.reminderDays = v is int && v > 0 ? v : s.reminderDays;
+            }
+            SETTING_TARGET_CONNECTED_PCT => {
+                s.targetConnectedPct = v is int && v > 0 ? v : s.targetConnectedPct;
+            }
+            SETTING_MAX_EXPIRED_PCT => {
+                s.maxExpiredPct = v is int && v >= 0 ? v : s.maxExpiredPct;
+            }
+            SETTING_TARGET_SHARE_SUCCESS_PCT => {
+                s.targetShareSuccessPct = v is int && v > 0 ? v : s.targetShareSuccessPct;
+            }
+            SETTING_TARGET_PRIORITY_REACH_PCT => {
+                s.targetPriorityReachPct = v is int && v > 0 ? v : s.targetPriorityReachPct;
+            }
+            SETTING_TARGET_ACTIVE_30D => {
+                s.targetActive30d = v is int && v > 0 ? v : s.targetActive30d;
+            }
+            SETTING_TARGET_REPOSTS_PER_WEEK => {
+                s.targetRepostsPerWeek = v is int && v > 0 ? v : s.targetRepostsPerWeek;
             }
             SETTING_SHARING_ENABLED => {
                 s.sharingEnabled = v != false;

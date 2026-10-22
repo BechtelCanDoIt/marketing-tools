@@ -359,7 +359,7 @@ function testHeadcountIsCountedOnceAndKeptForAWeek() returns error? {
     json body = check first.getJsonPayload();
     test:assertEquals(check body.total, 4);
     test:assertEquals(check body.businessUnits, [{name: "Water", headcount: 3}, {name: "Land", headcount: 1}]);
-    test:assertEquals(check body.teams, [{key: "Rivers/", name: "Rivers", businessUnit: "Water", headcount: 3}]);
+    test:assertEquals(check body.teams, [{key: "Water/Rivers/", name: "Rivers", businessUnit: "Water", headcount: 3}]);
 
     _ = check send("GET", "/headcount", (), check rvToken("rv-b"));
     test:assertEquals(takeDirectoryFetches(), 1, "one directory call serves every caller for the week");
@@ -439,12 +439,12 @@ function testPeopleBoardsAreOpenToEveryEmployee() returns error? {
     // Own team by default, another team by key, own BU by default.
     string token = check rvToken("rv-b");
     json team = check (check send("GET", "/leaderboard/people?scope=TEAM", (), token)).getJsonPayload();
-    test:assertEquals(check team.team, "Rivers/");
+    test:assertEquals(check team.team, "Water/Rivers/");
     test:assertEquals(check team.teamName, "Rivers");
     test:assertEquals(check team.businessUnit, "Water");
     test:assertEquals((<json[]>check team.entries).map(e => checkpanic e.employeeId), ["rv-a", "rv-b"]);
     test:assertEquals(check team.summary, {headcount: 3, participants: 2});
-    json byKey = check (check send("GET", "/leaderboard/people?scope=TEAM&team=Rivers%2F", (), check rvToken("lb-1"))).getJsonPayload();
+    json byKey = check (check send("GET", "/leaderboard/people?scope=TEAM&team=Water%2FRivers%2F", (), check rvToken("lb-1"))).getJsonPayload();
     test:assertEquals((<json[]>check byKey.entries).length(), 2, "a team by key, for someone outside it");
     json bu = check (check send("GET", "/leaderboard/people?scope=BU", (), token)).getJsonPayload();
     test:assertEquals(check bu.businessUnit, "Water");

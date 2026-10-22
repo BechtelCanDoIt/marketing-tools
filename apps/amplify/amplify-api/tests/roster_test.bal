@@ -99,8 +99,10 @@ function testIndexKeepsBusinessUnitsAndTheFullCount() {
     test:assertEquals(index.total, 6, "everyone with a work email, once, team or not");
     test:assertEquals(index.buMembers["Corporate"], ["c@wso2.com", "e@wso2.com", "f@wso2.com"]);
     test:assertEquals(index.buOf["a@wso2.com"], "Product");
-    test:assertEquals(index.teamBu["Engineering/Platform"], "Product", "a team sits in the BU most of it sits in");
-    test:assertEquals(index.teamBu["Engineering/Digital"], "Corporate", "a tie goes to the BU seen first");
+    test:assertEquals(index.teamBu["Product/Engineering/Platform"], "Product");
+    // Two people in one team under different BUs are two teams: the BU is the directory's, never worked out.
+    test:assertEquals(index.teamBu["Corporate/Engineering/Digital"], "Corporate");
+    test:assertEquals(index.teamBu["Product/Engineering/Digital"], "Product");
 }
 
 @test:Config
@@ -108,8 +110,9 @@ function testHeadcountByBuAndTeam() {
     HeadcountSnapshot snapshot = headcountOf(indexDirectory(BU_DIRECTORY), [1760000000, 0]);
     test:assertEquals(snapshot.total, 6);
     test:assertEquals(snapshot.businessUnits, [{name: "Corporate", headcount: 3}, {name: "Product", headcount: 3}]);
-    test:assertEquals(snapshot.teams.map(t => [t.name, t.headcount]), [["Digital", 2], ["Platform", 2], ["Marketing", 1]]);
-    test:assertEquals(snapshot.teams[1].businessUnit, "Product");
+    test:assertEquals(snapshot.teams.map(t => [t.name, t.businessUnit, t.headcount]),
+            [["Platform", "Product", 2], ["Digital", "Corporate", 1], ["Digital", "Product", 1],
+            ["Marketing", "Corporate", 1]]);
 }
 
 @test:Config
@@ -123,11 +126,11 @@ function testGroupRowsSumPointsAndKeepUnplacedPeople() returns error? {
         {email: "f@wso2.com", totalPoints: 4}
     ];
     var [teams, unplaced, unplacedPoints] = groupRows(index, snapshot, points, "TEAM", ());
-    test:assertEquals(teams.length(), 3, "teams with no points are listed too");
+    test:assertEquals(teams.length(), 4, "teams with no points are listed too");
     test:assertEquals(unplaced, 2);
     test:assertEquals(unplacedPoints, 11);
     json[] ranked = rankGroups(teams);
-    test:assertEquals(check ranked[0].key, "Marketing/", "Marketing and Platform tie on 80: by name");
+    test:assertEquals(check ranked[0].key, "Corporate/Marketing/", "Marketing and Platform tie on 80: by name");
 }
 
 @test:Config
@@ -149,7 +152,7 @@ function testGroupRowsFilterTeamsByBu() {
     DirectoryIndex index = indexDirectory(BU_DIRECTORY);
     HeadcountSnapshot snapshot = headcountOf(index, [1760000000, 0]);
     var [teams, _, _] = groupRows(index, snapshot, [{email: "a@wso2.com", totalPoints: 5}], "TEAM", "Product");
-    test:assertEquals(teams.map(t => t.name), ["Platform"], "Digital is a tie, so it sits in the BU seen first");
+    test:assertEquals(teams.map(t => t.name).sort(), ["Digital", "Platform"]);
     var [bus, _, _] = groupRows(index, snapshot, [{email: "a@wso2.com", totalPoints: 5}], "BU", ());
     test:assertEquals(bus.map(t => t.name).sort(), ["Corporate", "Product"]);
 }
