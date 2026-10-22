@@ -283,6 +283,12 @@ isolated function topStandings(string period, int topN) returns recognition:Stan
     }
 }
 
+isolated function weeklyTotalsRead(time:Utc weekStart) returns recognition:EmployeeTotal[]|error {
+    retry<resilience:TransientDbRetry> (dbReadRetries) {
+        return check recognition:weeklyTotals(check db(), weekStart);
+    }
+}
+
 isolated function standingOf(types:EmployeeId employeeId, string period) returns recognition:Standing|error? {
     retry<resilience:TransientDbRetry> (dbReadRetries) {
         return check recognition:standingOf(check db(), employeeId, period);

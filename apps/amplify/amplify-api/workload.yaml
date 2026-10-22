@@ -50,6 +50,8 @@ configurations:
       value: "259200"
     - name: BAL_CONFIG_VAR_HEADCOUNTCACHESECONDS
       value: "604800"
+    - name: BAL_CONFIG_VAR_TOPBOARDCACHESECONDS
+      value: "7200"
     - name: BAL_CONFIG_VAR_SCORECARDTARGETCONNECTEDPCT
       value: "25"
     - name: BAL_CONFIG_VAR_SCORECARDMAXEXPIREDPCT

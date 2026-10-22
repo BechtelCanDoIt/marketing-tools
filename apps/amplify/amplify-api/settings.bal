@@ -28,6 +28,9 @@ import ballerina/time;
 type Settings record {|
     # `leaderboard.top_n` (B16)
     int topN = 3;
+    # `leaderboard.top_scope`: what the Celebrate top three and My position cover, `WEEK` (this calendar week,
+    # Monday to Sunday UTC) or `ALL` (all time)
+    string topScope = "WEEK";
     # `team.visibility`: `TEAM` or `COMPANY` (ADR-019)
     string teamVisibility = "TEAM";
     # `campaign.default_window_days` (C7)
@@ -64,6 +67,7 @@ type SettingRule record {|
 
 final readonly & map<SettingRule> EDITABLE_SETTINGS = {
     [SETTING_TOP_N]: {kind: "int", min: 1, max: 50},
+    [SETTING_TOP_SCOPE]: {kind: "enum", values: ["WEEK", "ALL"]},
     [SETTING_TEAM_VISIBILITY]: {kind: "enum", values: ["TEAM", "COMPANY"]},
     [SETTING_WINDOW_DAYS]: {kind: "int", min: 1, max: 365},
     [SETTING_SLA_HOURS]: {kind: "int", min: 1, max: 720},
@@ -158,6 +162,9 @@ isolated function settingsOf(store:Setting[] rows) returns Settings {
         match row.key {
             SETTING_TOP_N => {
                 s.topN = v is int && v > 0 ? v : s.topN;
+            }
+            SETTING_TOP_SCOPE => {
+                s.topScope = v == "ALL" ? "ALL" : "WEEK";
             }
             SETTING_TEAM_VISIBILITY => {
                 s.teamVisibility = v == "COMPANY" ? "COMPANY" : "TEAM";
