@@ -46,5 +46,9 @@ name = "amplify_domain.recognition"
 export = true
 
 [[package.modules]]
+name = "amplify_domain.reporting"
+export = true
+
+[[package.modules]]
 name = "amplify_domain.announcements"
 export = true

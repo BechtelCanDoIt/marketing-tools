@@ -237,3 +237,48 @@ public isolated function campaignNumbers(postgresql:Client db, string[] campaign
         };
     return result;
 }
+
+# Start of the calendar week (Monday 00:00 UTC) that holds `t`.
+#
+# + t - Any instant
+# + return - Monday 00:00:00 UTC of that week
+public isolated function weekStartOf(time:Utc t) returns time:Utc {
+    // 1970-01-01 was a Thursday, so day 0 is 3 days past a Monday.
+    int days = <int>(t[0] / 86400);
+    int sinceMonday = (days + 3) % 7;
+    return [(days - sinceMonday) * 86400, 0];
+}
+
+# Points earned per employee in `[weekStart, weekStart + 7 days)`, straight from the ledger (adjustments
+# and reversals included, so it matches the all-time board's arithmetic). People whose week nets to zero
+# or less are left out. Names and emails come from the identity context, as the full rebuild does.
+#
+# + db - Client
+# + weekStart - Monday 00:00 UTC
+# + return - One total per employee with points that week, or an error
+public isolated function weeklyTotals(postgresql:Client db, time:Utc weekStart) returns EmployeeTotal[]|error {
+    string startTs = time:utcToString(weekStart);
+    string endTs = time:utcToString(time:utcAddSeconds(weekStart, 7d * 86400d));
+    stream<record {|
+        string employee_id;
+        string? display_name;
+        string? email;
+        int total_points;
+        time:Utc? last_activity_at;
+    |}, error?> rows = db->query(`
+        SELECT l.employee_id, e.display_name, e.email::text AS email, sum(l.points)::int AS total_points,
+               max(l.created_at) AS last_activity_at
+        FROM scoring.points_ledger l
+        LEFT JOIN identity.employee e ON e.employee_id = l.employee_id
+        WHERE l.created_at >= CAST(${startTs} AS timestamptz) AND l.created_at < CAST(${endTs} AS timestamptz)
+        GROUP BY l.employee_id, e.display_name, e.email
+        HAVING sum(l.points) > 0`);
+    return from var r in rows
+        select {
+            employeeId: r.employee_id,
+            displayName: r.display_name ?: r.employee_id,
+            email: r.email ?: "",
+            totalPoints: r.total_points,
+            lastActivityAt: r.last_activity_at
+        };
+}

@@ -90,6 +90,15 @@ public const OWN_POST = "OWN_POST";
 # Own post amplified by WSO2 or a senior leader (T4 top-up, C4).
 public const OWN_POST_AMPLIFIED = "OWN_POST_AMPLIFIED";
 
+# A like on an Amplify post on LinkedIn (phase 4, Community Management).
+public const REACTION = "REACTION";
+# A comment on an Amplify post on LinkedIn (phase 4).
+public const COMMENT = "COMMENT";
+# Amplify Challenge entry (a PO adjustment until the Challenge has its own flow).
+public const CHALLENGE_ENTRY = "CHALLENGE_ENTRY";
+# Amplify Challenge winner (a PO adjustment until the Challenge has its own flow).
+public const CHALLENGE_WINNER = "CHALLENGE_WINNER";
+
 # What an in-app share does on LinkedIn. The kind sets the tier.
 public type ShareKind REPOST|REPOST_COMMENTARY|SHARE|SHARE_COMMENTARY;
 
@@ -100,7 +109,7 @@ public type EngagementAction ShareKind;
 public type ExternalAction OWN_POST;
 
 # Action a point rule prices and a ledger row records.
-public type PointAction ShareKind|OWN_POST|OWN_POST_AMPLIFIED;
+public type PointAction ShareKind|OWN_POST|OWN_POST_AMPLIFIED|REACTION|COMMENT|CHALLENGE_ENTRY|CHALLENGE_WINNER;
 
 # Whether a share kind carries the employee's commentary.
 #

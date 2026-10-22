@@ -25,6 +25,7 @@ import amplify_domain.announcements;
 import amplify_domain.connection;
 import amplify_domain.external_sharing;
 import amplify_domain.recognition;
+import amplify_domain.reporting;
 import amplify_domain.scoring;
 import amplify_domain.sharing;
 import amplify_domain.store;
@@ -77,6 +78,9 @@ function setDirectory(string mode) {
     lock {
         directoryCache = ();
     }
+    lock {
+        headcountCache = ();
+    }
 }
 
 function takeDirectoryFetches() returns int {
@@ -93,6 +97,16 @@ function expireDirectoryCache() {
         [DirectoryIndex & readonly, decimal]? hit = directoryCache;
         if hit is [DirectoryIndex & readonly, decimal] {
             directoryCache = [hit[0], hit[1] - rosterCacheSeconds - 1d];
+        }
+    }
+}
+
+# Ages the cached employee count past `headcountCacheSeconds`, as if a week went by.
+function expireHeadcountCache() {
+    lock {
+        [HeadcountSnapshot & readonly, decimal]? hit = headcountCache;
+        if hit is [HeadcountSnapshot & readonly, decimal] {
+            headcountCache = [hit[0], hit[1] - headcountCacheSeconds - 1d];
         }
     }
 }
@@ -117,8 +131,8 @@ service /people/employees/basic\-info on jwksListener {
             return {teamName: "Rivers", members: [{name: "Bob Jones bob@wso2.com"}]};
         }
         json[] rows = from string m in RIVERS
-            select {workEmail: m.toUpperAscii(), firstName: "R", team: "Rivers", subTeam: ()};
-        rows.push({workEmail: "rv-noteam@wso2.com", firstName: "N", team: (), subTeam: ()});
+            select {workEmail: m.toUpperAscii(), firstName: "R", team: "Rivers", subTeam: (), businessUnit: "Water"};
+        rows.push({workEmail: "rv-noteam@wso2.com", firstName: "N", team: (), subTeam: (), businessUnit: "Land"});
         return rows;
     }
 }
@@ -201,6 +215,13 @@ isolated function mockTeamPageOf(string period, string[]? emails, string? q, rec
         }
     }
     return {items, total: rows.length()};
+}
+
+@test:Mock {functionName: "pointsByEmailOf"}
+isolated function mockPointsByEmailOf(string period) returns recognition:EmailPoints[]|error {
+    check dbGate();
+    return from recognition:Standing s in STANDINGS
+        select {email: s.email, totalPoints: s.totalPoints};
 }
 
 @test:Mock {functionName: "monthlyPoints"}
@@ -447,3 +468,98 @@ final FakeAnnouncements fakeAnnouncements = new;
 @test:Mock {functionName: "announcementRepository"}
 isolated function mockAnnouncementRepository(store:Actor actor) returns announcements:AnnouncementRepository|error =>
     fakeAnnouncements;
+
+// ---- Dashboards (ADR-036) -------------------------------------------------------------------------
+
+const time:Utc DASH_NOW = [1761000000, 0];
+
+isolated function dashPost(string id, string title, string cat, boolean priority, string status, int openedDaysAgo, int reposts,
+        int withCommentary = 0)
+        returns reporting:CampaignRow => {
+    campaignId: id,
+    title,
+    categoryCode: cat,
+    categoryLabel: cat == "PRODUCT" ? "Product" : "Event",
+    isPriority: priority,
+    status,
+    opensAt: time:utcAddSeconds(DASH_NOW, <decimal>(-86400 * openedDaysAgo)),
+    closesAt: time:utcAddSeconds(DASH_NOW, <decimal>(86400 * (30 - openedDaysAgo))),
+    reposts,
+    repostsWithCommentary: withCommentary
+};
+
+isolated Snapshot? fakeSnapshot = ();
+isolated int snapshotLoads = 0;
+
+isolated function fixedSnapshot() returns Snapshot => {
+    asOf: DASH_NOW,
+    live: {live: 2, livePriority: 1, closingWithin7Days: 1},
+    reposts7d: 60,
+    reposts7dWithCommentary: 15,
+    repostsPrev7d: 40,
+    repostsThisMonth: 90,
+    repostsPrevMonth: 50,
+    weekly: from int i in 0 ..< 8
+        select {weekStart: string `2026-09-${i + 1 < 10 ? "0" : ""}${i + 1}`, reposts: i * 5},
+    connections: {active: 1, expiring: 0, expired: 1, revoked: 0},
+    participation: {connected: 2, expired: 1, reposted: 30, active30Days: 25},
+    points: {week: 120, month: 500, year: 4000},
+    peopleWithPoints: 28,
+    campaigns: [
+        dashPost("p-launch", "Launch", "PRODUCT", true, "OPEN", 3, 40, 12),
+        dashPost("p-event", "Event", "EVENT", false, "OPEN", 10, 10),
+        dashPost("p-old", "Old news", "PRODUCT", false, "CLOSED", 20, 5),
+        dashPost("p-ancient", "Ancient", "EVENT", false, "CLOSED", 80, 99)
+    ],
+    delivery: {
+        "p-launch": {status: "SENT", attempts: (), sentAt: DASH_NOW},
+        "p-event": {status: "QUEUED", attempts: 3, sentAt: ()}
+    },
+    shares: {queued: 1, published: 57, failed: 3, failedByReason: {NEEDS_RECONNECT: 2, PROVIDER_REJECTED: 1, RETRIES_EXHAUSTED: 0}},
+    cards: {total: 3, sent: 2, queued: 1, failed: 0, retrying: 1}
+};
+
+# Replaces the snapshot the fake database answers with, and drops the cached one.
+#
+# + s - Snapshot, or `()` for the fixed one
+function setSnapshot(Snapshot? s = ()) {
+    lock {
+        fakeSnapshot = s is () ? fixedSnapshot() : s.clone();
+    }
+    lock {
+        snapshotCache = ();
+    }
+}
+
+function takeSnapshotLoads() returns int {
+    lock {
+        int n = snapshotLoads;
+        snapshotLoads = 0;
+        return n;
+    }
+}
+
+@test:Mock {functionName: "loadSnapshot"}
+isolated function mockLoadSnapshot(time:Utc now) returns Snapshot|error {
+    check dbGate();
+    lock {
+        snapshotLoads += 1;
+    }
+    lock {
+        Snapshot? s = fakeSnapshot;
+        return s is () ? fixedSnapshot().clone() : s.clone();
+    }
+}
+
+@test:Mock {functionName: "categoryCounts"}
+isolated function mockCategoryCounts(time:Utc since) returns reporting:CategoryCount[]|error {
+    check dbGate();
+    return [{code: "PRODUCT", label: "Product", reposts: 45, repostsWithCommentary: 12},
+        {code: "EVENT", label: "Event", reposts: 10, repostsWithCommentary: 0}];
+}
+
+@test:Mock {functionName: "campaignByDay"}
+isolated function mockPostByDay(string campaignId) returns int[]|error {
+    check dbGate();
+    return campaignId == "p-launch" ? [30, 5, 3, 1, 1, 0, 0] : [1, 0, 0, 0, 0, 0, 0];
+}

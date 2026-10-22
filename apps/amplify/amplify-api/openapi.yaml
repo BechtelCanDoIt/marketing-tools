@@ -31,6 +31,7 @@ tags:
   - name: C2 Scoring
   - name: S4 Recognition
   - name: S5 Admin
+  - name: S6 Dashboards
   - name: Probes
 
 paths:
@@ -585,6 +586,88 @@ paths:
         "400": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
+  /leaderboard/top:
+    get:
+      tags: [S4 Recognition]
+      operationId: getLeaderboardTop
+      x-roles: [EMP, PO, MKT, SLT, ADM]
+      description: "The Celebrate top three and the caller's own position, company wide. The scope is the `leaderboard.top_scope` setting: `WEEK` (default) covers the current calendar week, Monday 00:00 UTC to the next Monday, summed from the points ledger; `ALL` is the all-time standings. Weekly totals are shared by every caller and kept in memory for 2 hours (`topBoardCacheSeconds`), so the first caller after they run out loads them and the rest reuse them; a failed reload serves the previous totals of the same week. `me` comes from the same totals, so it matches the top three (ADR-037)."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+      responses:
+        "200":
+          description: OK
+          headers:
+            Cache-Control: {schema: {type: string}, description: "private, max-age=60"}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LeaderboardTop"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /leaderboard/people:
+    get:
+      tags: [S4 Recognition]
+      operationId: getLeaderboardPeople
+      x-roles: [EMP, PO, MKT, SLT, ADM]
+      description: "People ranked within the whole company, a business unit (BU) or a team. Open to every employee (ADR-035). `BU` and `TEAM` default to the caller's own when `bu` / `team` is omitted; the team key is the opaque `key` from `/headcount` or `/leaderboard/groups`. Membership comes from the people directory, so `BU` and `TEAM` answer 503 `DEPENDENCY_UNAVAILABLE` when it has never loaded."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+        - {$ref: "#/components/parameters/Period"}
+        - {name: scope, in: query, schema: {type: string, enum: [COMPANY, BU, TEAM], default: COMPANY}}
+        - {name: bu, in: query, schema: {type: string, maxLength: 100}}
+        - {name: team, in: query, schema: {type: string, maxLength: 200}}
+        - {name: q, in: query, schema: {type: string, maxLength: 100}}
+        - {$ref: "#/components/parameters/Page"}
+        - {$ref: "#/components/parameters/Size"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LeaderboardPeople"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /leaderboard/groups:
+    get:
+      tags: [S4 Recognition]
+      operationId: getLeaderboardGroups
+      x-roles: [EMP, PO, MKT, SLT, ADM]
+      description: "All teams (or one BU's teams), or all BUs, ranked against each other by the sum of their members' points. Open to every employee (ADR-035). Teams with no points are listed with 0. Participation is people with points over the employee count (`/headcount`). People the directory doesn't place are summed in `unassigned`, never dropped."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+        - {$ref: "#/components/parameters/Period"}
+        - {name: by, in: query, schema: {type: string, enum: [TEAM, BU], default: TEAM}}
+        - {name: bu, in: query, description: "Only the teams in this BU (by=TEAM only)", schema: {type: string, maxLength: 100}}
+        - {name: sort, in: query, description: "Column to order by; rank is the points-based dense rank", schema: {type: string, enum: [rank, name, points, participants, headcount, participation], default: rank}}
+        - {name: dir, in: query, schema: {type: string, enum: [asc, desc], default: asc}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LeaderboardGroups"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /headcount:
+    get:
+      tags: [S4 Recognition]
+      operationId: getHeadcount
+      x-roles: [EMP, PO, MKT, SLT, ADM]
+      description: "Current employee count, overall and by BU and team, counted from the people directory (everyone it returns with a work email). Kept in memory for `headcountCacheSeconds` (7 days); when that runs out the directory is read again, and a failed read keeps serving the last count. Never stored in the database."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Headcount"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
   /me/points:
     get:
       tags: [S4 Recognition]
@@ -665,6 +748,104 @@ paths:
         "400": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+
+  /dashboards/operations:
+    get:
+      tags: [S6 Dashboards]
+      operationId: getDashboardOperations
+      x-roles: [PO, MKT, SLT, ADM]
+      description: "Operations board: what is live, who is sharing, whether anything is stuck. Read-only, computed from Amplify's own tables, cached 60 s. Not for plain employees (403)."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DashboardOperations"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /dashboards/campaigns:
+    get:
+      tags: [S6 Dashboards]
+      operationId: getDashboardCampaigns
+      x-roles: [PO, MKT, SLT, ADM]
+      description: "Campaign performance: reposts per campaign, a selected campaign's first seven days, and reposts by category. `selected` defaults to the campaign with the most reposts. Cached 60 s."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+        - {name: days, in: query, description: "Look-back for campaigns and categories", schema: {type: integer, minimum: 1, maximum: 90, default: 30}}
+        - {name: campaignId, in: query, schema: {type: string, maxLength: 64}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DashboardCampaigns"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /dashboards/participation:
+    get:
+      tags: [S6 Dashboards]
+      operationId: getDashboardParticipation
+      x-roles: [PO, MKT, SLT, ADM]
+      description: "Participation funnel numbers: employees, connected, reposted at least once, active in the last 30 days, expired connections. The team and BU boards come from /leaderboard/groups. Cached 60 s."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DashboardParticipation"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /dashboards/glance:
+    get:
+      tags: [S6 Dashboards]
+      operationId: getDashboardGlance
+      x-roles: [PO, MKT, SLT, ADM]
+      description: "At a glance: the numbers for the leadership check-in. People, teams and the best campaign's rank come from /leaderboard and /leaderboard/groups. Cached 60 s."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DashboardGlance"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /dashboards/scorecard:
+    get:
+      tags: [S6 Dashboards]
+      operationId: getDashboardScorecard
+      x-roles: [PO, MKT, SLT, ADM]
+      description: "Scorecard: seven measures against their targets (`scorecard*` configuration, ADR-036). Cached 60 s."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DashboardScorecard"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
 
   /admin/announcements:
@@ -1095,7 +1276,7 @@ components:
       properties:
         reason: {type: string, minLength: 1, maxLength: 1000}
 
-    PointAction: {type: string, enum: [REPOST, REPOST_COMMENTARY, SHARE, SHARE_COMMENTARY, OWN_POST, OWN_POST_AMPLIFIED]}
+    PointAction: {type: string, enum: [REPOST, REPOST_COMMENTARY, SHARE, SHARE_COMMENTARY, OWN_POST, OWN_POST_AMPLIFIED, REACTION, COMMENT, CHALLENGE_ENTRY, CHALLENGE_WINNER]}
     PointRule:
       type: object
       required: [id, action, points, effectiveFrom, createdBy, createdAt, inForce]
@@ -1145,6 +1326,28 @@ components:
         createdAt: {type: string, format: date-time}
         status: {type: string, nullable: true, enum: [HELD, PAID]}
 
+    LeaderboardTop:
+      type: object
+      required: [period, topN, generatedAt, company, me]
+      properties:
+        period: {type: string, enum: [WEEK, ALL]}
+        weekStart: {type: string, format: date-time, nullable: true, description: "Monday 00:00 UTC; null for ALL"}
+        weekEnd: {type: string, format: date-time, nullable: true, description: "The next Monday 00:00 UTC; null for ALL"}
+        topN: {type: integer}
+        generatedAt: {type: string, format: date-time, description: "When the weekly totals were read (up to 2 hours ago)"}
+        company:
+          type: array
+          items:
+            type: object
+            required: [employeeId, displayName, email, points, rank]
+            properties:
+              employeeId: {type: string}
+              displayName: {type: string}
+              email: {type: string}
+              points: {type: integer}
+              rank: {type: integer}
+              previousRank: {type: integer, nullable: true}
+        me: {$ref: "#/components/schemas/PersonalStanding"}
     Leaderboard:
       type: object
       required: [period, topN, generatedAt, company, me, teamStatus]
@@ -1250,6 +1453,288 @@ components:
                 properties:
                   canAdjust: {type: boolean}
                   canReverse: {type: boolean}
+    LeaderboardPeople:
+      type: object
+      required: [period, scope, page, size, total, summary, entries]
+      properties:
+        period: {type: string}
+        scope: {type: string, enum: [COMPANY, BU, TEAM]}
+        businessUnit: {type: string, nullable: true}
+        team: {type: string, nullable: true, description: "Team key (BU and TEAM scopes)"}
+        teamName: {type: string, nullable: true}
+        page: {type: integer}
+        size: {type: integer}
+        total: {type: integer}
+        summary:
+          type: object
+          required: [participants]
+          properties:
+            headcount: {type: integer, nullable: true, description: "Employees in the scope, from the cached count; null when the directory never loaded on the company view"}
+            participants: {type: integer, description: "People in the scope with points"}
+        entries:
+          type: array
+          items:
+            type: object
+            required: [employeeId, displayName, email, points, rank, scopeRank]
+            properties:
+              employeeId: {type: string}
+              displayName: {type: string}
+              email: {type: string}
+              points: {type: integer}
+              rank: {type: integer, description: "Company rank"}
+              scopeRank: {type: integer, description: "Rank within the scope (equals rank on the company view)"}
+              previousRank: {type: integer, nullable: true}
+              lastActivityAt: {type: string, format: date-time, nullable: true}
+    LeaderboardGroups:
+      type: object
+      required: [period, by, asOf, totals, entries, unassigned]
+      properties:
+        period: {type: string}
+        by: {type: string, enum: [TEAM, BU]}
+        businessUnit: {type: string, nullable: true}
+        asOf: {type: string, format: date-time, description: "When the employee count was taken"}
+        totals:
+          type: object
+          required: [headcount, participants, points]
+          properties:
+            headcount: {type: integer}
+            participants: {type: integer}
+            points: {type: integer}
+        entries:
+          type: array
+          items:
+            type: object
+            required: [rank, key, name, points, participants, headcount, participationRate]
+            properties:
+              rank: {type: integer, description: "Dense rank, ties share a rank"}
+              key: {type: string, description: "Opaque team key, or the BU name"}
+              name: {type: string}
+              businessUnit: {type: string, nullable: true}
+              points: {type: integer}
+              participants: {type: integer}
+              headcount: {type: integer}
+              participationRate: {type: number, description: "participants / headcount, 3 decimals"}
+        unassigned:
+          type: object
+          required: [participants, points]
+          description: People with points the directory doesn't place in a team or BU
+          properties:
+            participants: {type: integer}
+            points: {type: integer}
+    Headcount:
+      type: object
+      required: [asOf, cacheSeconds, total, businessUnits, teams]
+      properties:
+        asOf: {type: string, format: date-time, description: "When the directory was read"}
+        cacheSeconds: {type: integer}
+        total: {type: integer}
+        businessUnits:
+          type: array
+          items:
+            type: object
+            required: [name, headcount]
+            properties:
+              name: {type: string}
+              headcount: {type: integer}
+        teams:
+          type: array
+          items:
+            type: object
+            required: [key, name, headcount]
+            properties:
+              key: {type: string}
+              name: {type: string}
+              businessUnit: {type: string, nullable: true}
+              headcount: {type: integer}
+    DashboardAnnouncement:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [NONE, QUEUED, SENT, FAILED], description: "NONE = no announcement row yet"}
+        attempts: {type: integer, nullable: true, description: "Outbox attempts so far while QUEUED (the retry the worker is on); null otherwise"}
+        sentAt: {type: string, format: date-time, nullable: true}
+    DashboardCampaignRow:
+      type: object
+      required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, repostsWithCommentary]
+      properties:
+        campaignId: {type: string}
+        title: {type: string}
+        categoryCode: {type: string}
+        categoryLabel: {type: string}
+        isPriority: {type: boolean}
+        status: {type: string, enum: [SCHEDULED, OPEN, CLOSED, ARCHIVED]}
+        opensAt: {type: string, format: date-time}
+        closesAt: {type: string, format: date-time}
+        reposts: {type: integer, description: "Active engagements recorded against the campaign"}
+        repostsWithCommentary: {type: integer, description: "Of those, reposts with the employee's own commentary"}
+        announcement: {$ref: "#/components/schemas/DashboardAnnouncement"}
+    DashboardOperations:
+      type: object
+      required: [asOf, kpis, campaigns, shareHealth, connections]
+      properties:
+        asOf: {type: string, format: date-time}
+        headcount: {type: integer, nullable: true, description: "Employee count from /headcount; null when the people directory never loaded"}
+        kpis:
+          type: object
+          required: [campaignsLive, campaignsLivePriority, campaignsClosingWithin7Days, reposts7d, reposts7dWithCommentary, repostsPrev7d, peopleConnected, connectionsExpired, pointsThisWeek, pointsThisMonth, pointsThisYear, peopleWithPoints]
+          properties:
+            campaignsLive: {type: integer}
+            campaignsLivePriority: {type: integer}
+            campaignsClosingWithin7Days: {type: integer}
+            reposts7d: {type: integer}
+            reposts7dWithCommentary: {type: integer, description: "Of reposts7d, with the employee's own commentary"}
+            repostsPrev7d: {type: integer}
+            peopleConnected: {type: integer}
+            connectionsExpired: {type: integer}
+            pointsThisWeek: {type: integer, description: "Since Monday 00:00 UTC"}
+            pointsThisMonth: {type: integer, description: "Since the 1st, UTC"}
+            pointsThisYear: {type: integer, description: "Since 1 January, UTC"}
+            peopleWithPoints: {type: integer}
+        campaigns: {type: array, items: {$ref: "#/components/schemas/DashboardCampaignRow"}}
+        shareHealth:
+          type: object
+          required: [windowDays, published, queued, failed, failedByReason]
+          properties:
+            windowDays: {type: integer}
+            published: {type: integer}
+            queued: {type: integer}
+            failed: {type: integer}
+            failedByReason: {type: object, additionalProperties: {type: integer}}
+        connections:
+          type: object
+          required: [active, expiring, expired, revoked]
+          properties:
+            active: {type: integer}
+            expiring: {type: integer}
+            expired: {type: integer, description: "Token past its expiry"}
+            revoked: {type: integer, description: "Needs reconnect for another reason (revoked, token missing)"}
+            neverConnected: {type: integer, nullable: true, description: "headcount minus connected; null without a headcount"}
+    DashboardCampaigns:
+      type: object
+      required: [asOf, windowDays, campaigns, byCategory]
+      properties:
+        asOf: {type: string, format: date-time}
+        windowDays: {type: integer}
+        peopleConnected: {type: integer}
+        campaigns: {type: array, items: {$ref: "#/components/schemas/DashboardCampaignRow"}}
+        selected:
+          type: object
+          nullable: true
+          required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, repostsWithCommentary, first24Hours, announcement, byDay]
+          properties:
+            campaignId: {type: string}
+            title: {type: string}
+            categoryCode: {type: string}
+            categoryLabel: {type: string}
+            isPriority: {type: boolean}
+            opensAt: {type: string, format: date-time}
+            closesAt: {type: string, format: date-time}
+            reposts: {type: integer}
+            repostsWithCommentary: {type: integer}
+            shareOfConnected: {type: number, nullable: true, description: "reposts / people connected, 3 decimals"}
+            first24Hours: {type: integer}
+            announcement: {$ref: "#/components/schemas/DashboardAnnouncement"}
+            byDay:
+              type: array
+              description: "Seven entries, day 1 = the first 24 hours after opens_at"
+              items:
+                type: object
+                required: [day, reposts]
+                properties:
+                  day: {type: integer}
+                  reposts: {type: integer}
+        byCategory:
+          type: array
+          items:
+            type: object
+            required: [code, label, reposts, repostsWithCommentary]
+            properties:
+              code: {type: string}
+              label: {type: string}
+              reposts: {type: integer, description: "Active engagements: reposts plus reposts with comments"}
+              repostsWithCommentary: {type: integer, description: "Of those, with the employee's own commentary"}
+    DashboardParticipation:
+      type: object
+      required: [asOf, funnel]
+      properties:
+        asOf: {type: string, format: date-time}
+        funnel:
+          type: object
+          required: [connected, reposted, active30Days, expired]
+          properties:
+            employees: {type: integer, nullable: true}
+            connected: {type: integer}
+            reposted: {type: integer, description: "People with at least one active engagement"}
+            active30Days: {type: integer, description: "People with an engagement in the last 30 days"}
+            expired: {type: integer, description: "Connections past their expiry"}
+    DashboardGlance:
+      type: object
+      required: [asOf, month, reposts, weekly, participants, campaignsLive, campaignsReachingTarget, shareSuccess]
+      properties:
+        asOf: {type: string, format: date-time}
+        month: {type: string}
+        reposts:
+          type: object
+          required: [thisMonth, previousMonth]
+          properties:
+            thisMonth: {type: integer}
+            previousMonth: {type: integer}
+        weekly:
+          type: array
+          description: "Eight weeks, oldest first, weeks start Monday UTC"
+          items:
+            type: object
+            required: [weekStart, reposts]
+            properties:
+              weekStart: {type: string}
+              reposts: {type: integer}
+        participants: {type: integer, description: "People with at least one engagement"}
+        headcount: {type: integer, nullable: true}
+        campaignsLive: {type: integer}
+        campaignsReachingTarget:
+          type: object
+          required: [reached, live, thresholdPercent]
+          properties:
+            reached: {type: integer, description: "Live campaigns reposted by at least thresholdPercent of connected people"}
+            live: {type: integer}
+            thresholdPercent: {type: integer}
+        shareSuccess:
+          type: object
+          required: [published, attempts]
+          description: "Last 7 days: published over published plus failed"
+          properties:
+            published: {type: integer}
+            attempts: {type: integer}
+        bestCampaign:
+          type: object
+          nullable: true
+          properties:
+            campaignId: {type: string}
+            title: {type: string}
+            categoryLabel: {type: string}
+            isPriority: {type: boolean}
+            reposts: {type: integer}
+    DashboardScorecard:
+      type: object
+      required: [asOf, measures]
+      properties:
+        asOf: {type: string, format: date-time}
+        measures:
+          type: array
+          items:
+            type: object
+            required: [key, label, unit, value, target, comparison, status]
+            properties:
+              key: {type: string, enum: [connected, expired, shareSuccess, chatCards, priorityReach, active30Days, repostsPerWeek]}
+              label: {type: string}
+              unit: {type: string, enum: [PERCENT, COUNT]}
+              value: {type: number}
+              numerator: {type: integer, nullable: true}
+              denominator: {type: integer, nullable: true}
+              target: {type: number}
+              comparison: {type: string, enum: [AT_LEAST, AT_MOST]}
+              status: {type: string, enum: [ON_TRACK, WATCH]}
+              note: {type: string, nullable: true}
     PointsHistory:
       type: object
       required: [employeeId, page, size, total, items]

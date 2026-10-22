@@ -309,7 +309,7 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
     string b = check newEmployee(apiDb, "rank-b");
     string po = check newEmployee(apiDb, "po");
     scoring:PointRule[] rules = check (new scoring:PgPointRuleRepository(jobsDb)).all();
-    test:assertEquals(rules.length(), 11, "seeded rules: S001 plus the five S005 pilot versions");
+    test:assertEquals(rules.length(), 16, "seeded rules: S001, the five S005 pilot versions and the five S006 rules");
     scoring:PgLedgerRepository jobsLedger = new (jobsDb);
     string campaignId = types:newUuidV7();
     time:Utc now = time:utcNow();

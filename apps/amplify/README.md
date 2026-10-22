@@ -91,6 +91,8 @@ Every setting is a Ballerina `configurable`, set through `BAL_CONFIG_VAR_<NAME>`
 | `PEOPLEDIRECTORYURL` | ✓ | | | | `http://people-stub:9096/employees/basic-info` (Choreo: unset until D13's service credential, `teamStatus: UNAVAILABLE`). people-app `GET /employees/basic-info`; teams cached 3 days |
 | `CAMPAIGNLINKORIGINS` | ✓ | | | | `https://www.linkedin.com,https://linkedin.com,http://localhost:19091` (Choreo prod: unset = LinkedIn only; dev may add the mock's public www URL). Origins a campaign's post link may use |
 | `ROSTERCACHESECONDS` | ✓ | | | | unset (default 259200 = 3 days). Team-roster TTL: how long a team move takes to show without a restart |
+| `HEADCOUNTCACHESECONDS` | ✓ | | | | unset (default 604800 = 7 days). How long the employee count ("of N") reuses one directory read |
+| `SCORECARDTARGETCONNECTEDPCT`, `SCORECARDMAXEXPIREDPCT`, `SCORECARDTARGETSHARESUCCESSPCT`, `SCORECARDTARGETPRIORITYREACHPCT`, `SCORECARDTARGETACTIVE30D`, `SCORECARDTARGETREPOSTSPERWEEK` | ✓ | | | | unset (defaults 25, 5, 98, 25, 100, 150). The scorecard lines; local `.env` names are `SCORECARD_TARGET_CONNECTED_PCT` etc. |
 | `PEOPLEDIRECTORYTOKENURL`, `PEOPLEDIRECTORYCLIENTID`, `PEOPLEDIRECTORYCLIENTSECRET` | ✓ | | | | unset. OAuth2 client credentials for the people-app API (Choreo connection) |
 | `LINKEDINCLIENTID` | ✓ | ✓ | | | `amplify-local` (mock) |
 | `LINKEDINCLIENTSECRET` | ✓ | | | ✓ | random, shared with the mock |

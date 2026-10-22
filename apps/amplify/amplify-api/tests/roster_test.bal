@@ -17,6 +17,8 @@
 // Team rosters from the people directory (D13): grouping by sub-team with the team as fallback, and the
 // viewer's roster lookup.
 
+import amplify_domain.recognition;
+
 import ballerina/test;
 
 final DirectoryRecord[] & readonly DIRECTORY = [
@@ -74,3 +76,102 @@ function testRowsWithoutEmailDontBreakTheDirectory() returns error? {
     test:assertEquals(rosterFrom(indexDirectory(rows), "ada@wso2.com")?.emails, ["ada@wso2.com"]);
 }
 
+
+// ---- Business units, employee count, group boards (ADR-035) ------------------------------------------
+
+final DirectoryRecord[] & readonly BU_DIRECTORY = [
+    {workEmail: "a@wso2.com", team: "Engineering", subTeam: "Platform", businessUnit: "Product"},
+    {workEmail: "b@wso2.com", team: "Engineering", subTeam: "Platform", businessUnit: "Product"},
+    {workEmail: "c@wso2.com", team: "Engineering", subTeam: "Digital", businessUnit: "Corporate"},
+    {workEmail: "d@wso2.com", team: "Engineering", subTeam: "Digital", businessUnit: "Product"},
+    {workEmail: "e@wso2.com", team: "Marketing", subTeam: (), businessUnit: "Corporate"},
+    // Counted in the headcount and its BU, but in no team.
+    {workEmail: "f@wso2.com", team: (), subTeam: (), businessUnit: "Corporate"},
+    // Same person twice: counted once.
+    {workEmail: "A@wso2.com", team: "Engineering", subTeam: "Platform", businessUnit: "Product"},
+    // No email: not an employee we can count.
+    {workEmail: (), team: "Marketing", subTeam: (), businessUnit: "Corporate"}
+];
+
+@test:Config
+function testIndexKeepsBusinessUnitsAndTheFullCount() {
+    DirectoryIndex index = indexDirectory(BU_DIRECTORY);
+    test:assertEquals(index.total, 6, "everyone with a work email, once, team or not");
+    test:assertEquals(index.buMembers["Corporate"], ["c@wso2.com", "e@wso2.com", "f@wso2.com"]);
+    test:assertEquals(index.buOf["a@wso2.com"], "Product");
+    test:assertEquals(index.teamBu["Product/Engineering/Platform"], "Product");
+    // Two people in one team under different BUs are two teams: the BU is the directory's, never worked out.
+    test:assertEquals(index.teamBu["Corporate/Engineering/Digital"], "Corporate");
+    test:assertEquals(index.teamBu["Product/Engineering/Digital"], "Product");
+}
+
+@test:Config
+function testHeadcountByBuAndTeam() {
+    HeadcountSnapshot snapshot = headcountOf(indexDirectory(BU_DIRECTORY), [1760000000, 0]);
+    test:assertEquals(snapshot.total, 6);
+    test:assertEquals(snapshot.businessUnits, [{name: "Corporate", headcount: 3}, {name: "Product", headcount: 3}]);
+    test:assertEquals(snapshot.teams.map(t => [t.name, t.businessUnit, t.headcount]),
+            [["Platform", "Product", 2], ["Digital", "Corporate", 1], ["Digital", "Product", 1],
+            ["Marketing", "Corporate", 1]]);
+}
+
+@test:Config
+function testGroupRowsSumPointsAndKeepUnplacedPeople() returns error? {
+    DirectoryIndex index = indexDirectory(BU_DIRECTORY);
+    HeadcountSnapshot snapshot = headcountOf(index, [1760000000, 0]);
+    recognition:EmailPoints[] points = [
+        {email: "a@wso2.com", totalPoints: 50}, {email: "b@wso2.com", totalPoints: 30},
+        {email: "e@wso2.com", totalPoints: 80}, {email: "stranger@wso2.com", totalPoints: 7},
+        // In a BU but no team: unplaced on the team board, counted on the BU board.
+        {email: "f@wso2.com", totalPoints: 4}
+    ];
+    var [teams, unplaced, unplacedPoints] = groupRows(index, snapshot, points, "TEAM", ());
+    test:assertEquals(teams.length(), 4, "teams with no points are listed too");
+    test:assertEquals(unplaced, 2);
+    test:assertEquals(unplacedPoints, 11);
+    json[] ranked = rankGroups(teams);
+    test:assertEquals(check ranked[0].key, "Corporate/Marketing/", "Marketing and Platform tie on 80: by name");
+}
+
+@test:Config
+function testRankGroupsShareARankOnATie() returns error? {
+    GroupRow[] rows = [
+        {key: "a", name: "Alpha", businessUnit: (), points: 80, participants: 2, headcount: 4},
+        {key: "b", name: "Beta", businessUnit: (), points: 80, participants: 1, headcount: 0},
+        {key: "c", name: "Gamma", businessUnit: (), points: 10, participants: 1, headcount: 2}
+    ];
+    json[] ranked = rankGroups(rows);
+    test:assertEquals(ranked.map(r => checkpanic r.rank), [1, 1, 2], "dense rank");
+    test:assertEquals(ranked.map(r => checkpanic r.key), ["a", "b", "c"], "ties: by name");
+    test:assertEquals(check ranked[0].participationRate, 0.5d);
+    test:assertEquals(check ranked[1].participationRate, 0.0d, "no headcount: 0, never a division by zero");
+}
+
+@test:Config
+function testGroupRowsFilterTeamsByBu() {
+    DirectoryIndex index = indexDirectory(BU_DIRECTORY);
+    HeadcountSnapshot snapshot = headcountOf(index, [1760000000, 0]);
+    var [teams, _, _] = groupRows(index, snapshot, [{email: "a@wso2.com", totalPoints: 5}], "TEAM", "Product");
+    test:assertEquals(teams.map(t => t.name).sort(), ["Digital", "Platform"]);
+    var [bus, _, _] = groupRows(index, snapshot, [{email: "a@wso2.com", totalPoints: 5}], "BU", ());
+    test:assertEquals(bus.map(t => t.name).sort(), ["Corporate", "Product"]);
+}
+
+@test:Config
+function testGroupSortReordersButKeepsThePointsRank() returns error? {
+    GroupRow[] rows = [
+        {key: "a", name: "Alpha", businessUnit: (), points: 100, participants: 1, headcount: 50},
+        {key: "b", name: "Beta", businessUnit: (), points: 60, participants: 9, headcount: 10},
+        {key: "c", name: "Gamma", businessUnit: (), points: 80, participants: 4, headcount: 8}
+    ];
+    test:assertEquals(rankGroups(rows).map(r => checkpanic r.key), ["a", "c", "b"], "default: by rank, best first");
+    json[] byRate = rankGroups(rows, "participation", "desc");
+    test:assertEquals(byRate.map(r => checkpanic r.key), ["b", "c", "a"], "participation, highest on top");
+    test:assertEquals(byRate.map(r => checkpanic r.rank), [3, 2, 1], "the points rank doesn't change");
+    test:assertEquals(rankGroups(rows, "participation", "asc").map(r => checkpanic r.key), ["a", "c", "b"]);
+    test:assertEquals(rankGroups(rows, "name", "desc").map(r => checkpanic r.key), ["c", "b", "a"]);
+    test:assertEquals(rankGroups(rows, "headcount", "desc").map(r => checkpanic r.key), ["a", "b", "c"]);
+    test:assertEquals(rankGroups(rows, "participants", "desc").map(r => checkpanic r.key), ["b", "c", "a"]);
+    test:assertEquals(rankGroups(rows, "points", "asc").map(r => checkpanic r.key), ["b", "c", "a"]);
+    test:assertEquals(rankGroups(rows, "rank", "desc").map(r => checkpanic r.key), ["b", "c", "a"]);
+}
