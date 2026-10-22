@@ -495,6 +495,7 @@ isolated function fixedSnapshot() returns Snapshot => {
     asOf: DASH_NOW,
     live: {live: 2, livePriority: 1, closingWithin7Days: 1},
     reposts7d: 60,
+    reposts7dWithCommentary: 15,
     repostsPrev7d: 40,
     repostsThisMonth: 90,
     repostsPrevMonth: 50,
@@ -502,7 +503,7 @@ isolated function fixedSnapshot() returns Snapshot => {
         select {weekStart: string `2026-09-${i + 1 < 10 ? "0" : ""}${i + 1}`, reposts: i * 5},
     connections: {active: 1, expiring: 0, expired: 1, revoked: 0},
     participation: {connected: 2, expired: 1, reposted: 30, active30Days: 25},
-    pointsThisMonth: 500,
+    points: {week: 120, month: 500, year: 4000},
     peopleWithPoints: 28,
     campaigns: [
         dashPost("p-launch", "Launch", "PRODUCT", true, "OPEN", 3, 40, 12),

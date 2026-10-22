@@ -622,6 +622,8 @@ paths:
         - {$ref: "#/components/parameters/Period"}
         - {name: by, in: query, schema: {type: string, enum: [TEAM, BU], default: TEAM}}
         - {name: bu, in: query, description: "Only the teams in this BU (by=TEAM only)", schema: {type: string, maxLength: 100}}
+        - {name: sort, in: query, description: "Column to order by; rank is the points-based dense rank", schema: {type: string, enum: [rank, name, points, participants, headcount, participation], default: rank}}
+        - {name: dir, in: query, schema: {type: string, enum: [asc, desc], default: asc}}
       responses:
         "200":
           description: OK
@@ -1534,16 +1536,19 @@ components:
         headcount: {type: integer, nullable: true, description: "Employee count from /headcount; null when the people directory never loaded"}
         kpis:
           type: object
-          required: [campaignsLive, campaignsLivePriority, campaignsClosingWithin7Days, reposts7d, repostsPrev7d, peopleConnected, connectionsExpired, pointsThisMonth, peopleWithPoints]
+          required: [campaignsLive, campaignsLivePriority, campaignsClosingWithin7Days, reposts7d, reposts7dWithCommentary, repostsPrev7d, peopleConnected, connectionsExpired, pointsThisWeek, pointsThisMonth, pointsThisYear, peopleWithPoints]
           properties:
             campaignsLive: {type: integer}
             campaignsLivePriority: {type: integer}
             campaignsClosingWithin7Days: {type: integer}
             reposts7d: {type: integer}
+            reposts7dWithCommentary: {type: integer, description: "Of reposts7d, with the employee's own commentary"}
             repostsPrev7d: {type: integer}
             peopleConnected: {type: integer}
             connectionsExpired: {type: integer}
-            pointsThisMonth: {type: integer}
+            pointsThisWeek: {type: integer, description: "Since Monday 00:00 UTC"}
+            pointsThisMonth: {type: integer, description: "Since the 1st, UTC"}
+            pointsThisYear: {type: integer, description: "Since 1 January, UTC"}
             peopleWithPoints: {type: integer}
         campaigns: {type: array, items: {$ref: "#/components/schemas/DashboardCampaignRow"}}
         shareHealth:

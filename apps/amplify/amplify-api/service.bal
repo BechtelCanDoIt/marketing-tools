@@ -488,11 +488,13 @@ service http:InterceptableService / on apiListener {
     # + period - Period
     # + 'by - `TEAM` (default) or `BU`
     # + bu - Limit `TEAM` to one BU
+    # + sort - `rank` (default), `name`, `points`, `participants`, `headcount`, `participation`
+    # + dir - `asc` (default) or `desc`
     # + return - The board, or problem details
     resource function get leaderboard/groups(http:RequestContext ctx, string period = "ALL", string 'by = "TEAM",
-            string? bu = ())
+            string? bu = (), string sort = "rank", string dir = "asc")
             returns http:Response|ProblemResponse|error =>
-        okJson(groupBoard(cid(ctx), period, 'by, bu));
+        okJson(groupBoard(cid(ctx), period, 'by, bu, sort, dir));
 
     # Current employee count, overall and by business unit and team. Counted from the people directory and
     # kept for a week.

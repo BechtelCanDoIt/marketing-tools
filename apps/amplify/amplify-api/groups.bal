@@ -23,6 +23,7 @@
 import amplify_api.auth;
 import amplify_domain.recognition;
 
+import ballerina/lang.array;
 import ballerina/log;
 
 # What a people board covers (openapi `LeaderboardPeople.scope`).
@@ -67,35 +68,74 @@ isolated function headcountView(string? correlationId) returns json|ProblemRespo
     };
 }
 
-# Dense ranks (ties share a rank, like `recognition.standing`), best first, then by name.
+# Columns the group boards sort by (openapi `sort`).
+final readonly & string[] GROUP_SORTS = ["rank", "name", "points", "participants", "headcount", "participation"];
+
+# A group with its points-based rank.
+type RankedGroup record {|
+    # The group
+    GroupRow row;
+    # Dense rank by points, ties share a rank
+    int rank;
+|};
+
+isolated function participationOf(GroupRow r) returns decimal =>
+    r.headcount > 0 ? <decimal>r.participants / <decimal>r.headcount : 0d;
+
+# Ranks groups by points (dense rank, ties by name), then orders them by the asked column. The rank
+# stays the points rank, so sorting only reorders rows; ties in the sort column keep the points order.
 #
 # + rows - Unranked groups
-# + return - The rows as ranked JSON entries
-isolated function rankGroups(GroupRow[] rows) returns json[] {
-    GroupRow[] sorted = from GroupRow r in rows
+# + sortBy - One of `GROUP_SORTS`
+# + dir - `asc` or `desc`
+# + return - The rows as ranked JSON entries, in the asked order
+isolated function rankGroups(GroupRow[] rows, string sortBy = "rank", string dir = "asc") returns json[] {
+    GroupRow[] byPoints = from GroupRow r in rows
         order by r.points descending, r.name ascending, r.key ascending
         select r;
-    json[] entries = [];
+    RankedGroup[] ranked = [];
     int rank = 0;
     int? previous = ();
-    foreach GroupRow r in sorted {
+    foreach GroupRow r in byPoints {
         if previous is () || r.points != previous {
             rank += 1;
             previous = r.points;
         }
-        float rate = r.headcount > 0 ? <float>r.participants / <float>r.headcount : 0.0;
-        entries.push({
-            rank,
-            key: r.key,
-            name: r.name,
-            businessUnit: r.businessUnit,
-            points: r.points,
-            participants: r.participants,
-            headcount: r.headcount,
-            participationRate: (<decimal>rate).round(3)
-        });
+        ranked.push({row: r, rank});
     }
-    return entries;
+    array:SortDirection direction = dir == "desc" ? array:DESCENDING : array:ASCENDING;
+    RankedGroup[] ordered = ranked;
+    match sortBy {
+        "name" => {
+            ordered = ranked.sort(direction, g => g.row.name.toLowerAscii());
+        }
+        "points" => {
+            ordered = ranked.sort(direction, g => g.row.points);
+        }
+        "participants" => {
+            ordered = ranked.sort(direction, g => g.row.participants);
+        }
+        "headcount" => {
+            ordered = ranked.sort(direction, g => g.row.headcount);
+        }
+        "participation" => {
+            ordered = ranked.sort(direction, g => participationOf(g.row));
+        }
+        _ => {
+            ordered = ranked.sort(direction, g => g.rank);
+        }
+    }
+    return from RankedGroup g in ordered
+        select {
+            rank: g.rank,
+            key: g.row.key,
+            name: g.row.name,
+            businessUnit: g.row.businessUnit,
+            points: g.row.points,
+            participants: g.row.participants,
+            headcount: g.row.headcount,
+            participationRate: (participationOf(g.row)).round(3)
+        };
 }
 
 # Teams (or BUs) with their points, from the directory index and the standings. Pure, so it is testable
@@ -150,14 +190,22 @@ isolated function groupRows(DirectoryIndex index, HeadcountSnapshot snapshot, re
 # + period - `ALL`, `YYYY-MM` or `YYYY-Qn`
 # + groupBy - `TEAM` or `BU`
 # + bu - Limit `TEAM` to one business unit
+# + sortBy - Column to order by
+# + dir - `asc` or `desc`
 # + return - The board, or problem details
-isolated function groupBoard(string? correlationId, string period, string groupBy, string? bu)
-        returns json|ProblemResponse {
+isolated function groupBoard(string? correlationId, string period, string groupBy, string? bu, string sortBy = "rank",
+        string dir = "asc") returns json|ProblemResponse {
     do {
         check checkPeriod(period);
         check maxLen(bu, 100, "bu");
         if groupBy != "TEAM" && groupBy != "BU" {
             return badRequest("by must be TEAM or BU", correlationId);
+        }
+        if GROUP_SORTS.indexOf(sortBy) is () {
+            return badRequest("sort must be rank, name, points, participants, headcount or participation", correlationId);
+        }
+        if dir != "asc" && dir != "desc" {
+            return badRequest("dir must be asc or desc", correlationId);
         }
         if groupBy == "BU" && bu is string {
             return badRequest("bu only narrows by=TEAM", correlationId);
@@ -188,7 +236,7 @@ isolated function groupBoard(string? correlationId, string period, string groupB
             businessUnit: buFilter,
             asOf: snapshot.asOf,
             totals: {headcount, participants, points: total},
-            entries: rankGroups(rows),
+            entries: rankGroups(rows, sortBy, dir),
             unassigned: {participants: unassignedPeople, points: unassignedPoints}
         };
     } on fail error e {

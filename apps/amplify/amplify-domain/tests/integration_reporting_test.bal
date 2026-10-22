@@ -76,6 +76,7 @@ function testRepostsAndPostsFeedTheBoards() returns error? {
     int liveBefore = (check reporting:liveCounts(apiDb)).live;
     int repostsBefore = check reporting:repostsBetween(apiDb, time:utcAddSeconds(t0, -60), time:utcAddSeconds(t0, 3600));
     int peopleBefore = check reporting:repostingPeople(apiDb);
+    int commentBefore = check reporting:commentaryRepostsBetween(apiDb, time:utcAddSeconds(t0, -60), time:utcAddSeconds(t0, 3600));
     reporting:ParticipationCounts funnelBefore = check reporting:participationCounts(apiDb);
 
     campaign:Campaign c = check registerCampaign(apiDb, po);
@@ -119,6 +120,9 @@ function testRepostsAndPostsFeedTheBoards() returns error? {
     test:assertEquals(byDay.length(), 7);
     test:assertEquals(byDay[0], 2, "published inside the first 24 hours");
     test:assertEquals(byDay.reduce(isolated function(int a, int b) returns int => a + b, 0), 2);
+
+    test:assertEquals(check reporting:commentaryRepostsBetween(apiDb, time:utcAddSeconds(t0, -60), time:utcAddSeconds(t0, 3600)),
+            commentBefore + 1, "one of the two reposts carries commentary");
 
     reporting:CategoryCount[] cats = from reporting:CategoryCount k in
             check reporting:repostsByCategory(apiDb, time:utcAddSeconds(t0, -60))
@@ -228,4 +232,26 @@ function testPointsInMonthAndEmptyIdLists() returns error? {
 function deliveryFor(postgresql:Client db, string campaignId) returns reporting:Delivery|error {
     reporting:Delivery? d = (check reporting:deliveryOf(db, [campaignId]))[campaignId];
     return d is () ? error("no announcement row for " + campaignId) : d;
+}
+
+@test:Config {groups: ["integration"]}
+function testPointsAwardedMoveWithTheLedgerInEveryWindow() returns error? {
+    if !itEnabled {
+        return;
+    }
+    postgresql:Client db = check api();
+    string emp = check newEmployee(db, "rptwin");
+    string po = check newEmployee(db, "rptwinpo");
+    scoring:PgLedgerRepository ledger = new (db, poActor(po), 3);
+    reporting:PointsAwarded before = check reporting:pointsAwarded(db);
+    types:LedgerEntry adj = check scoring:adjustPoints(ledger, emp, 40, "IT window", po, (), "it-rpt-win", time:utcNow());
+    reporting:PointsAwarded after = check reporting:pointsAwarded(db);
+    test:assertEquals(after.week, before.week + 40);
+    test:assertEquals(after.month, before.month + 40);
+    test:assertEquals(after.year, before.year + 40);
+    _ = check scoring:reverseEntry(ledger, adj.reference, "IT window reversal", po, "it-rpt-win-rev", time:utcNow());
+    reporting:PointsAwarded reversed = check reporting:pointsAwarded(db);
+    test:assertEquals(reversed.week, before.week, "a reversal nets the adjustment out");
+    test:assertTrue(reversed.year >= reversed.month && reversed.month >= reversed.week, "year contains month contains week");
+    check db.close();
 }

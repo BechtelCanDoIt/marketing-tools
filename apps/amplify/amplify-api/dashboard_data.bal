@@ -34,6 +34,8 @@ type Snapshot record {|
     reporting:LiveCounts live;
     # Reposts in the last 7 days
     int reposts7d;
+    # Of those, with the employee's own commentary
+    int reposts7dWithCommentary;
     # Reposts in the 7 days before that
     int repostsPrev7d;
     # Reposts this calendar month (UTC)
@@ -46,8 +48,8 @@ type Snapshot record {|
     reporting:ConnectionBreakdown connections;
     # The funnel
     reporting:ParticipationCounts participation;
-    # Points awarded this month
-    int pointsThisMonth;
+    # Points awarded this week, month and year (UTC calendar)
+    reporting:PointsAwarded points;
     # People with points
     int peopleWithPoints;
     # Open campaigns and campaigns opened in the last 90 days, priority first then newest (at most 200)
@@ -119,13 +121,14 @@ isolated function snapshotTx(postgresql:Client pg, time:Utc now) returns Snapsho
             asOf: now,
             live: check reporting:liveCounts(pg),
             reposts7d: check reporting:repostsBetween(pg, weekAgo, soon),
+            reposts7dWithCommentary: check reporting:commentaryRepostsBetween(pg, weekAgo, soon),
             repostsPrev7d: check reporting:repostsBetween(pg, twoWeeksAgo, weekAgo),
             repostsThisMonth: check reporting:repostsBetween(pg, monthStart, soon),
             repostsPrevMonth: check reporting:repostsBetween(pg, prevMonthStart, monthStart),
             weekly: check reporting:weeklyReposts(pg, 8),
             connections: check reporting:connectionBreakdown(pg),
             participation: check reporting:participationCounts(pg),
-            pointsThisMonth: check reporting:pointsInMonth(pg, month + "-01"),
+            points: check reporting:pointsAwarded(pg),
             peopleWithPoints: (check recognition:recognitionTotals(pg, month + "-01", now)).employeesWithPoints,
             campaigns,
             delivery: check reporting:deliveryOf(pg, ids),
