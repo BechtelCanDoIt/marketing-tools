@@ -1,7 +1,7 @@
 # CLAUDE.md — amplify-domain
 
 ## Overview
-Shared library `wso2/amplify_domain` (ADR-021, resolves B19): the bounded contexts that both `amplify-api` and `amplify-jobs` run. Not deployed. Current version 0.2.0 (needs amplify_common 0.6.0); bump `version` and the consumers' `[[dependency]]` together when the API changes.
+Shared library `wso2/amplify_domain` (ADR-021, resolves B19): the bounded contexts that both `amplify-api` and `amplify-jobs` run. Not deployed. Current version 0.3.0 (needs amplify_common 0.6.0); bump `version` and the consumers' `[[dependency]]` together when the API changes.
 
 ## Commands
 Publish `amplify_common` first, then `bal pack && bal push --repository=local` here, then rebuild consumers. `bal test` runs unit tests; the root-module `integration` group needs `AMPLIFY_IT=true` and a migrated Postgres 18 (`docs/migrations/README.md`).

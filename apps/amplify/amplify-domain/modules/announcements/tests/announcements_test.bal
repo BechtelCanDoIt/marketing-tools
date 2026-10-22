@@ -65,3 +65,47 @@ function cardLinksToOneWso2SharePage() returns error? {
     test:assertEquals(check buttons[0].onClick.openLink.url, "https://one.wso2.com/amplify/celebrate?share=c1");
     test:assertEquals(check cards[0].card.header.imageUrl, "https://media.wso2.com/amplify-avatar.png");
 }
+
+@test:Config
+function noveraNotificationHasAnAmplifyButtonToTheSharePageAndKeepsOnlyAnHttpsIcon() {
+    NoveraNotification n = buildNoveraNotification(
+            {campaignId: "c1", title: "T", summary: "S", imageUrl: (), isPriority: true},
+            "https://one.wso2.com/amplify/celebrate/", "https://media.wso2.com/amplify-avatar.png");
+    test:assertEquals(n.'source, "amplify");
+    test:assertEquals(n.button.url, "https://one.wso2.com/amplify/celebrate?share=c1");
+    test:assertEquals(n.button.label, "Amplify");
+    test:assertEquals(n.subtitle, "Amplify · Priority");
+    test:assertEquals(n.iconUrl, "https://media.wso2.com/amplify-avatar.png");
+    test:assertFalse(buildNoveraNotification({campaignId: "c1", title: "T", summary: (), imageUrl: (),
+            isPriority: false}, "https://x.example", "http://insecure.example/a.png").hasKey("iconUrl"));
+}
+
+@test:Config
+function noveraNotificationPicksThePostImageThenTheDefaultAndOnlyWhenChatCanFetchIt() {
+    string own = "https://media.wso2.com/leader.png";
+    string fallback = "https://media.wso2.com/default.png";
+    NoveraNotification withOwn = buildNoveraNotification(
+            {campaignId: "c1", title: "T", summary: "S", imageUrl: own, isPriority: false}, "https://x.example",
+            (), fallback);
+    test:assertEquals(withOwn.imageUrl, own);
+    // A private host or plain http can't be fetched by Chat: the default image stands in.
+    NoveraNotification unusable = buildNoveraNotification(
+            {campaignId: "c1", title: "T", summary: "S", imageUrl: "https://intranet.local/a.png", isPriority: false},
+            "https://x.example", (), fallback);
+    test:assertEquals(unusable.imageUrl, fallback);
+    // Neither usable: no image at all.
+    test:assertFalse(buildNoveraNotification({campaignId: "c1", title: "T", summary: "S", imageUrl: (),
+            isPriority: false}, "https://x.example").hasKey("imageUrl"));
+}
+
+@test:Config
+function noveraNotificationCutsToNoveraLimitsAndFillsAnEmptySummary() {
+    string long = string:'join("", from int i in 0 ..< 6000 select "x");
+    NoveraNotification n = buildNoveraNotification(
+            {campaignId: "c1", title: long, summary: long, imageUrl: (), isPriority: false}, "https://x.example");
+    test:assertEquals(n.title.length(), 300);
+    test:assertEquals(n.body.length(), 5000);
+    NoveraNotification blank = buildNoveraNotification(
+            {campaignId: "c1", title: "T", summary: "  ", imageUrl: (), isPriority: false}, "https://x.example");
+    test:assertEquals(blank.body, "A new post is ready to share.");
+}

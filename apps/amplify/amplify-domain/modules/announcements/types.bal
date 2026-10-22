@@ -61,3 +61,21 @@ public type CampaignCardSource record {|
     # Priority flag
     boolean isPriority;
 |};
+
+# A campaign announcement for Novera's `POST /internal/notifications` (plain text; Novera builds and escapes the card).
+public type NoveraNotification record {|
+    # Caller id Novera logs and uses in the card id
+    string 'source;
+    # Bold title
+    string title;
+    # One grey line under the title
+    string subtitle;
+    # Body text
+    string body;
+    # Icon beside the title (https only), if any
+    string iconUrl?;
+    # Picture under the title (public https only), if any
+    string imageUrl?;
+    # The Amplify button: opens the Celebrate page with this campaign's share dialog
+    record {|string url; string label;|} button;
+|};

@@ -128,6 +128,7 @@ type Deps record {|
     RunStore runStore;
     RunLock runLock;
     ChatPort? chat;
+    NoveraPort? novera = ();
     linkedin:ProviderAdapter? linkedIn;
     crypto:TokenCipher? cipher;
     RunConfig config;
