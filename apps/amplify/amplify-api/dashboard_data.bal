@@ -89,7 +89,7 @@ isolated function campaignByDay(string campaignId) returns int[]|error {
 # + return - Card and people, or an error
 isolated function campaignPeople(string campaignId) returns [reporting:CampaignCard, reporting:Reposter[]]|error {
     postgresql:Client pg = check db();
-    reporting:CampaignCard card = (check reporting:campaignCard(pg, campaignId)) ?: {summary: (), imageUrl: (), resourceUrl: ()};
+    reporting:CampaignCard card = (check reporting:campaignCard(pg, campaignId)) ?: {summary: (), imageUrl: (), resourceUrl: (), resourceUrn: ""};
     return [card, check reporting:campaignReposters(pg, campaignId)];
 }
 
@@ -101,4 +101,17 @@ isolated function campaignPeople(string campaignId) returns [reporting:CampaignC
 isolated function exportRows(time:Utc 'from, time:Utc to) returns reporting:ExportRow[]|error {
     postgresql:Client pg = check db();
     return reporting:exportRows(pg, 'from, to);
+}
+
+# One person and the posts they reposted, for the person popup.
+#
+# + employeeId - Employee id
+# + return - The person and their posts, `()` when Amplify has never seen the id, or an error
+isolated function personPosts(string employeeId) returns [reporting:PersonIdentity, reporting:PersonPost[]]?|error {
+    postgresql:Client pg = check db();
+    reporting:PersonIdentity? who = check reporting:personIdentity(pg, employeeId);
+    if who is () {
+        return ();
+    }
+    return [who, check reporting:personPosts(pg, employeeId)];
 }

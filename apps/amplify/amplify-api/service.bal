@@ -540,6 +540,14 @@ service http:InterceptableService / on apiListener {
     resource function get dashboards/export(http:RequestContext ctx, string 'from, string to)
             returns http:Response|ProblemResponse|error => dashboardExport(cid(ctx), 'from, to);
 
+    # One person's Post Performance: the posts they reposted, with and without their own comment.
+    #
+    # + ctx - Request context
+    # + employeeId - Employee id
+    # + return - The board, or problem details
+    resource function get dashboards/people/[string employeeId](http:RequestContext ctx)
+            returns http:Response|ProblemResponse|error => dashboardPerson(cid(ctx), employeeId);
+
     # Participation funnel numbers.
     #
     # + ctx - Request context
