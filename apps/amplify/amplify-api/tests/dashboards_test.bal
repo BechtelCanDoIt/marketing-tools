@@ -118,6 +118,10 @@ function testPostPerformanceBoardSelectsAndFilters() returns error? {
     json[] byDay = <json[]>check body.selected.byDay;
     test:assertEquals(byDay.length(), 7);
     test:assertEquals(check byDay[0], {day: 1, reposts: 30});
+    test:assertEquals(check body.selected.imageUrl, "https://example.com/launch.png");
+    test:assertEquals(check body.selected.summary, "Launch day");
+    test:assertEquals(check body.selected.people.reposts, [{employeeId: "e1", displayName: "Ada Lovelace"}, {employeeId: "e3", displayName: "Alan Turing"}]);
+    test:assertEquals(check body.selected.people.withComments, [{employeeId: "e2", displayName: "Grace Hopper"}]);
     test:assertEquals(check body.byCategory, [{code: "PRODUCT", label: "Product", reposts: 45, repostsWithCommentary: 12},
         {code: "EVENT", label: "Event", reposts: 10, repostsWithCommentary: 0}]);
 
@@ -224,4 +228,26 @@ function testSnapshotIsReusedForSixtySeconds() returns error? {
     }
     test:assertEquals(takeSnapshotLoads(), 1, "five boards, one snapshot");
     test:assertEquals(snapshotCacheSize(), 1);
+}
+
+@test:Config {groups: ["dashboards"]}
+function testExportIsAnEscapedCsvForDashboardReadersOnly() returns error? {
+    string token = check boardToken(auth:ROLE_MARKETING);
+    http:Response res = check send("GET", "/dashboards/export?from=2025-10-01&to=2025-10-31", (), token);
+    test:assertEquals(res.statusCode, 200);
+    test:assertTrue((header(res, "Content-Type") ?: "").startsWith("text/csv"));
+    test:assertEquals(header(res, "Content-Disposition"), "attachment; filename=\"amplify-2025-10-01-to-2025-10-31.csv\"");
+    string csv = check res.getTextPayload();
+    string[] lines = re `\r\n`.split(csv.trim());
+    test:assertEquals(lines[0], "record_type,occurred_at,campaign_id,campaign_title,category,is_priority,employee_id,employee_name,employee_email,action,status,points,detail");
+    test:assertEquals(lines[1], "ENGAGEMENT,2025-10-20T10:00:00Z,p-launch,\"Launch, big\",Product,true,e1,\"'=Ada \"\"AL\"\" Lovelace\",ada@example.com,REPOST,ACTIVE,,",
+            "quoted, quote doubled, formula neutralised");
+    test:assertEquals(lines[2], "POINTS,2025-10-20T10:00:01Z,,,,,e1,,,REPOST,HELD,5,ENGAGEMENT");
+
+    http:Response plain = check send("GET", "/dashboards/export?from=2025-10-01&to=2025-10-31", (), check rvToken("dash-plain"));
+    test:assertEquals(plain.statusCode, 403);
+    foreach string q in ["from=2025-10-01", "from=nope&to=2025-10-31", "from=2025-10-31&to=2025-10-01", "from=2023-01-01&to=2025-10-31",
+        "from=2025-02-30&to=2025-03-01"] {
+        test:assertEquals((check send("GET", "/dashboards/export?" + q, (), token)).statusCode, 400, q);
+    }
 }

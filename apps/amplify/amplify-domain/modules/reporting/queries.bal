@@ -387,3 +387,152 @@ public isolated function commentaryRepostsBetween(postgresql:Client db, time:Utc
         WHERE status = 'ACTIVE' AND action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY')
           AND occurred_at >= CAST(${a} AS timestamptz) AND occurred_at < CAST(${b} AS timestamptz)`);
 }
+
+# A campaign's card as Marketing posted it: the text and picture the popup shows.
+public type CampaignCard record {|
+    # Short text under the title
+    string? summary;
+    # Picture
+    string? imageUrl;
+    # Link to the post on LinkedIn
+    string? resourceUrl;
+|};
+
+# One person who reposted a campaign.
+public type Reposter record {|
+    # Employee id
+    string employeeId;
+    # Name as the sign-in recorded it (the id when the employee row is missing)
+    string displayName;
+    # Whether the repost carries the employee's own comment
+    boolean withCommentary;
+|};
+
+# A campaign's card.
+#
+# + db - Client
+# + campaignId - Campaign
+# + return - The card, `()` when the campaign is gone, or an error
+public isolated function campaignCard(postgresql:Client db, string campaignId) returns CampaignCard?|error {
+    stream<CampaignCard, error?> rows = db->query(`
+        SELECT summary, image_url AS "imageUrl", resource_url AS "resourceUrl"
+        FROM campaign.campaign WHERE id = CAST(${campaignId} AS uuid)`);
+    CampaignCard[] found = check from CampaignCard r in rows
+        select r;
+    return found.length() > 0 ? found[0] : ();
+}
+
+# Everyone with an active repost of a campaign, plain reposts and reposts with comments, by name.
+#
+# + db - Client
+# + campaignId - Campaign
+# + return - One row per person and action, or an error
+public isolated function campaignReposters(postgresql:Client db, string campaignId) returns Reposter[]|error {
+    stream<record {|string employee_id; string display_name; boolean commented;|}, error?> rows = db->query(`
+        SELECT e.employee_id, COALESCE(p.display_name, e.employee_id) AS display_name,
+               e.action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY') AS commented
+        FROM sharing.engagement_v e
+        LEFT JOIN identity.employee p ON p.employee_id = e.employee_id
+        WHERE e.status = 'ACTIVE' AND e.campaign_id = CAST(${campaignId} AS uuid)
+        ORDER BY lower(COALESCE(p.display_name, e.employee_id)), e.employee_id
+        LIMIT 2000`);
+    return from var r in rows
+        select {employeeId: r.employee_id, displayName: r.display_name, withCommentary: r.commented};
+}
+
+# One line of the raw-data export: a fact the dashboards count, in a fixed set of columns.
+public type ExportRow record {|
+    # `ENGAGEMENT`, `SHARE_REQUEST`, `POINTS`, `CAMPAIGN` or `CONNECTION`
+    string recordType;
+    # When it happened (UTC, ISO 8601)
+    string occurredAt;
+    # Campaign id, when the fact belongs to one
+    string? campaignId;
+    # Campaign title
+    string? campaignTitle;
+    # Campaign category label
+    string? category;
+    # Campaign priority flag
+    boolean? isPriority;
+    # Employee id
+    string? employeeId;
+    # Employee name
+    string? employeeName;
+    # Employee email
+    string? employeeEmail;
+    # Repost kind or points action
+    string? action;
+    # State of the row (ACTIVE, DELETED, PUBLISHED, FAILED, QUEUED, HELD, OPEN, SENT, ACTIVE and so on)
+    string? status;
+    # Points, for ledger rows
+    int? points;
+    # Anything else worth a column: failure reason, source type, closing time, token expiry
+    string? detail;
+|};
+
+# The raw rows behind every board for a date range, oldest first: engagements, share attempts, points ledger
+# rows, campaigns opened and connections made. `from` is inclusive, `to` exclusive, both UTC.
+#
+# + db - Client
+# + from - First moment
+# + to - First moment not included
+# + return - Rows, or an error
+public isolated function exportRows(postgresql:Client db, time:Utc 'from, time:Utc to) returns ExportRow[]|error {
+    string a = time:utcToString('from);
+    string b = time:utcToString(to);
+    stream<ExportRow, error?> rows = db->query(`
+        SELECT x."recordType", x."occurredAt", x."campaignId", x."campaignTitle", x.category, x."isPriority", x."employeeId",
+               x."employeeName", x."employeeEmail", x.action, x.status, x.points, x.detail
+        FROM (
+            SELECT 'ENGAGEMENT' AS "recordType", to_char(e.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "occurredAt",
+                   e.campaign_id::text AS "campaignId", c.title AS "campaignTitle", COALESCE(cat.label, c.category_code) AS category,
+                   c.is_priority AS "isPriority", e.employee_id AS "employeeId", p.display_name AS "employeeName",
+                   p.email::text AS "employeeEmail", e.action, e.status, NULL::int AS points, NULL::text AS detail,
+                   e.occurred_at AS sort_at
+            FROM sharing.engagement_v e
+            LEFT JOIN campaign.campaign c ON c.id = e.campaign_id
+            LEFT JOIN campaign.category cat ON cat.code = c.category_code
+            LEFT JOIN identity.employee p ON p.employee_id = e.employee_id
+            WHERE e.occurred_at >= CAST(${a} AS timestamptz) AND e.occurred_at < CAST(${b} AS timestamptz)
+          UNION ALL
+            SELECT 'SHARE_REQUEST', to_char(s.requested_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                   s.campaign_id::text, c.title, COALESCE(cat.label, c.category_code), c.is_priority,
+                   s.employee_id, p.display_name, p.email::text, s.kind, s.status, NULL, s.failure_reason, s.requested_at
+            FROM sharing.share_request_v s
+            LEFT JOIN campaign.campaign c ON c.id = s.campaign_id
+            LEFT JOIN campaign.category cat ON cat.code = c.category_code
+            LEFT JOIN identity.employee p ON p.employee_id = s.employee_id
+            WHERE s.requested_at >= CAST(${a} AS timestamptz) AND s.requested_at < CAST(${b} AS timestamptz)
+          UNION ALL
+            SELECT 'POINTS', to_char(l.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                   l.campaign_id::text, c.title, COALESCE(cat.label, c.category_code), c.is_priority,
+                   l.employee_id, p.display_name, p.email::text, l.action, l.status, l.points, l.source_type, l.created_at
+            FROM scoring.points_ledger l
+            LEFT JOIN campaign.campaign c ON c.id = l.campaign_id
+            LEFT JOIN campaign.category cat ON cat.code = c.category_code
+            LEFT JOIN identity.employee p ON p.employee_id = l.employee_id
+            WHERE l.created_at >= CAST(${a} AS timestamptz) AND l.created_at < CAST(${b} AS timestamptz)
+          UNION ALL
+            SELECT 'CAMPAIGN', to_char(c.opens_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                   c.id::text, c.title, COALESCE(cat.label, c.category_code), c.is_priority,
+                   NULL, NULL, NULL, NULL, c.status, NULL,
+                   'closes ' || to_char(c.closes_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') || '; card ' || COALESCE(a.status, 'NONE'),
+                   c.opens_at
+            FROM campaign.campaign_v c
+            LEFT JOIN campaign.category cat ON cat.code = c.category_code
+            LEFT JOIN announcement.announcement_v a ON a.campaign_id = c.id
+            WHERE c.opens_at >= CAST(${a} AS timestamptz) AND c.opens_at < CAST(${b} AS timestamptz)
+          UNION ALL
+            SELECT 'CONNECTION', to_char(m.connected_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                   NULL, NULL, NULL, NULL, m.employee_id, p.display_name, p.email::text, NULL, m.status, NULL,
+                   'token expires ' || to_char(m.access_expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                   m.connected_at
+            FROM connection.member_connection_v m
+            LEFT JOIN identity.employee p ON p.employee_id = m.employee_id
+            WHERE m.connected_at >= CAST(${a} AS timestamptz) AND m.connected_at < CAST(${b} AS timestamptz)
+        ) x
+        ORDER BY x.sort_at, x."recordType", x."employeeId"
+        LIMIT 200000`);
+    return from ExportRow r in rows
+        select r;
+}
