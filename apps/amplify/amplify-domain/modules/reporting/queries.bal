@@ -396,14 +396,18 @@ public type CampaignCard record {|
     string? imageUrl;
     # Link to the post on LinkedIn
     string? resourceUrl;
+    # LinkedIn resource URN (the link is built from it when there is no URL)
+    string resourceUrn;
 |};
 
 # One person who reposted a campaign.
 public type Reposter record {|
     # Employee id
     string employeeId;
-    # Name as the sign-in recorded it (the id when the employee row is missing)
+    # Name as Amplify recorded it (the id when it never did; the UI looks the person up in the directory)
     string displayName;
+    # Work email, the key to the people directory
+    string? email;
     # Whether the repost carries the employee's own comment
     boolean withCommentary;
 |};
@@ -415,7 +419,7 @@ public type Reposter record {|
 # + return - The card, `()` when the campaign is gone, or an error
 public isolated function campaignCard(postgresql:Client db, string campaignId) returns CampaignCard?|error {
     stream<CampaignCard, error?> rows = db->query(`
-        SELECT summary, image_url AS "imageUrl", resource_url AS "resourceUrl"
+        SELECT summary, image_url AS "imageUrl", resource_url AS "resourceUrl", resource_urn AS "resourceUrn"
         FROM campaign.campaign WHERE id = CAST(${campaignId} AS uuid)`);
     CampaignCard[] found = check from CampaignCard r in rows
         select r;
@@ -428,16 +432,18 @@ public isolated function campaignCard(postgresql:Client db, string campaignId) r
 # + campaignId - Campaign
 # + return - One row per person and action, or an error
 public isolated function campaignReposters(postgresql:Client db, string campaignId) returns Reposter[]|error {
-    stream<record {|string employee_id; string display_name; boolean commented;|}, error?> rows = db->query(`
-        SELECT e.employee_id, COALESCE(p.display_name, e.employee_id) AS display_name,
+    stream<record {|string employee_id; string display_name; string? email; boolean commented;|}, error?> rows = db->query(`
+        SELECT e.employee_id, COALESCE(p.display_name, st.display_name, e.employee_id) AS display_name,
+               COALESCE(p.email::text, st.email::text) AS email,
                e.action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY') AS commented
         FROM sharing.engagement_v e
         LEFT JOIN identity.employee p ON p.employee_id = e.employee_id
+        LEFT JOIN recognition.standing st ON st.employee_id = e.employee_id AND st.period_key = 'ALL'
         WHERE e.status = 'ACTIVE' AND e.campaign_id = CAST(${campaignId} AS uuid)
-        ORDER BY lower(COALESCE(p.display_name, e.employee_id)), e.employee_id
+        ORDER BY lower(COALESCE(p.display_name, st.display_name, e.employee_id)), e.employee_id
         LIMIT 2000`);
     return from var r in rows
-        select {employeeId: r.employee_id, displayName: r.display_name, withCommentary: r.commented};
+        select {employeeId: r.employee_id, displayName: r.display_name, email: r.email, withCommentary: r.commented};
 }
 
 # One line of the raw-data export: a fact the dashboards count, in a fixed set of columns.
@@ -535,4 +541,79 @@ public isolated function exportRows(postgresql:Client db, time:Utc 'from, time:U
         LIMIT 200000`);
     return from ExportRow r in rows
         select r;
+}
+
+# One person's name and what they reposted, for the person popup on the dashboards.
+public type PersonPost record {|
+    # Campaign id
+    string campaignId;
+    # Title
+    string title;
+    # Category code
+    string categoryCode;
+    # Category label
+    string categoryLabel;
+    # Priority flag
+    boolean isPriority;
+    # Opens
+    time:Utc opensAt;
+    # 1 when the person reposted it plainly
+    int reposts;
+    # 1 when the person reposted it with their own comment
+    int repostsWithCommentary;
+|};
+
+# A person as Amplify knows them.
+public type PersonIdentity record {|
+    # Employee id
+    string employeeId;
+    # Name (the id when Amplify never recorded one)
+    string displayName;
+    # Work email
+    string? email;
+|};
+
+# A person's name and email, `()` when Amplify has never seen the id.
+#
+# + db - Client
+# + employeeId - Employee id
+# + return - The person, `()`, or an error
+public isolated function personIdentity(postgresql:Client db, string employeeId) returns PersonIdentity?|error {
+    stream<PersonIdentity, error?> rows = db->query(`
+        SELECT x.employee_id AS "employeeId", COALESCE(p.display_name, st.display_name, x.employee_id) AS "displayName",
+               COALESCE(p.email::text, st.email::text) AS email
+        FROM (SELECT ${employeeId}::text AS employee_id) x
+        LEFT JOIN identity.employee p ON p.employee_id = x.employee_id
+        LEFT JOIN recognition.standing st ON st.employee_id = x.employee_id AND st.period_key = 'ALL'
+        WHERE p.employee_id IS NOT NULL OR st.employee_id IS NOT NULL
+           OR EXISTS (SELECT 1 FROM sharing.engagement_v e WHERE e.employee_id = x.employee_id)`);
+    PersonIdentity[] found = check from PersonIdentity r in rows
+        select r;
+    return found.length() > 0 ? found[0] : ();
+}
+
+# The posts a person has an active repost of, newest first.
+#
+# + db - Client
+# + employeeId - Employee id
+# + return - One row per campaign, or an error
+public isolated function personPosts(postgresql:Client db, string employeeId) returns PersonPost[]|error {
+    stream<record {|string id; string title; string category_code; string category_label; boolean is_priority;
+            time:Utc opens_at; int plain; int commented;|}, error?> rows = db->query(`
+        SELECT c.id::text AS id, c.title, c.category_code, COALESCE(cat.label, c.category_code) AS category_label,
+               c.is_priority, c.opens_at,
+               count(*) FILTER (WHERE e.action NOT IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY'))::int AS plain,
+               count(*) FILTER (WHERE e.action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY'))::int AS commented
+        FROM sharing.engagement_v e
+        JOIN campaign.campaign c ON c.id = e.campaign_id
+        LEFT JOIN campaign.category cat ON cat.code = c.category_code
+        WHERE e.status = 'ACTIVE' AND e.employee_id = ${employeeId}
+        GROUP BY c.id, c.title, c.category_code, cat.label, c.is_priority, c.opens_at
+        ORDER BY c.opens_at DESC, c.id
+        LIMIT 200`);
+    return from var r in rows
+        select {
+            campaignId: r.id, title: r.title, categoryCode: r.category_code, categoryLabel: r.category_label,
+            isPriority: r.is_priority, opensAt: r.opens_at, reposts: r.plain, repostsWithCommentary: r.commented
+        };
 }

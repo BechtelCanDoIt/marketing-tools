@@ -810,6 +810,26 @@ paths:
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
+  /dashboards/people/{employeeId}:
+    get:
+      tags: [S6 Dashboards]
+      operationId: getDashboardPerson
+      x-roles: [PO, MKT, SLT, ADM]
+      description: "One person's Post Performance for the person popup: every post they have an active repost of (plain, and with their own comment) and the category split. Team and BU come from the people directory in the UI. Cached 60 s."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+        - {name: employeeId, in: path, required: true, schema: {type: string, maxLength: 255}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DashboardPersonBoard"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
   /dashboards/participation:
     get:
       tags: [S6 Dashboards]
@@ -1634,7 +1654,41 @@ components:
       required: [employeeId, displayName]
       properties:
         employeeId: {type: string}
+        displayName: {type: string, description: "The id when Amplify never recorded a name"}
+        email: {type: string, nullable: true, description: "Work email, the key to the people directory"}
+    DashboardPersonBoard:
+      type: object
+      required: [employeeId, displayName, reposts, repostsWithCommentary, posts, byCategory]
+      properties:
+        employeeId: {type: string}
         displayName: {type: string}
+        email: {type: string, nullable: true}
+        reposts: {type: integer, description: "Plain reposts"}
+        repostsWithCommentary: {type: integer}
+        posts:
+          type: array
+          items:
+            type: object
+            required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, reposts, repostsWithCommentary]
+            properties:
+              campaignId: {type: string}
+              title: {type: string}
+              categoryCode: {type: string}
+              categoryLabel: {type: string}
+              isPriority: {type: boolean}
+              opensAt: {type: string, format: date-time}
+              reposts: {type: integer}
+              repostsWithCommentary: {type: integer}
+        byCategory:
+          type: array
+          items:
+            type: object
+            required: [code, label, reposts, repostsWithCommentary]
+            properties:
+              code: {type: string}
+              label: {type: string}
+              reposts: {type: integer, description: "Plain reposts"}
+              repostsWithCommentary: {type: integer}
     DashboardCampaigns:
       type: object
       required: [asOf, windowDays, campaigns, byCategory]
@@ -1651,6 +1705,7 @@ components:
             summary: {type: string, nullable: true}
             imageUrl: {type: string, nullable: true}
             resourceUrl: {type: string, nullable: true}
+            resourceUrn: {type: string}
             people:
               type: object
               description: "Everyone with an active repost of the campaign, by name"

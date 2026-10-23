@@ -215,15 +215,16 @@ isolated function campaignsBoard(Snapshot s, int days, reporting:CategoryCount[]
             summary: card.summary,
             imageUrl: card.imageUrl,
             resourceUrl: card.resourceUrl,
+            resourceUrn: card.resourceUrn,
             byDay: from int i in 0 ..< byDay.length()
                 select {day: i + 1, reposts: byDay[i]},
             people: {
                 reposts: from reporting:Reposter r in people
                     where !r.withCommentary
-                    select {employeeId: r.employeeId, displayName: r.displayName},
+                    select {employeeId: r.employeeId, displayName: r.displayName, email: r.email},
                 withComments: from reporting:Reposter r in people
                     where r.withCommentary
-                    select {employeeId: r.employeeId, displayName: r.displayName}
+                    select {employeeId: r.employeeId, displayName: r.displayName, email: r.email}
             }
         };
     }
@@ -515,4 +516,61 @@ isolated function dashboardExport(string? correlationId, string 'from, string to
     res.setTextPayload(exportCsv(rows), "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", string `attachment; filename="amplify-${'from}-to-${to}.csv"`);
     return res;
+}
+
+// ---- One person's Post Performance -----------------------------------------------------------------
+
+# The person popup: who they are and every post they reposted, with the category split.
+#
+# + who - The person
+# + posts - Their posts, newest first
+# + return - Body
+isolated function personBoard(reporting:PersonIdentity who, reporting:PersonPost[] posts) returns json {
+    map<[int, int]> byCode = {};
+    map<string> labels = {};
+    int plain = 0;
+    int commented = 0;
+    foreach reporting:PersonPost p in posts {
+        plain += p.reposts;
+        commented += p.repostsWithCommentary;
+        [int, int] cur = byCode[p.categoryCode] ?: [0, 0];
+        byCode[p.categoryCode] = [cur[0] + p.reposts, cur[1] + p.repostsWithCommentary];
+        labels[p.categoryCode] = p.categoryLabel;
+    }
+    json[] categories = from string code in byCode.keys()
+        let [int, int] n = byCode.get(code)
+        order by n[0] + n[1] descending, labels.get(code) ascending
+        select {code, label: labels.get(code), reposts: n[0], repostsWithCommentary: n[1]};
+    return {
+        employeeId: who.employeeId,
+        displayName: who.displayName,
+        email: who.email,
+        reposts: plain,
+        repostsWithCommentary: commented,
+        posts: from reporting:PersonPost p in posts
+            select {
+                campaignId: p.campaignId,
+                title: p.title,
+                categoryCode: p.categoryCode,
+                categoryLabel: p.categoryLabel,
+                isPriority: p.isPriority,
+                opensAt: ts(p.opensAt),
+                reposts: p.reposts,
+                repostsWithCommentary: p.repostsWithCommentary
+            },
+        byCategory: categories
+    };
+}
+
+isolated function dashboardPerson(string? correlationId, string employeeId) returns http:Response|ProblemResponse|error {
+    do {
+        check maxLen(employeeId, 255, "employeeId");
+        [reporting:PersonIdentity, reporting:PersonPost[]]? found = check personPosts(employeeId);
+        if found is () {
+            return notFound("Person not found", correlationId);
+        }
+        return boardResponse(personBoard(found[0], found[1]));
+    } on fail error e {
+        return failure(e, correlationId, "Person board");
+    }
 }

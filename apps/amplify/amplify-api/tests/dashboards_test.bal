@@ -120,8 +120,9 @@ function testPostPerformanceBoardSelectsAndFilters() returns error? {
     test:assertEquals(check byDay[0], {day: 1, reposts: 30});
     test:assertEquals(check body.selected.imageUrl, "https://example.com/launch.png");
     test:assertEquals(check body.selected.summary, "Launch day");
-    test:assertEquals(check body.selected.people.reposts, [{employeeId: "e1", displayName: "Ada Lovelace"}, {employeeId: "e3", displayName: "Alan Turing"}]);
-    test:assertEquals(check body.selected.people.withComments, [{employeeId: "e2", displayName: "Grace Hopper"}]);
+    test:assertEquals(check body.selected.people.reposts, [{employeeId: "e1", displayName: "Ada Lovelace", email: "ada@example.com"}, {employeeId: "e3", displayName: "Alan Turing", email: "alan@example.com"}]);
+    test:assertEquals(check body.selected.people.withComments, [{employeeId: "e2", displayName: "Grace Hopper", email: ()}]);
+    test:assertEquals(check body.selected.resourceUrn, "urn:li:share:1");
     test:assertEquals(check body.byCategory, [{code: "PRODUCT", label: "Product", reposts: 45, repostsWithCommentary: 12},
         {code: "EVENT", label: "Event", reposts: 10, repostsWithCommentary: 0}]);
 
@@ -250,4 +251,19 @@ function testExportIsAnEscapedCsvForDashboardReadersOnly() returns error? {
         "from=2025-02-30&to=2025-03-01"] {
         test:assertEquals((check send("GET", "/dashboards/export?" + q, (), token)).statusCode, 400, q);
     }
+}
+
+@test:Config {groups: ["dashboards"]}
+function testPersonBoardCountsOnePersonsPosts() returns error? {
+    string token = check boardToken(auth:ROLE_SLT);
+    json body = check (check send("GET", "/dashboards/people/e1", (), token)).getJsonPayload();
+    test:assertEquals(check body.displayName, "Ada Lovelace");
+    test:assertEquals(check body.email, "ada@example.com");
+    test:assertEquals(check body.reposts, 1);
+    test:assertEquals(check body.repostsWithCommentary, 2);
+    test:assertEquals((<json[]>check body.posts).length(), 2);
+    test:assertEquals(check body.byCategory, [{code: "PRODUCT", label: "Product", reposts: 1, repostsWithCommentary: 1},
+        {code: "EVENT", label: "Event", reposts: 0, repostsWithCommentary: 1}]);
+    test:assertEquals((check send("GET", "/dashboards/people/nobody", (), token)).statusCode, 404);
+    test:assertEquals((check send("GET", "/dashboards/people/e1", (), check rvToken("dash-plain"))).statusCode, 403);
 }
