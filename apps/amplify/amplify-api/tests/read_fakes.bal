@@ -563,3 +563,24 @@ isolated function mockPostByDay(string campaignId) returns int[]|error {
     check dbGate();
     return campaignId == "p-launch" ? [30, 5, 3, 1, 1, 0, 0] : [1, 0, 0, 0, 0, 0, 0];
 }
+
+@test:Mock {functionName: "campaignPeople"}
+isolated function mockCampaignPeople(string campaignId) returns [reporting:CampaignCard, reporting:Reposter[]]|error {
+    check dbGate();
+    return [{summary: "Launch day", imageUrl: "https://example.com/launch.png", resourceUrl: "https://www.linkedin.com/feed/update/urn:li:share:1"},
+        [{employeeId: "e1", displayName: "Ada Lovelace", withCommentary: false},
+        {employeeId: "e2", displayName: "Grace Hopper", withCommentary: true},
+        {employeeId: "e3", displayName: "Alan Turing", withCommentary: false}]];
+}
+
+@test:Mock {functionName: "exportRows"}
+isolated function mockExportRows(time:Utc 'from, time:Utc to) returns reporting:ExportRow[]|error {
+    check dbGate();
+    return [
+        {recordType: "ENGAGEMENT", occurredAt: "2025-10-20T10:00:00Z", campaignId: "p-launch", campaignTitle: "Launch, big", category: "Product",
+            isPriority: true, employeeId: "e1", employeeName: "=Ada \"AL\" Lovelace", employeeEmail: "ada@example.com",
+            action: "REPOST", status: "ACTIVE", points: (), detail: ()},
+        {recordType: "POINTS", occurredAt: "2025-10-20T10:00:01Z", campaignId: (), campaignTitle: (), category: (), isPriority: (),
+            employeeId: "e1", employeeName: (), employeeEmail: (), action: "REPOST", status: "HELD", points: 5, detail: "ENGAGEMENT"}
+    ];
+}

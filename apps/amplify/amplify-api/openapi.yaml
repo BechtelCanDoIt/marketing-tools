@@ -790,6 +790,26 @@ paths:
         "403": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
+  /dashboards/export:
+    get:
+      tags: [S6 Dashboards]
+      operationId: getDashboardExport
+      x-roles: [PO, MKT, SLT, ADM]
+      description: "The raw rows behind every board for a date range as a CSV download (UTC days, both ends inclusive, at most 366 days). One row per engagement, share attempt, points ledger row, campaign opened and connection made, in one set of columns told apart by record_type. Not cached."
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+        - {name: from, in: query, required: true, schema: {type: string, format: date}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date}}
+      responses:
+        "200":
+          description: OK
+          content:
+            text/csv:
+              schema: {type: string}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
   /dashboards/participation:
     get:
       tags: [S6 Dashboards]
@@ -1609,6 +1629,12 @@ components:
             expired: {type: integer, description: "Token past its expiry"}
             revoked: {type: integer, description: "Needs reconnect for another reason (revoked, token missing)"}
             neverConnected: {type: integer, nullable: true, description: "headcount minus connected; null without a headcount"}
+    DashboardPerson:
+      type: object
+      required: [employeeId, displayName]
+      properties:
+        employeeId: {type: string}
+        displayName: {type: string}
     DashboardCampaigns:
       type: object
       required: [asOf, windowDays, campaigns, byCategory]
@@ -1620,8 +1646,18 @@ components:
         selected:
           type: object
           nullable: true
-          required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, repostsWithCommentary, first24Hours, announcement, byDay]
+          required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, repostsWithCommentary, first24Hours, announcement, byDay, people]
           properties:
+            summary: {type: string, nullable: true}
+            imageUrl: {type: string, nullable: true}
+            resourceUrl: {type: string, nullable: true}
+            people:
+              type: object
+              description: "Everyone with an active repost of the campaign, by name"
+              required: [reposts, withComments]
+              properties:
+                reposts: {type: array, items: {$ref: "#/components/schemas/DashboardPerson"}}
+                withComments: {type: array, items: {$ref: "#/components/schemas/DashboardPerson"}}
             campaignId: {type: string}
             title: {type: string}
             categoryCode: {type: string}
