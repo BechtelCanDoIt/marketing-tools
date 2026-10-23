@@ -187,16 +187,18 @@ isolated function campaignsWithin(Snapshot s, int days) returns reporting:Campai
 # + s - Snapshot
 # + days - Look-back, 1 to 90
 # + categories - Reposts by category in the look-back
-# + selected - The selected campaign and its first seven days, `()` when there are no campaigns
+# + selected - The selected campaign, its first seven days, its card and the people who reposted it, `()` when there are no campaigns
 # + return - Body
 isolated function campaignsBoard(Snapshot s, int days, reporting:CategoryCount[] categories,
-        [reporting:CampaignRow, int[]]? selected) returns json {
+        [reporting:CampaignRow, int[], reporting:CampaignCard, reporting:Reposter[]]? selected) returns json {
     reporting:CampaignRow[] campaigns = campaignsWithin(s, days);
     int connected = s.connections.active + s.connections.expiring + s.connections.expired + s.connections.revoked;
     json detail = ();
-    if selected is [reporting:CampaignRow, int[]] {
+    if selected is [reporting:CampaignRow, int[], reporting:CampaignCard, reporting:Reposter[]] {
         reporting:CampaignRow p = selected[0];
         int[] byDay = selected[1];
+        reporting:CampaignCard card = selected[2];
+        reporting:Reposter[] people = selected[3];
         detail = {
             campaignId: p.campaignId,
             title: p.title,
@@ -210,8 +212,20 @@ isolated function campaignsBoard(Snapshot s, int days, reporting:CategoryCount[]
             shareOfConnected: ratio(p.reposts, connected),
             first24Hours: byDay[0],
             announcement: announcementOf(s.delivery, p.campaignId),
+            summary: card.summary,
+            imageUrl: card.imageUrl,
+            resourceUrl: card.resourceUrl,
+            resourceUrn: card.resourceUrn,
             byDay: from int i in 0 ..< byDay.length()
-                select {day: i + 1, reposts: byDay[i]}
+                select {day: i + 1, reposts: byDay[i]},
+            people: {
+                reposts: from reporting:Reposter r in people
+                    where !r.withCommentary
+                    select {employeeId: r.employeeId, displayName: r.displayName, email: r.email},
+                withComments: from reporting:Reposter r in people
+                    where r.withCommentary
+                    select {employeeId: r.employeeId, displayName: r.displayName, email: r.email}
+            }
         };
     }
     return {
@@ -387,9 +401,10 @@ isolated function dashboardCampaigns(string? correlationId, int days, string? ca
         } else if campaigns.length() > 0 {
             pick = campaigns[0];
         }
-        [reporting:CampaignRow, int[]]? selected = ();
+        [reporting:CampaignRow, int[], reporting:CampaignCard, reporting:Reposter[]]? selected = ();
         if pick is reporting:CampaignRow {
-            selected = [pick, check campaignByDay(pick.campaignId)];
+            var [card, people] = check campaignPeople(pick.campaignId);
+            selected = [pick, check campaignByDay(pick.campaignId), card, people];
         }
         reporting:CategoryCount[] categories = check categoryCounts(time:utcAddSeconds(s.asOf, -86400d * <decimal>days));
         return boardResponse(campaignsBoard(s, days, categories, selected));
@@ -421,5 +436,141 @@ isolated function dashboardScorecard(string? correlationId) returns http:Respons
         return boardResponse(scorecard(s, headcountOrNil(correlationId), scorecardTargets()));
     } on fail error e {
         return failure(e, correlationId, "Scorecard");
+    }
+}
+
+// ---- Raw-data export -------------------------------------------------------------------------------
+
+const int EXPORT_MAX_DAYS = 366;
+
+const string[] EXPORT_COLUMNS = ["record_type", "occurred_at", "campaign_id", "campaign_title", "category", "is_priority",
+    "employee_id", "employee_name", "employee_email", "action", "status", "points", "detail"];
+
+# One CSV cell: quoted when it holds a comma, quote or line break, and a leading `=`, `+`, `-`, `@`, tab or
+# return gets a single quote in front so a spreadsheet never runs a name or title as a formula.
+#
+# + value - Cell text, `()` for empty
+# + return - The cell
+isolated function csvCell(string? value) returns string {
+    if value is () || value.length() == 0 {
+        return "";
+    }
+    string v = value;
+    string first = v.substring(0, 1);
+    if first == "=" || first == "+" || first == "-" || first == "@" || first == "\t" || first == "\r" {
+        v = "'" + v;
+    }
+    if v.includes(",") || v.includes("\"") || v.includes("\n") || v.includes("\r") {
+        return "\"" + re `"`.replaceAll(v, "\"\"") + "\"";
+    }
+    return v;
+}
+
+# The export rows as CSV text, header first, CRLF line ends.
+#
+# + rows - Rows
+# + return - CSV
+isolated function exportCsv(reporting:ExportRow[] rows) returns string {
+    string[] lines = [string:'join(",", ...EXPORT_COLUMNS)];
+    foreach reporting:ExportRow r in rows {
+        boolean? priority = r.isPriority;
+        int? points = r.points;
+        string[] cells = [r.recordType, r.occurredAt, r.campaignId ?: "", r.campaignTitle ?: "", r.category ?: "",
+            priority is boolean ? priority.toString() : "", r.employeeId ?: "", r.employeeName ?: "",
+            r.employeeEmail ?: "", r.action ?: "", r.status ?: "", points is int ? points.toString() : "", r.detail ?: ""];
+        lines.push(string:'join(",", ...cells.map(csvCell)));
+    }
+    return string:'join("\r\n", ...lines) + "\r\n";
+}
+
+# A `YYYY-MM-DD` date as midnight UTC, `()` when it isn't a real date.
+#
+# + date - Text
+# + return - The moment, or `()`
+isolated function dayStart(string date) returns time:Utc? {
+    if !re `\d{4}-\d{2}-\d{2}`.isFullMatch(date) {
+        return ();
+    }
+    time:Utc|error t = time:utcFromString(date + "T00:00:00Z");
+    return t is time:Utc ? t : ();
+}
+
+isolated function dashboardExport(string? correlationId, string 'from, string to) returns http:Response|ProblemResponse|error {
+    time:Utc? firstDay = dayStart('from);
+    time:Utc? last = dayStart(to);
+    if firstDay is () || last is () {
+        return badRequest("from and to must be dates, YYYY-MM-DD", correlationId);
+    }
+    time:Utc endExclusive = time:utcAddSeconds(last, 86400d);
+    if time:utcDiffSeconds(endExclusive, firstDay) <= 0d {
+        return badRequest("to must not be before from", correlationId);
+    }
+    if time:utcDiffSeconds(endExclusive, firstDay) > 86400d * <decimal>EXPORT_MAX_DAYS {
+        return badRequest("The range is at most " + EXPORT_MAX_DAYS.toString() + " days", correlationId);
+    }
+    reporting:ExportRow[]|error rows = exportRows(firstDay, endExclusive);
+    if rows is error {
+        return failure(rows, correlationId, "Export");
+    }
+    http:Response res = new;
+    res.setTextPayload(exportCsv(rows), "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", string `attachment; filename="amplify-${'from}-to-${to}.csv"`);
+    return res;
+}
+
+// ---- One person's Post Performance -----------------------------------------------------------------
+
+# The person popup: who they are and every post they reposted, with the category split.
+#
+# + who - The person
+# + posts - Their posts, newest first
+# + return - Body
+isolated function personBoard(reporting:PersonIdentity who, reporting:PersonPost[] posts) returns json {
+    map<[int, int]> byCode = {};
+    map<string> labels = {};
+    int plain = 0;
+    int commented = 0;
+    foreach reporting:PersonPost p in posts {
+        plain += p.reposts;
+        commented += p.repostsWithCommentary;
+        [int, int] cur = byCode[p.categoryCode] ?: [0, 0];
+        byCode[p.categoryCode] = [cur[0] + p.reposts, cur[1] + p.repostsWithCommentary];
+        labels[p.categoryCode] = p.categoryLabel;
+    }
+    json[] categories = from string code in byCode.keys()
+        let [int, int] n = byCode.get(code)
+        order by n[0] + n[1] descending, labels.get(code) ascending
+        select {code, label: labels.get(code), reposts: n[0], repostsWithCommentary: n[1]};
+    return {
+        employeeId: who.employeeId,
+        displayName: who.displayName,
+        email: who.email,
+        reposts: plain,
+        repostsWithCommentary: commented,
+        posts: from reporting:PersonPost p in posts
+            select {
+                campaignId: p.campaignId,
+                title: p.title,
+                categoryCode: p.categoryCode,
+                categoryLabel: p.categoryLabel,
+                isPriority: p.isPriority,
+                opensAt: ts(p.opensAt),
+                reposts: p.reposts,
+                repostsWithCommentary: p.repostsWithCommentary
+            },
+        byCategory: categories
+    };
+}
+
+isolated function dashboardPerson(string? correlationId, string employeeId) returns http:Response|ProblemResponse|error {
+    do {
+        check maxLen(employeeId, 255, "employeeId");
+        [reporting:PersonIdentity, reporting:PersonPost[]]? found = check personPosts(employeeId);
+        if found is () {
+            return notFound("Person not found", correlationId);
+        }
+        return boardResponse(personBoard(found[0], found[1]));
+    } on fail error e {
+        return failure(e, correlationId, "Person board");
     }
 }

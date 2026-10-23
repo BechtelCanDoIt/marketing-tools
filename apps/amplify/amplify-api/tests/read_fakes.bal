@@ -563,3 +563,38 @@ isolated function mockPostByDay(string campaignId) returns int[]|error {
     check dbGate();
     return campaignId == "p-launch" ? [30, 5, 3, 1, 1, 0, 0] : [1, 0, 0, 0, 0, 0, 0];
 }
+
+@test:Mock {functionName: "campaignPeople"}
+isolated function mockCampaignPeople(string campaignId) returns [reporting:CampaignCard, reporting:Reposter[]]|error {
+    check dbGate();
+    return [{summary: "Launch day", imageUrl: "https://example.com/launch.png", resourceUrl: "https://www.linkedin.com/feed/update/urn:li:share:1", resourceUrn: "urn:li:share:1"},
+        [{employeeId: "e1", displayName: "Ada Lovelace", email: "ada@example.com", withCommentary: false},
+        {employeeId: "e2", displayName: "Grace Hopper", email: (), withCommentary: true},
+        {employeeId: "e3", displayName: "Alan Turing", email: "alan@example.com", withCommentary: false}]];
+}
+
+@test:Mock {functionName: "exportRows"}
+isolated function mockExportRows(time:Utc 'from, time:Utc to) returns reporting:ExportRow[]|error {
+    check dbGate();
+    return [
+        {recordType: "ENGAGEMENT", occurredAt: "2025-10-20T10:00:00Z", campaignId: "p-launch", campaignTitle: "Launch, big", category: "Product",
+            isPriority: true, employeeId: "e1", employeeName: "=Ada \"AL\" Lovelace", employeeEmail: "ada@example.com",
+            action: "REPOST", status: "ACTIVE", points: (), detail: ()},
+        {recordType: "POINTS", occurredAt: "2025-10-20T10:00:01Z", campaignId: (), campaignTitle: (), category: (), isPriority: (),
+            employeeId: "e1", employeeName: (), employeeEmail: (), action: "REPOST", status: "HELD", points: 5, detail: "ENGAGEMENT"}
+    ];
+}
+
+@test:Mock {functionName: "personPosts"}
+isolated function mockPersonPosts(string employeeId) returns [reporting:PersonIdentity, reporting:PersonPost[]]?|error {
+    check dbGate();
+    if employeeId == "nobody" {
+        return ();
+    }
+    time:Utc opened = check time:utcFromString("2025-10-19T00:00:00Z");
+    return [{employeeId, displayName: "Ada Lovelace", email: "ada@example.com"},
+        [{campaignId: "p-launch", title: "Launch", categoryCode: "PRODUCT", categoryLabel: "Product", isPriority: true, opensAt: opened,
+            reposts: 1, repostsWithCommentary: 1},
+        {campaignId: "p-event", title: "Event", categoryCode: "EVENT", categoryLabel: "Event", isPriority: false, opensAt: opened,
+            reposts: 0, repostsWithCommentary: 1}]];
+}

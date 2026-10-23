@@ -94,6 +94,8 @@ public final Rule[] & readonly ACTIVITY_MATRIX = [
     {method: "GET", path: "/headcount", allowed: ALL, capability: "headcount.read", useCase: "Employee count from the people directory, cached 7 days (ADR-035)"},
     {method: "GET", path: "/dashboards/operations", allowed: DASHBOARD_READERS, capability: "dashboards.operations.read", useCase: "Operations board (ADR-036)"},
     {method: "GET", path: "/dashboards/campaigns", allowed: DASHBOARD_READERS, capability: "dashboards.campaigns.read", useCase: "Campaign performance board"},
+    {method: "GET", path: "/dashboards/export", allowed: DASHBOARD_READERS, capability: "dashboards.export.read", useCase: "Raw rows behind the boards for a date range, CSV"},
+    {method: "GET", path: "/dashboards/people/{employeeId}", allowed: DASHBOARD_READERS, capability: "dashboards.people.read", useCase: "One person's Post Performance popup"},
     {method: "GET", path: "/dashboards/participation", allowed: DASHBOARD_READERS, capability: "dashboards.participation.read", useCase: "Participation funnel numbers"},
     {method: "GET", path: "/dashboards/glance", allowed: DASHBOARD_READERS, capability: "dashboards.glance.read", useCase: "At a glance numbers"},
     {method: "GET", path: "/dashboards/scorecard", allowed: DASHBOARD_READERS, capability: "dashboards.scorecard.read", useCase: "Scorecard against the scorecard.* targets"},
