@@ -262,6 +262,7 @@ function testPersonBoardCountsOnePersonsPosts() returns error? {
     test:assertEquals(check body.reposts, 1);
     test:assertEquals(check body.repostsWithCommentary, 2);
     test:assertEquals((<json[]>check body.posts).length(), 2);
+    test:assertEquals(check (<json[]>check body.posts)[0].closesAt, "2025-11-18T00:00:00Z");
     test:assertEquals(check body.byCategory, [{code: "PRODUCT", label: "Product", reposts: 1, repostsWithCommentary: 1},
         {code: "EVENT", label: "Event", reposts: 0, repostsWithCommentary: 1}]);
     test:assertEquals((check send("GET", "/dashboards/people/nobody", (), token)).statusCode, 404);
