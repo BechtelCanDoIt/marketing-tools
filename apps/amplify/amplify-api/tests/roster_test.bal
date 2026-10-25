@@ -106,6 +106,20 @@ function testIndexKeepsBusinessUnitsAndTheFullCount() {
 }
 
 @test:Config
+function testIndexAndHeadcountByHouse() {
+    DirectoryIndex index = indexDirectory([
+        {workEmail: "a@wso2.com", house: "Oak"},
+        {workEmail: "b@wso2.com", house: " Oak "},
+        {workEmail: "c@wso2.com", house: "Elm"},
+        {workEmail: "d@wso2.com"}
+    ]);
+    test:assertEquals(index.houseOf["b@wso2.com"], "Oak");
+    test:assertEquals(index.houseMembers["Oak"], ["a@wso2.com", "b@wso2.com"]);
+    test:assertEquals(index.houseOf["d@wso2.com"], (), "no house, left out");
+    test:assertEquals(headcountOf(index, [1760000000, 0]).houses, [{name: "Oak", headcount: 2}, {name: "Elm", headcount: 1}]);
+}
+
+@test:Config
 function testHeadcountByBuAndTeam() {
     HeadcountSnapshot snapshot = headcountOf(indexDirectory(BU_DIRECTORY), [1760000000, 0]);
     test:assertEquals(snapshot.total, 6);

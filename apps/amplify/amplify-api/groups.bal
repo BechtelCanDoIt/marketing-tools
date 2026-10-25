@@ -30,15 +30,15 @@ import ballerina/log;
 type PeopleScope "COMPANY"|"BU"|"TEAM";
 
 # What a group board ranks (openapi `LeaderboardGroups.by`).
-type GroupBy "TEAM"|"BU";
+type GroupBy "TEAM"|"BU"|"HOUSE";
 
 # One ranked team or business unit.
 type GroupRow record {|
-    # Opaque key: the team key, or the BU name
+    # Opaque key: the team key, or the BU or house name
     string key;
     # Display name
     string name;
-    # BU a team sits in, `()` for a BU row or when unknown
+    # BU a team sits in, `()` for a BU or house row or when unknown
     string? businessUnit;
     # Sum of its members' points
     int points;
@@ -144,7 +144,7 @@ isolated function rankGroups(GroupRow[] rows, string sortBy = "rank", string dir
 # + index - Directory index
 # + snapshot - Employee count (the denominators)
 # + points - Everyone's points
-# + groupBy - `TEAM` or `BU`
+# + groupBy - `TEAM`, `BU` or `HOUSE`
 # + bu - Only the teams in this BU (`TEAM` only), or `()`
 # + return - The unranked rows and the points of people the directory doesn't place
 isolated function groupRows(DirectoryIndex index, HeadcountSnapshot snapshot, recognition:EmailPoints[] points,
@@ -154,6 +154,11 @@ isolated function groupRows(DirectoryIndex index, HeadcountSnapshot snapshot, re
         foreach BusinessUnitCount b in snapshot.businessUnits {
             rows[b.name] = {key: b.name, name: b.name, businessUnit: (), points: 0, participants: 0,
                 headcount: b.headcount};
+        }
+    } else if groupBy == "HOUSE" {
+        foreach HouseCount h in snapshot.houses {
+            rows[h.name] = {key: h.name, name: h.name, businessUnit: (), points: 0, participants: 0,
+                headcount: h.headcount};
         }
     } else {
         foreach TeamCount t in snapshot.teams {
@@ -167,7 +172,8 @@ isolated function groupRows(DirectoryIndex index, HeadcountSnapshot snapshot, re
     int unassignedPeople = 0;
     int unassignedPoints = 0;
     foreach recognition:EmailPoints e in points {
-        string? key = groupBy == "BU" ? index.buOf[e.email] : index.teamOf[e.email];
+        string? key = groupBy == "BU" ? index.buOf[e.email]
+            : groupBy == "HOUSE" ? index.houseOf[e.email] : index.teamOf[e.email];
         if key is () {
             unassignedPeople += 1;
             unassignedPoints += e.totalPoints;
@@ -184,11 +190,11 @@ isolated function groupRows(DirectoryIndex index, HeadcountSnapshot snapshot, re
     return [rows.toArray(), unassignedPeople, unassignedPoints];
 }
 
-# `GET /leaderboard/groups`: all teams (optionally one BU's), or all BUs, ranked against each other.
+# `GET /leaderboard/groups`: all teams (optionally one BU's), all BUs, or all houses, ranked against each other.
 #
 # + correlationId - Correlation id
 # + period - `ALL`, `YYYY-MM` or `YYYY-Qn`
-# + groupBy - `TEAM` or `BU`
+# + groupBy - `TEAM`, `BU` or `HOUSE`
 # + bu - Limit `TEAM` to one business unit
 # + sortBy - Column to order by
 # + dir - `asc` or `desc`
@@ -198,8 +204,8 @@ isolated function groupBoard(string? correlationId, string period, string groupB
     do {
         check checkPeriod(period);
         check maxLen(bu, 100, "bu");
-        if groupBy != "TEAM" && groupBy != "BU" {
-            return badRequest("by must be TEAM or BU", correlationId);
+        if groupBy != "TEAM" && groupBy != "BU" && groupBy != "HOUSE" {
+            return badRequest("by must be TEAM, BU or HOUSE", correlationId);
         }
         if GROUP_SORTS.indexOf(sortBy) is () {
             return badRequest("sort must be rank, name, points, participants, headcount or participation", correlationId);
@@ -207,7 +213,7 @@ isolated function groupBoard(string? correlationId, string period, string groupB
         if dir != "asc" && dir != "desc" {
             return badRequest("dir must be asc or desc", correlationId);
         }
-        if groupBy == "BU" && bu is string {
+        if groupBy != "TEAM" && bu is string {
             return badRequest("bu only narrows by=TEAM", correlationId);
         }
         DirectoryIndex|error index = directoryIndex(correlationId);

@@ -638,7 +638,7 @@ paths:
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
         - {$ref: "#/components/parameters/Period"}
-        - {name: by, in: query, schema: {type: string, enum: [TEAM, BU], default: TEAM}}
+        - {name: by, in: query, schema: {type: string, enum: [TEAM, BU, HOUSE], default: TEAM}}
         - {name: bu, in: query, description: "Only the teams in this BU (by=TEAM only)", schema: {type: string, maxLength: 100}}
         - {name: sort, in: query, description: "Column to order by; rank is the points-based dense rank", schema: {type: string, enum: [rank, name, points, participants, headcount, participation], default: rank}}
         - {name: dir, in: query, schema: {type: string, enum: [asc, desc], default: asc}}
@@ -1530,7 +1530,7 @@ components:
       required: [period, by, asOf, totals, entries, unassigned]
       properties:
         period: {type: string}
-        by: {type: string, enum: [TEAM, BU]}
+        by: {type: string, enum: [TEAM, BU, HOUSE]}
         businessUnit: {type: string, nullable: true}
         asOf: {type: string, format: date-time, description: "When the employee count was taken"}
         totals:
@@ -1669,7 +1669,7 @@ components:
           type: array
           items:
             type: object
-            required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, reposts, repostsWithCommentary]
+            required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, repostsWithCommentary]
             properties:
               campaignId: {type: string}
               title: {type: string}
@@ -1677,6 +1677,7 @@ components:
               categoryLabel: {type: string}
               isPriority: {type: boolean}
               opensAt: {type: string, format: date-time}
+              closesAt: {type: string, format: date-time}
               reposts: {type: integer}
               repostsWithCommentary: {type: integer}
         byCategory:

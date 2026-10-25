@@ -408,7 +408,15 @@ function testGroupBoardsRankTeamsAndBusinessUnits() returns error? {
     json land = check (check send("GET", "/leaderboard/groups?by=TEAM&bu=Land", (), token)).getJsonPayload();
     test:assertEquals((<json[]>check land.entries).length(), 0, "a BU with no teams");
 
-    foreach string query in ["sort=bogus", "dir=sideways", "by=bogus", "period=ALLX", "by=BU&bu=Water", "bu=" + "x".padEnd(101, "x")] {
+    json houses = check (check send("GET", "/leaderboard/groups?by=HOUSE", (), token)).getJsonPayload();
+    json[] houseEntries = <json[]>check houses.entries;
+    test:assertEquals(houseEntries.length(), 1, "only houses the directory names");
+    test:assertEquals(check houseEntries[0].name, "Oak");
+    test:assertEquals(check houseEntries[0].points, 450);
+    test:assertEquals(check houseEntries[0].participants, 2);
+    test:assertEquals(check houseEntries[0].headcount, 3);
+
+    foreach string query in ["sort=bogus", "dir=sideways", "by=bogus", "period=ALLX", "by=BU&bu=Water", "by=HOUSE&bu=Water", "bu=" + "x".padEnd(101, "x")] {
         http:Response bad = check send("GET", "/leaderboard/groups?" + query, (), token);
         test:assertEquals(bad.statusCode, 400, query);
     }
