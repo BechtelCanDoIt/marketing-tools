@@ -557,6 +557,8 @@ public type PersonPost record {|
     boolean isPriority;
     # Opens
     time:Utc opensAt;
+    # Closes
+    time:Utc closesAt;
     # 1 when the person reposted it plainly
     int reposts;
     # 1 when the person reposted it with their own comment
@@ -599,21 +601,22 @@ public isolated function personIdentity(postgresql:Client db, string employeeId)
 # + return - One row per campaign, or an error
 public isolated function personPosts(postgresql:Client db, string employeeId) returns PersonPost[]|error {
     stream<record {|string id; string title; string category_code; string category_label; boolean is_priority;
-            time:Utc opens_at; int plain; int commented;|}, error?> rows = db->query(`
+            time:Utc opens_at; time:Utc closes_at; int plain; int commented;|}, error?> rows = db->query(`
         SELECT c.id::text AS id, c.title, c.category_code, COALESCE(cat.label, c.category_code) AS category_label,
-               c.is_priority, c.opens_at,
+               c.is_priority, c.opens_at, c.closes_at,
                count(*) FILTER (WHERE e.action NOT IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY'))::int AS plain,
                count(*) FILTER (WHERE e.action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY'))::int AS commented
         FROM sharing.engagement_v e
         JOIN campaign.campaign c ON c.id = e.campaign_id
         LEFT JOIN campaign.category cat ON cat.code = c.category_code
         WHERE e.status = 'ACTIVE' AND e.employee_id = ${employeeId}
-        GROUP BY c.id, c.title, c.category_code, cat.label, c.is_priority, c.opens_at
+        GROUP BY c.id, c.title, c.category_code, cat.label, c.is_priority, c.opens_at, c.closes_at
         ORDER BY c.opens_at DESC, c.id
         LIMIT 200`);
     return from var r in rows
         select {
             campaignId: r.id, title: r.title, categoryCode: r.category_code, categoryLabel: r.category_label,
-            isPriority: r.is_priority, opensAt: r.opens_at, reposts: r.plain, repostsWithCommentary: r.commented
+            isPriority: r.is_priority, opensAt: r.opens_at, closesAt: r.closes_at, reposts: r.plain,
+            repostsWithCommentary: r.commented
         };
 }

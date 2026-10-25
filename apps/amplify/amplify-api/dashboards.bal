@@ -555,6 +555,7 @@ isolated function personBoard(reporting:PersonIdentity who, reporting:PersonPost
                 categoryLabel: p.categoryLabel,
                 isPriority: p.isPriority,
                 opensAt: ts(p.opensAt),
+                closesAt: ts(p.closesAt),
                 reposts: p.reposts,
                 repostsWithCommentary: p.repostsWithCommentary
             },

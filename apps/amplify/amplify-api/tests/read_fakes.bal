@@ -131,7 +131,7 @@ service /people/employees/basic\-info on jwksListener {
             return {teamName: "Rivers", members: [{name: "Bob Jones bob@wso2.com"}]};
         }
         json[] rows = from string m in RIVERS
-            select {workEmail: m.toUpperAscii(), firstName: "R", team: "Rivers", subTeam: (), businessUnit: "Water"};
+            select {workEmail: m.toUpperAscii(), firstName: "R", team: "Rivers", subTeam: (), businessUnit: "Water", house: "Oak"};
         rows.push({workEmail: "rv-noteam@wso2.com", firstName: "N", team: (), subTeam: (), businessUnit: "Land"});
         return rows;
     }
@@ -592,9 +592,10 @@ isolated function mockPersonPosts(string employeeId) returns [reporting:PersonId
         return ();
     }
     time:Utc opened = check time:utcFromString("2025-10-19T00:00:00Z");
+    time:Utc closed = check time:utcFromString("2025-11-18T00:00:00Z");
     return [{employeeId, displayName: "Ada Lovelace", email: "ada@example.com"},
         [{campaignId: "p-launch", title: "Launch", categoryCode: "PRODUCT", categoryLabel: "Product", isPriority: true, opensAt: opened,
-            reposts: 1, repostsWithCommentary: 1},
+            closesAt: closed, reposts: 1, repostsWithCommentary: 1},
         {campaignId: "p-event", title: "Event", categoryCode: "EVENT", categoryLabel: "Event", isPriority: false, opensAt: opened,
-            reposts: 0, repostsWithCommentary: 1}]];
+            closesAt: closed, reposts: 0, repostsWithCommentary: 1}]];
 }

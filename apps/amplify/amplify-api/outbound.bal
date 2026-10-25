@@ -293,6 +293,8 @@ type DirectoryRecord record {
     string? subTeam = ();
     # Business unit (BU), the level above team
     string? businessUnit = ();
+    # House (a company-wide grouping that cuts across BUs and teams)
+    string? house = ();
 };
 
 # Everyone's team, built from one directory response.
@@ -307,6 +309,10 @@ type DirectoryIndex record {|
     map<string> buOf;
     # Business unit name to member emails, lowercase
     map<string[]> buMembers;
+    # Lowercase email to house name (people without one are left out)
+    map<string> houseOf;
+    # House name to member emails, lowercase
+    map<string[]> houseMembers;
     # Team key to its business unit, as the directory states it (the key carries it, so a team is never
     # guessed into a BU)
     map<string> teamBu;
@@ -330,6 +336,8 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
     map<string[]> members = {};
     map<string> buOf = {};
     map<string[]> buMembers = {};
+    map<string> houseOf = {};
+    map<string[]> houseMembers = {};
     map<string> teamBu = {};
     map<boolean> seen = {};
     foreach DirectoryRecord r in records {
@@ -341,6 +349,13 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
         string team = (r.team ?: "").trim();
         string subTeam = (r.subTeam ?: "").trim();
         string bu = (r.businessUnit ?: "").trim();
+        string house = (r.house ?: "").trim();
+        if house != "" {
+            houseOf[email] = house;
+            string[] houseList = houseMembers[house] ?: [];
+            houseList.push(email);
+            houseMembers[house] = houseList;
+        }
         if bu != "" {
             buOf[email] = bu;
             string[] buList = buMembers[bu] ?: [];
@@ -358,7 +373,7 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
         list.push(email);
         members[key] = list;
     }
-    return {teamOf, teamNames, members, buOf, buMembers, teamBu, total: seen.length()}.cloneReadOnly();
+    return {teamOf, teamNames, members, buOf, buMembers, houseOf, houseMembers, teamBu, total: seen.length()}.cloneReadOnly();
 }
 
 # The viewer's roster from the index.
@@ -446,6 +461,14 @@ type BusinessUnitCount record {|
     int headcount;
 |};
 
+# Employees in one house.
+type HouseCount record {|
+    # House name
+    string name;
+    # Employees
+    int headcount;
+|};
+
 # Employees in one team.
 type TeamCount record {|
     # Opaque team key (`team/subTeam`), what the board endpoints take as `team`
@@ -464,6 +487,8 @@ type HeadcountSnapshot record {|
     int total;
     # By business unit, largest first
     BusinessUnitCount[] businessUnits;
+    # By house, largest first
+    HouseCount[] houses;
     # By team, largest first
     TeamCount[] teams;
     # When the directory was read (UTC)
@@ -483,13 +508,17 @@ isolated function headcountOf(DirectoryIndex index, time:Utc asOf) returns Headc
         let int n = emails.length()
         order by n descending, name ascending
         select {name, headcount: n};
+    HouseCount[] houses = from var [name, emails] in index.houseMembers.entries()
+        let int n = emails.length()
+        order by n descending, name ascending
+        select {name, headcount: n};
     TeamCount[] teams = from var [key, emails] in index.members.entries()
         let int n = emails.length()
         let string name = index.teamNames[key] ?: key
         let string bu = index.teamBu[key] ?: ""
         order by n descending, name ascending, key ascending
         select {key, name, businessUnit: bu == "" ? () : bu, headcount: n};
-    return {total: index.total, businessUnits, teams, asOf: time:utcToString(asOf)}.cloneReadOnly();
+    return {total: index.total, businessUnits, houses, teams, asOf: time:utcToString(asOf)}.cloneReadOnly();
 }
 
 # The employee count: reused for `headcountCacheSeconds`, then counted again from a fresh directory call
