@@ -2700,7 +2700,7 @@
                 "body": {
                   "mode": "file",
                   "file": {
-                    "src": "/Users/sjambe/Desktop/TestDocument.pdf"
+                    "src": "sample-media/TestDocument.pdf"
                   }
                 },
                 "url": {
@@ -2757,7 +2757,7 @@
                     "body": {
                       "mode": "file",
                       "file": {
-                        "src": "/Users/sjambe/Desktop/TestDocument.pdf"
+                        "src": "sample-media/TestDocument.pdf"
                       }
                     },
                     "url": {
@@ -3295,7 +3295,7 @@
                 "body": {
                   "mode": "file",
                   "file": {
-                    "src": "/Users/sjambe/Downloads/2B-testing.mp4"
+                    "src": "sample-media/2B-testing.mp4"
                   }
                 },
                 "url": {
@@ -3367,7 +3367,7 @@
                     "body": {
                       "mode": "file",
                       "file": {
-                        "src": "/Users/sjambe/Downloads/2B-testing.mp4"
+                        "src": "sample-media/2B-testing.mp4"
                       }
                     },
                     "url": {
@@ -3717,7 +3717,7 @@
                 "body": {
                   "mode": "file",
                   "file": {
-                    "src": "/Users/sjambe/Desktop/app-logo.jpeg"
+                    "src": "sample-media/app-logo.jpeg"
                   }
                 },
                 "url": {
@@ -3774,7 +3774,7 @@
                     "body": {
                       "mode": "file",
                       "file": {
-                        "src": "/Users/sjambe/Desktop/app-logo.jpeg"
+                        "src": "sample-media/app-logo.jpeg"
                       }
                     },
                     "url": {
