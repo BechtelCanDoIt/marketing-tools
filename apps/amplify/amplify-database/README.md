@@ -12,16 +12,16 @@ Amplify DB Migrate: the Choreo Manual Task (and Compose one-shot) that builds th
 
 Run from this folder: `bal build`, `bal test`, `bal run`. Rules for writing scripts: never edit an applied migration, no `?` in scripts (the JDBC driver reads it as a bind marker), enums are `text` plus `CHECK`, views are `security_invoker`, and maintenance functions are `SECURITY DEFINER` with a pinned `search_path`. Details: `CLAUDE.md` in this folder.
 
-> **The data model below is a copy** of [`architecture/solution/Phase 1/phase1-data-model.md`](../../../../../architecture/solution/Phase%201/phase1-data-model.md) (pasted 2026-10-21, relative links adjusted). That file is the source of truth. Change it first, then refresh this copy.
+> **The data model below is a copy** of [`architecture/solution/Phase 1/phase1-data-model.md`](../architecture/solution/Phase%201/phase1-data-model.md) (pasted 2026-10-21, relative links adjusted). That file is the source of truth. Change it first, then refresh this copy.
 
 ---
 
 ## WSO2 Amplify — Phase 1 Data Model (DDD)
 
 Status: **Draft v2 for review** (2026-10-16)
-Builds on: [phase1-domains.md](../../../../../architecture/solution/Phase%201/phase1-domains.md) · Plan: [phase1-planned-todos.md](../../../../../projectmanagement/phase1-planned-todos.md) (M3)
+Builds on: [phase1-domains.md](../architecture/solution/Phase%201/phase1-domains.md) · Plan: [phase1-planned-todos.md](../docs/requirements/phase1-planned-todos.md) (M3)
 Database: **PostgreSQL 18** (Choreo-managed, Aiven), one database `amplify`.
-Audit mitigations applied 2026-10-16 ([requirements-map.md](../../../../../architecture/solution/Phase%201/requirements-map.md), Audit B–D). Phase labels follow the requirements-map [Other phases](../../../../../architecture/solution/Phase%201/requirements-map.md#other-phases-refine-later) table: "phase 2" means the Coin issuer and SLT reports; Community Management work is "future phase" (D5).
+Audit mitigations applied 2026-10-16 ([requirements-map.md](../architecture/solution/Phase%201/requirements-map.md), Audit B–D). Phase labels follow the requirements-map [Other phases](../architecture/solution/Phase%201/requirements-map.md#other-phases-refine-later) table: "phase 2" means the Coin issuer and SLT reports; Community Management work is "future phase" (D5).
 
 ## Contents
 
@@ -109,7 +109,7 @@ erDiagram
     CAMPAIGN ||..o| ANNOUNCEMENT : "announced once"
 ```
 
-| Schema | Context ([phase1-domains](../../../../../architecture/solution/Phase%201/phase1-domains.md)) | Tables | Written by |
+| Schema | Context ([phase1-domains](../architecture/solution/Phase%201/phase1-domains.md)) | Tables | Written by |
 | --- | --- | --- | --- |
 | `identity` | shared kernel | `employee` | api |
 | `campaign` | S1 Campaign | `campaign` (AR), `campaign_tag`, `category` | api |
@@ -191,7 +191,7 @@ erDiagram
 ```
 
 - Upserted by `amplify-api` on authenticated calls, so the leaderboard has a name and One WSO2 has an email to look up photo and team (ADR-009).
-- Data deletion is **deferred to a future phase** (C3, ADR-016). Phase 1 builds no `EmployeeErased` handling and no `erased_at` column. The pilot runs under a security checklist exception ([exception](../../../../../docs/security/checklist-exception-data-deletion.md)) with a manual interim process ([runbook](../../../../../docs/runbooks/data-deletion-interim.md)). The future design anonymizes rather than deletes, and still has to solve the immutable `points_ledger.employee_id`.
+- Data deletion is **deferred to a future phase** (C3, ADR-016). Phase 1 builds no `EmployeeErased` handling and no `erased_at` column. The pilot runs under a security checklist exception ([exception](../docs/security/checklist-exception-data-deletion.md)) with a manual interim process ([runbook](../docs/runbooks/data-deletion-interim.md)). The future design anonymizes rather than deletes, and still has to solve the immutable `points_ledger.employee_id`.
 
 **Virtual FKs:** none outgoing. `employee.employee_id` is the parent of every `employee_id`, `created_by`, `decided_by` and `actor_id` column (see the overview table).
 
@@ -433,7 +433,7 @@ erDiagram
 
 **Derived status** (`sharing.share_request_v`): `PUBLISHED` if `published_at`; `FAILED` if `failed_at`; else `QUEUED`. `engagement_v` adds `ACTIVE` / `DELETED` from `deleted_at`. These are the share states every doc uses (B14); there is no `PENDING` share state.
 
-**Kinds (B4):** `REPOST` / `REPOST_COMMENTARY` reshare the campaign post (`reshareContext.parent`). `SHARE` / `SHARE_COMMENTARY` create a new post that links to it, and are the fallback. The M0 D5 spike passed on 2026-10-20 (a member token can reshare an organization post), so the Amplify action is `REPOST` ([ADR-034](../../../../../architecture/decisions/ADR-034-share-is-a-repost.md)). All four are in the enums from the first migration, so the fallback needs no schema change.
+**Kinds (B4):** `REPOST` / `REPOST_COMMENTARY` reshare the campaign post (`reshareContext.parent`). `SHARE` / `SHARE_COMMENTARY` create a new post that links to it, and are the fallback. The M0 D5 spike passed on 2026-10-20 (a member token can reshare an organization post), so the Amplify action is `REPOST` ([ADR-034](../architecture/decisions/ADR-034-share-is-a-repost.md)). All four are in the enums from the first migration, so the fallback needs no schema change.
 
 **Retry after a failure reuses the row** (C2, ADR-015). When the employee shares again after a `FAILED` request (typically after reconnecting), `amplify-api` updates the same row in one transaction: clear `failed_at` and `failure_reason`, set the new `kind` / `commentary`, bump `attempts` and `version`, and write a fresh `RepostRequested` outbox row (idempotency key `share_request.id` + `attempts`). It's allowed only while the row is unpublished and the connection is `ACTIVE`. The unique key stays `(campaign_id, employee_id)`, so one row per campaign per employee still holds.
 
@@ -634,9 +634,9 @@ erDiagram
 | Team page (paged, search, sort) | index `(period_key, rank)`; `pg_trgm` GIN on `display_name` for search | index scan + `LIMIT` |
 | My monthly history | PK range on `(employee_id, month)` | one range scan |
 
-- Full queries and response shapes: [leaderboards.md](../../../../../architecture/solution/Phase%201/leaderboards.md).
+- Full queries and response shapes: [leaderboards.md](../architecture/solution/Phase%201/leaderboards.md).
 - **Re-ranking:** after inserting ledger rows, the score pass upserts the affected employees' totals, then re-ranks the period with one `UPDATE … FROM (SELECT dense_rank() …)`. At ~830 employees that's milliseconds. It then bumps `standing_version`. Built in M3 as SQL functions (V010): `recognition.apply_ledger_entry(reference, top_n)` (called by the ledger repository in the insert's transaction), `recognition.rerank(period, top_n)` and `recognition.rebuild(top_n)`.
-- **Recognition locks (V012, deep review 2026-10-17).** Two transaction-scoped advisory locks guard every recognition write, always in this order: (1) the app-level key **4242101**, taken by `store:lockRecognition` (`store:RECOGNITION_LOCK_KEY`), then (2) the SQL-level key **1634561133**, taken first thing inside `apply_ledger_entry`, `rerank` and `rebuild` (`store:RECOGNITION_SQL_LOCK_KEY`). The SQL lock stops two concurrent appends from re-ranking off their own snapshots (two people at rank 1) or deadlocking on row-lock order. The reverse order can deadlock, so `lockRecognition` must come before any of those functions in the same transaction. Both sites document it (the functions through V013's `COMMENT ON FUNCTION`); domain unit `testRecognitionLocksAreTakenInOrder` scans every call site and the DB IT checks that no SQL function takes 4242101. `lockRecognition` waits at most 2 s, because it runs inside the process-wide transaction gate ([ADR-032](../../../../../architecture/decisions/ADR-032-transaction-gate-ballerina-2201-13.md)). Every holder also sets a transaction-local 5 s `idle_in_transaction_session_timeout`.
+- **Recognition locks (V012, deep review 2026-10-17).** Two transaction-scoped advisory locks guard every recognition write, always in this order: (1) the app-level key **4242101**, taken by `store:lockRecognition` (`store:RECOGNITION_LOCK_KEY`), then (2) the SQL-level key **1634561133**, taken first thing inside `apply_ledger_entry`, `rerank` and `rebuild` (`store:RECOGNITION_SQL_LOCK_KEY`). The SQL lock stops two concurrent appends from re-ranking off their own snapshots (two people at rank 1) or deadlocking on row-lock order. The reverse order can deadlock, so `lockRecognition` must come before any of those functions in the same transaction. Both sites document it (the functions through V013's `COMMENT ON FUNCTION`); domain unit `testRecognitionLocksAreTakenInOrder` scans every call site and the DB IT checks that no SQL function takes 4242101. `lockRecognition` waits at most 2 s, because it runs inside the process-wide transaction gate ([ADR-032](../architecture/decisions/ADR-032-transaction-gate-ballerina-2201-13.md)). Every holder also sets a transaction-local 5 s `idle_in_transaction_session_timeout`.
 - **Caching:** `amplify-api` returns `ETag: <period>:<version>` and `Cache-Control: private, max-age=30`, and keeps an in-process cache keyed by version. One WSO2 sends `If-None-Match` and gets **304** when nothing changed. TanStack Query uses `staleTime: 60s`, prefetching when the Amplify menu opens.
 - **Target:** p95 under 50 ms at the API for leaderboard, position and Team pages (load test in M11).
 - **Rebuildable:** `POST /maintenance/rebuild-recognition` recomputes everything from the ledger. Recognition is never a source of truth.
@@ -731,13 +731,13 @@ erDiagram
 
 - **Outbox:** written in the same transaction as the aggregate change. Jobs claim with `FOR UPDATE SKIP LOCKED`. Partial index on `next_attempt_at WHERE status = 'PENDING'`. `DONE` rows older than 30 days are purged by the daily `POST /maintenance/partitions` call (B10). (Outbox keeps a `bigint` identity id because strict queue order matters more than global uniqueness.)
 - **Audit:** **retained 5 years** (decided; B17 closed the audit part of plan D7). Monthly partitions on `at`, created 3 months ahead. Partitions older than 60 months are detached and dropped by the same daily `/maintenance/partitions` call (which also creates partitions ahead and sweeps expired `oauth_state` rows), and each drop is itself audited. Append-only: insert/select grants only.
-- **Settings seed:** `leaderboard.top_n = 3`, `team.visibility = TEAM` ([leaderboards.md](../../../../../architecture/solution/Phase%201/leaderboards.md)), `campaign.default_window_days = 30` (C7), `po.review_sla_hours = 48` ([po-dashboard.md](../../../../../architecture/solution/Phase%201/po-dashboard.md)), `posts.window_days = 14`, `connection.reminder_days = 7`, `connection.token_grace_days = 5`, `audit.retention_months = 60`, `sharing.enabled = true`, `announcements.enabled = true`.
+- **Settings seed:** `leaderboard.top_n = 3`, `team.visibility = TEAM` ([leaderboards.md](../architecture/solution/Phase%201/leaderboards.md)), `campaign.default_window_days = 30` (C7), `po.review_sla_hours = 48` ([po-dashboard.md](../architecture/solution/Phase%201/po-dashboard.md)), `posts.window_days = 14`, `connection.reminder_days = 7`, `connection.token_grace_days = 5`, `audit.retention_months = 60`, `sharing.enabled = true`, `announcements.enabled = true`.
 
 ---
 
 ## Domain events → which table changes
 
-**This is the one event catalogue** for phase 1 (B9). [phase1-domains](../../../../../architecture/solution/Phase%201/phase1-domains.md#domain-events-outbox--jobs-table) and the plan link here instead of keeping their own lists. Every event is a `messaging.outbox` row (`event_type` = the name below), written in the same transaction as the producer's change, and claimed by `amplify-jobs` with `FOR UPDATE SKIP LOCKED`.
+**This is the one event catalogue** for phase 1 (B9). [phase1-domains](../architecture/solution/Phase%201/phase1-domains.md#domain-events-outbox--jobs-table) and the plan link here instead of keeping their own lists. Every event is a `messaging.outbox` row (`event_type` = the name below), written in the same transaction as the producer's change, and claimed by `amplify-jobs` with `FOR UPDATE SKIP LOCKED`.
 
 | Event (outbox `event_type`) | Publisher | Producer writes | Consumer | Consumer writes | Idempotency key |
 | --- | --- | --- | --- | --- | --- |
@@ -779,7 +779,7 @@ The migration user owns every object; app users never own tables, so they can't 
 | --- | --- |
 | `V011__announcement_thread_name.sql` | `announcement.chat_thread_name` (the thread Chat returns with each Club card, M6a). Recreates `announcement_v` to pick up the column and re-grants `SELECT` to the same roles as V008 |
 | `V012__recognition_lock_maintenance_timeout.sql` | `pg_advisory_xact_lock(1634561133)` first in `apply_ledger_entry`, `rerank`, `rebuild` (lock order above). `lock_timeout = 5s` on the six upkeep functions, so daily upkeep gives up instead of queueing every token and audit write behind an `ACCESS EXCLUSIVE` request; `run_partition_maintenance` takes advisory lock 1634561134 so two upkeep calls don't race. Owners and grants unchanged |
-| `V013__idle_timeout_dashboard_indexes.sql` | `ALTER ROLE amplify_api / amplify_jobs SET idle_in_transaction_session_timeout = '30s'` (runs as the bootstrap admin, before `SET LOCAL ROLE`), so a session the runtime leaves idle in a transaction releases its locks (R-13). Indexes `points_ledger (created_at)` and partial `share_request (failed_at) WHERE failed_at IS NOT NULL`, the two the planner used for the PO dashboard tiles (EXPLAIN in `projects/marketing-tools/apps/amplify/docs/migrations/2026-10-17-v013-idle-timeout-dashboard-indexes.md`). `COMMENT ON FUNCTION` for the lock order |
+| `V013__idle_timeout_dashboard_indexes.sql` | `ALTER ROLE amplify_api / amplify_jobs SET idle_in_transaction_session_timeout = '30s'` (runs as the bootstrap admin, before `SET LOCAL ROLE`), so a session the runtime leaves idle in a transaction releases its locks (R-13). Indexes `points_ledger (created_at)` and partial `share_request (failed_at) WHERE failed_at IS NOT NULL`, the two the planner used for the PO dashboard tiles (EXPLAIN in `docs/migrations/2026-10-17-v013-idle-timeout-dashboard-indexes.md`). `COMMENT ON FUNCTION` for the lock order |
 
 No script after V010 changes a grant (V011 only re-grants the recreated view). **Proposed, not applied** (jobs-db review D4/D5, H3; waiting on a decision): `REVOKE DELETE ON messaging.outbox, sharing.share_request, sharing.engagement, sharing.engagement_verification, connection.member_connection FROM amplify_api, amplify_jobs`; `REVOKE INSERT, UPDATE ON messaging.idempotency_key FROM amplify_jobs`; `REVOKE DELETE ON connection.oauth_state FROM amplify_jobs`; `REVOKE TEMPORARY ON DATABASE <db> FROM PUBLIC`. The grants table above is still what's in the database.
 
