@@ -15,7 +15,7 @@
 -- under the License.
 
 
--- V014: every action the points table prices, so later phases need no schema change (docs/proposals/point-values.md).
+-- V014: every action the points table prices, so later phases need no schema change (docs/requirements/point-values.md).
 -- Adds REACTION (like), COMMENT, CHALLENGE_ENTRY and CHALLENGE_WINNER to the actions a point rule can price and a
 -- ledger row can record. Nothing awards them yet: likes and comments need Community Management (phase 4) and the
 -- Amplify Challenge awards are PO adjustments until it has its own flow. `sharing.engagement.action` is unchanged

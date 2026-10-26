@@ -14,7 +14,7 @@
 -- specific language governing permissions and limitations
 -- under the License.
 
--- S005: pilot point values from the business, 2026-10-19 (docs/proposals/point-values.md, plan D6).
+-- S005: pilot point values from the business, 2026-10-19 (docs/requirements/point-values.md, plan D6).
 -- New versions of every rule, effective 2026-10-19 00:00 UTC; S001's values stay for awards made before
 -- then (append-only: points already earned are never recalculated).
 -- Which action earns what, by phase:

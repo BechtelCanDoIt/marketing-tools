@@ -14,7 +14,7 @@
 -- specific language governing permissions and limitations
 -- under the License.
 
--- S001: point rules (plan D6, docs/proposals/point-values.md; awaiting PO sign-off). Effective from the
+-- S001: point rules (plan D6, docs/requirements/point-values.md; awaiting PO sign-off). Effective from the
 -- epoch so any award time finds a rule. A change is a new row with a later effective_from (append-only).
 -- SHARE / SHARE_COMMENTARY are the D5 fallback kinds (B4) and price like their REPOST twins.
 -- OWN_POST_AMPLIFIED is the total; the ledger top-up is OWN_POST_AMPLIFIED − OWN_POST (C4).
