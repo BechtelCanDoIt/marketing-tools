@@ -11,7 +11,7 @@ Scope: everything the fork adds on top of upstream, read as `git diff $(git merg
 
 Method: the `security-review` skill, adapted to a fork-versus-upstream diff. I traced each candidate from the input to the sink, then checked it against the existing controls. The findings below are the ones that held up. Everything that did not hold up is in the "Not an issue, checked" list so nobody repeats the work.
 
-Carried forward from the v0.3 threat model, the v0.1 security checklist, [token-and-oauth-notes.md](../../architecture/security/token-and-oauth-notes.md) and the earlier reviews in this folder: see the last section. I did not edit any of them.
+Carried forward from the v0.3 threat model, the v0.1 security checklist, token-and-oauth-notes.md and the earlier reviews in this folder: see the last section. I did not edit any of them.
 
 ## Summary
 
