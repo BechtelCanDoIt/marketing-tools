@@ -1,10 +1,10 @@
 # R-13: parallel `transaction` blocks on Ballerina 2201.13.3
 
-Follow-up to finding R-13 in [2026-10-17-deep-review-amplify-domain.md](2026-10-17-deep-review-amplify-domain.md). The reproduction, scripts and raw results are outside the repo, in `amplify-wt/r13-probe/` (`main.bal`, `run-variants.sh`, `results-2201.13.3.txt`, `results-2201.14.1.txt`).
+Follow-up to finding R-13 in [2026-10-26-code-review-backend.md](2026-10-26-code-review-backend.md). The reproduction, scripts and raw results are outside the repo, in `amplify-wt/r13-probe/` (`main.bal`, `run-variants.sh`, `results-2201.13.3.txt`, `results-2201.14.1.txt`).
 
 ## Status (2026-10-17)
 
-Mitigated on 2201.13.3; the fix (the upgrade) is still open. Details in [round 2 item 12](2026-10-17-round2-handoffs.md#item-12-the-r-13-transaction-gate) and [ADR-032](../../../../../../architecture/decisions/ADR-032-transaction-gate-ballerina-2201-13.md).
+Mitigated on 2201.13.3; the fix (the upgrade) is still open. Details in [round 2 item 12](2026-10-17-round2-handoffs.md#item-12-the-r-13-transaction-gate) and [ADR-032](../../architecture/decisions/ADR-032-transaction-gate-ballerina-2201-13.md).
 
 **In place**
 
@@ -13,7 +13,7 @@ Mitigated on 2201.13.3; the fix (the upgrade) is still open. Details in [round 2
 - **`lockRecognition`** polls for at most **2 s** (`store:RECOGNITION_LOCK_WAIT_SECONDS`, was 10 s), because it now waits inside the gate.
 - **V013** sets `idle_in_transaction_session_timeout = '30s'` on `amplify_api` and `amplify_jobs`.
 - **Pool exhaustion fails readiness** in api and jobs: "Connection is not available" counts against the DB breaker, which opens and makes `/ready` answer 503 (api `testPoolExhaustionFailsReady`, jobs `poolExhaustionFailsReadiness`, jobs IT `realPoolExhaustionTripsTheBreaker`).
-- **Alert** on sessions idle in transaction for more than 30 s: [operations.md](../../../../../../docs/runbooks/operations.md) §11.
+- **Alert** on sessions idle in transaction for more than 30 s: [operations.md](../runbooks/operations.md) §11.
 - **Concurrency IT** `testGatedParallelWritesAllCommit` (5 rounds × 48 parallel PO adjustments through `store:inTransactionValue`):
   - gated: **5 of 5 green**, 240 of 240 committed, 0 failed, 0 idle in transaction;
   - gate removed locally: **2 of 3 red** (one run had 222 successes but 221 committed, so one lost commit, plus 18 failures; another had 1 failure).
