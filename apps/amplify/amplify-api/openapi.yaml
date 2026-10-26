@@ -1658,18 +1658,19 @@ components:
         email: {type: string, nullable: true, description: "Work email, the key to the people directory"}
     DashboardPersonBoard:
       type: object
-      required: [employeeId, displayName, reposts, repostsWithCommentary, posts, byCategory]
+      required: [employeeId, displayName, reposts, repostsWithCommentary, pointsThisMonth, posts, byCategory]
       properties:
         employeeId: {type: string}
         displayName: {type: string}
         email: {type: string, nullable: true}
         reposts: {type: integer, description: "Plain reposts"}
         repostsWithCommentary: {type: integer}
+        pointsThisMonth: {type: integer, description: "Points earned since the 1st (UTC), adjustments and reversals included"}
         posts:
           type: array
           items:
             type: object
-            required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, repostsWithCommentary]
+            required: [campaignId, title, categoryCode, categoryLabel, isPriority, opensAt, closesAt, reposts, repostsWithCommentary, points]
             properties:
               campaignId: {type: string}
               title: {type: string}
@@ -1680,16 +1681,18 @@ components:
               closesAt: {type: string, format: date-time}
               reposts: {type: integer}
               repostsWithCommentary: {type: integer}
+              points: {type: integer, description: "Points the person earned on this post (ledger, reversals included)"}
         byCategory:
           type: array
           items:
             type: object
-            required: [code, label, reposts, repostsWithCommentary]
+            required: [code, label, reposts, repostsWithCommentary, points]
             properties:
               code: {type: string}
               label: {type: string}
               reposts: {type: integer, description: "Plain reposts"}
               repostsWithCommentary: {type: integer}
+              points: {type: integer, description: "Points earned on this category's posts"}
     DashboardCampaigns:
       type: object
       required: [asOf, windowDays, campaigns, byCategory]
