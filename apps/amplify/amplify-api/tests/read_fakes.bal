@@ -586,7 +586,7 @@ isolated function mockExportRows(time:Utc 'from, time:Utc to) returns reporting:
 }
 
 @test:Mock {functionName: "personPosts"}
-isolated function mockPersonPosts(string employeeId) returns [reporting:PersonIdentity, reporting:PersonPost[]]?|error {
+isolated function mockPersonPosts(string employeeId) returns [reporting:PersonIdentity, reporting:PersonPost[], int]?|error {
     check dbGate();
     if employeeId == "nobody" {
         return ();
@@ -595,7 +595,7 @@ isolated function mockPersonPosts(string employeeId) returns [reporting:PersonId
     time:Utc closed = check time:utcFromString("2025-11-18T00:00:00Z");
     return [{employeeId, displayName: "Ada Lovelace", email: "ada@example.com"},
         [{campaignId: "p-launch", title: "Launch", categoryCode: "PRODUCT", categoryLabel: "Product", isPriority: true, opensAt: opened,
-            closesAt: closed, reposts: 1, repostsWithCommentary: 1},
+            closesAt: closed, reposts: 1, repostsWithCommentary: 1, points: 15},
         {campaignId: "p-event", title: "Event", categoryCode: "EVENT", categoryLabel: "Event", isPriority: false, opensAt: opened,
-            closesAt: closed, reposts: 0, repostsWithCommentary: 1}]];
+            closesAt: closed, reposts: 0, repostsWithCommentary: 1, points: 10}], 20];
 }

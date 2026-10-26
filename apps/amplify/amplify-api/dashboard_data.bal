@@ -106,12 +106,12 @@ isolated function exportRows(time:Utc 'from, time:Utc to) returns reporting:Expo
 # One person and the posts they reposted, for the person popup.
 #
 # + employeeId - Employee id
-# + return - The person and their posts, `()` when Amplify has never seen the id, or an error
-isolated function personPosts(string employeeId) returns [reporting:PersonIdentity, reporting:PersonPost[]]?|error {
+# + return - The person, their posts and the points they earned this month, `()` when Amplify has never seen the id, or an error
+isolated function personPosts(string employeeId) returns [reporting:PersonIdentity, reporting:PersonPost[], int]?|error {
     postgresql:Client pg = check db();
     reporting:PersonIdentity? who = check reporting:personIdentity(pg, employeeId);
     if who is () {
         return ();
     }
-    return [who, check reporting:personPosts(pg, employeeId)];
+    return [who, check reporting:personPosts(pg, employeeId), check reporting:personPointsThisMonth(pg, employeeId)];
 }
