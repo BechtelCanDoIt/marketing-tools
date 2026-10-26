@@ -1,6 +1,6 @@
 # WSO2 Amplify — Resilience Targets (plan M12)
 
-Resilience, recovery and detection targets for the Amplify phase 1 pilot (30 Oct 2026 – 29 Jan 2027). Written 2026-10-17. Pairs with [operations.md](operations.md) (the procedures) and [WSO2 Amplify Threat Model.docx](../security/WSO2%20Amplify%20Threat%20Model.docx) §6 (dependencies).
+Resilience, recovery and detection targets for the Amplify phase 1 pilot (30 Oct 2026 – 29 Jan 2027). Written 2026-10-17. Pairs with [operations.md](operations.md) (the procedures) and WSO2 Amplify Threat Model.docx §6 (dependencies).
 
 Owner: Scott. Escalation: PO team (product impact), WSO2 platform (Choreo/Aiven).
 

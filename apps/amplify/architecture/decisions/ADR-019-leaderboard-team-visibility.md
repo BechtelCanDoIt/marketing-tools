@@ -31,5 +31,5 @@ The first version of this ADR assumed a One WSO2 roster endpoint (`?email=<viewe
 
 - [leaderboards.md](../solution/Phase%201/leaderboards.md), [ADR-024](ADR-024-amplify-api-m5-boundaries.md) item 5
 - [ADR-009](ADR-009-people-data-from-one-wso2.md), [ADR-010](ADR-010-team-adjust-remove-po.md), [ADR-014](ADR-014-three-leaderboards-top-n.md)
-- [Threat model](../../docs/security/WSO2%20Amplify%20Threat%20Model.docx) (B-E3, AMP-R5, AMP-R9)
+- Threat model (B-E3, AMP-R5, AMP-R9)
 - [Phase 1 plan](../../docs/requirements/phase1-planned-todos.md) (M0 D13, M0c B15/A10)

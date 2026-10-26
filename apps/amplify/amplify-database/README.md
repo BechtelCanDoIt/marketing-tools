@@ -191,7 +191,7 @@ erDiagram
 ```
 
 - Upserted by `amplify-api` on authenticated calls, so the leaderboard has a name and One WSO2 has an email to look up photo and team (ADR-009).
-- Data deletion is **deferred to a future phase** (C3, ADR-016). Phase 1 builds no `EmployeeErased` handling and no `erased_at` column. The pilot runs under a security checklist exception ([exception](../docs/security/checklist-exception-data-deletion.md)) with a manual interim process ([runbook](../docs/runbooks/data-deletion-interim.md)). The future design anonymizes rather than deletes, and still has to solve the immutable `points_ledger.employee_id`.
+- Data deletion is **deferred to a future phase** (C3, ADR-016). Phase 1 builds no `EmployeeErased` handling and no `erased_at` column. The pilot runs under a security checklist exception (exception) with a manual interim process ([runbook](../docs/runbooks/data-deletion-interim.md)). The future design anonymizes rather than deletes, and still has to solve the immutable `points_ledger.employee_id`.
 
 **Virtual FKs:** none outgoing. `employee.employee_id` is the parent of every `employee_id`, `created_by`, `decided_by` and `actor_id` column (see the overview table).
 
