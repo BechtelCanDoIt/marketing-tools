@@ -19,6 +19,7 @@
 // `jsonBody` encoding of every large read (M11b), the PO dashboard cache, list validation, `/ready`.
 
 import amplify_api.auth;
+import amplify_common.types;
 import amplify_domain.store;
 
 import ballerina/http;
@@ -480,4 +481,37 @@ function testPeopleBoardsAreOpenToEveryEmployee() returns error? {
     test:assertEquals((check send("GET", "/leaderboard/people", (), token)).statusCode, 200,
             "the company board needs no directory");
     setDirectory("ok");
+}
+
+// ---- history rows for someone who is not a PO (threat model 6.4) ------------------------------------------------
+
+@test:Config {groups: ["reads"]}
+function testHistoryHidesPoReasonAndIdFromTeammates() returns error? {
+    types:LedgerEntry adjustment = {
+        reference: "ADJ-1", employeeId: "rv-b", campaignId: (), sourceType: types:ADJUSTMENT, sourceId: (),
+        action: (), points: -5, ruleId: (), reversesReference: (), reason: "Duplicate claim, HR looking at conduct",
+        actorId: "po-0001", correlationId: (), createdAt: [1760000000, 0], status: (), statusChangedAt: (),
+        paidAt: (), coinReference: ()
+    };
+    json row = ledgerDtoForTeammate(adjustment);
+    map<json> shown = <map<json>>row;
+    test:assertFalse(shown.hasKey("actorId"), "the PO's employee id stays internal");
+    test:assertEquals(shown["reason"], PO_ADJUSTMENT_LABEL, "a fixed label, never the PO's free text");
+    test:assertEquals(shown["points"], -5);
+
+    types:LedgerEntry reversal = adjustment.clone();
+    reversal.sourceType = types:REVERSAL;
+    reversal.reversesReference = "AMP-1";
+    test:assertEquals((<map<json>>ledgerDtoForTeammate(reversal))["reason"], PO_ADJUSTMENT_LABEL);
+
+    types:LedgerEntry award = adjustment.clone();
+    award.sourceType = types:ENGAGEMENT;
+    award.reason = ();
+    award.actorId = types:SYSTEM_ACTOR;
+    test:assertEquals((<map<json>>ledgerDtoForTeammate(award))["reason"], ());
+
+    // A PO still sees everything.
+    map<json> forPo = <map<json>>ledgerDto(adjustment).toJson();
+    test:assertEquals(forPo["actorId"], "po-0001");
+    test:assertEquals(forPo["reason"], "Duplicate claim, HR looking at conduct");
 }

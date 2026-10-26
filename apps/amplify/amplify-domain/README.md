@@ -14,7 +14,7 @@ Integration tests (group `integration`) need a migrated PostgreSQL 18; see `docs
 
 ## Domain map
 
-One module per bounded context under `modules/`. The context map below is copied from the [Phase 1 domain model](../../../../../architecture/solution/Phase%201/phase1-domains.md) (the source of truth; refresh this copy when it changes). `C` = core subdomain, `S` = supporting, `OHS/PL` = open host service + published language, `ACL` = anti-corruption layer.
+One module per bounded context under `modules/`. The context map below is copied from the [Phase 1 domain model](../architecture/solution/Phase%201/phase1-domains.md) (the source of truth; refresh this copy when it changes). `C` = core subdomain, `S` = supporting, `OHS/PL` = open host service + published language, `ACL` = anti-corruption layer.
 
 ```text
                                         WSO2 AMPLIFY · PHASE 1 CONTEXT MAP
@@ -86,5 +86,5 @@ C = core subdomain   S = supporting subdomain   OHS/PL = open host service + pub
 | S5 Announcements | Supporting | `announcements` | `announcement` | The Club chat card for a campaign, sent once |
 | Shared | | `identity`, `store` | `identity`, `messaging`, `audit`, `config` | Employee directory snapshot; the client, outbox and audit writers, SQL error mapping, partition upkeep |
 
-A context reads and writes only its own schema (no cross-context foreign keys, ADR-005). Contexts talk through events in the outbox: `CampaignRegistered`, `RepostRequested`, `EngagementRecorded`, `ConnectionReady` / `ConnectionRevoked`, `ExternalShareApproved`, and the `Points*` family. The full event catalogue is in [phase1-data-model](../../../../../architecture/solution/Phase%201/phase1-data-model.md). Which deployable runs which context is in the domain doc's "Mapping to the phase 1 deployables" table.
+A context reads and writes only its own schema (no cross-context foreign keys, ADR-005). Contexts talk through events in the outbox: `CampaignRegistered`, `RepostRequested`, `EngagementRecorded`, `ConnectionReady` / `ConnectionRevoked`, `ExternalShareApproved`, and the `Points*` family. The full event catalogue is in [phase1-data-model](../architecture/solution/Phase%201/phase1-data-model.md). Which deployable runs which context is in the domain doc's "Mapping to the phase 1 deployables" table.
 

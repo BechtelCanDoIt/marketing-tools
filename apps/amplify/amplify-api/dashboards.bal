@@ -553,7 +553,7 @@ isolated function personBoard(reporting:PersonIdentity who, reporting:PersonPost
         reposts: plain,
         repostsWithCommentary: commented,
         pointsThisMonth,
-        posts: from reporting:PersonPost p in posts
+        campaigns: from reporting:PersonPost p in posts
             select {
                 campaignId: p.campaignId,
                 title: p.title,

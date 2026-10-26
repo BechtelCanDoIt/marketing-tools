@@ -1352,7 +1352,7 @@ components:
         campaignId: {type: string, format: uuid}
     LedgerEntry:
       type: object
-      required: [reference, employeeId, sourceType, points, actorId, createdAt]
+      required: [reference, employeeId, sourceType, points, createdAt]
       properties:
         reference: {type: string}
         employeeId: {type: string}
@@ -1360,9 +1360,9 @@ components:
         sourceType: {type: string, enum: [ENGAGEMENT, EXTERNAL_SHARE, ADJUSTMENT, REVERSAL]}
         action: {type: string, nullable: true}
         points: {type: integer}
-        reason: {type: string, nullable: true}
+        reason: {type: string, nullable: true, description: "A PO's free text. Callers who are not a PO get the fixed label 'Adjusted by the PO team' on adjustment and reversal rows, and null on the others"}
         reversesReference: {type: string, nullable: true}
-        actorId: {type: string}
+        actorId: {type: string, description: "The PO's employee id. Omitted for callers who are not a PO"}
         createdAt: {type: string, format: date-time}
         status: {type: string, nullable: true, enum: [HELD, PAID]}
 
@@ -1658,7 +1658,7 @@ components:
         email: {type: string, nullable: true, description: "Work email, the key to the people directory"}
     DashboardPersonBoard:
       type: object
-      required: [employeeId, displayName, reposts, repostsWithCommentary, pointsThisMonth, posts, byCategory]
+      required: [employeeId, displayName, reposts, repostsWithCommentary, pointsThisMonth, campaigns, byCategory]
       properties:
         employeeId: {type: string}
         displayName: {type: string}
@@ -1666,7 +1666,7 @@ components:
         reposts: {type: integer, description: "Plain reposts"}
         repostsWithCommentary: {type: integer}
         pointsThisMonth: {type: integer, description: "Points earned since the 1st (UTC), adjustments and reversals included"}
-        posts:
+        campaigns:
           type: array
           items:
             type: object
