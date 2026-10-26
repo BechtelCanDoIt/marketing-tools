@@ -563,6 +563,8 @@ public type PersonPost record {|
     int reposts;
     # 1 when the person reposted it with their own comment
     int repostsWithCommentary;
+    # Points the person earned on it, from the ledger (reversals and adjustments on the post included)
+    int points;
 |};
 
 # A person as Amplify knows them.
@@ -601,14 +603,18 @@ public isolated function personIdentity(postgresql:Client db, string employeeId)
 # + return - One row per campaign, or an error
 public isolated function personPosts(postgresql:Client db, string employeeId) returns PersonPost[]|error {
     stream<record {|string id; string title; string category_code; string category_label; boolean is_priority;
-            time:Utc opens_at; time:Utc closes_at; int plain; int commented;|}, error?> rows = db->query(`
+            time:Utc opens_at; time:Utc closes_at; int plain; int commented; int points;|}, error?> rows = db->query(`
         SELECT c.id::text AS id, c.title, c.category_code, COALESCE(cat.label, c.category_code) AS category_label,
                c.is_priority, c.opens_at, c.closes_at,
                count(*) FILTER (WHERE e.action NOT IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY'))::int AS plain,
-               count(*) FILTER (WHERE e.action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY'))::int AS commented
+               count(*) FILTER (WHERE e.action IN ('REPOST_COMMENTARY', 'SHARE_COMMENTARY'))::int AS commented,
+               COALESCE(max(pts.points), 0)::int AS points
         FROM sharing.engagement_v e
         JOIN campaign.campaign c ON c.id = e.campaign_id
         LEFT JOIN campaign.category cat ON cat.code = c.category_code
+        LEFT JOIN (SELECT campaign_id, sum(points) AS points FROM scoring.points_ledger
+                   WHERE employee_id = ${employeeId} AND campaign_id IS NOT NULL GROUP BY campaign_id) pts
+               ON pts.campaign_id = c.id
         WHERE e.status = 'ACTIVE' AND e.employee_id = ${employeeId}
         GROUP BY c.id, c.title, c.category_code, cat.label, c.is_priority, c.opens_at, c.closes_at
         ORDER BY c.opens_at DESC, c.id
@@ -617,6 +623,19 @@ public isolated function personPosts(postgresql:Client db, string employeeId) re
         select {
             campaignId: r.id, title: r.title, categoryCode: r.category_code, categoryLabel: r.category_label,
             isPriority: r.is_priority, opensAt: r.opens_at, closesAt: r.closes_at, reposts: r.plain,
-            repostsWithCommentary: r.commented
+            repostsWithCommentary: r.commented, points: r.points
         };
+}
+
+# Points a person earned since the 1st of this month (UTC), from the ledger. Adjustments and reversals count, so it
+# matches their standing.
+#
+# + db - Client
+# + employeeId - Employee id
+# + return - Points, or an error
+public isolated function personPointsThisMonth(postgresql:Client db, string employeeId) returns int|error {
+    return db->queryRow(`
+        SELECT COALESCE(sum(points), 0)::int FROM scoring.points_ledger
+        WHERE employee_id = ${employeeId}
+          AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`);
 }
