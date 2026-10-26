@@ -83,16 +83,16 @@ No **Skipped gate** (High) findings: nothing is in stage or prod yet, so no late
 
 **Outputs**
 
-- Security Checklist document: [architecture/security/WSO2 Amplify Application Deployment Security Checklist.docx](../security/WSO2%20Amplify%20Application%20Deployment%20Security%20Checklist.docx) (M10).
-- Threat Model document: [architecture/security/WSO2 Amplify Threat Model.docx](../security/WSO2%20Amplify%20Threat%20Model.docx) (M10), built on the Stage 2 SAD.
+- Security Checklist document: architecture/security/WSO2 Amplify Application Deployment Security Checklist.docx (M10).
+- Threat Model document: architecture/security/WSO2 Amplify Threat Model.docx (M10), built on the Stage 2 SAD.
 - Token/OAuth specifics: [architecture/security/token-and-oauth-notes.md](../../architecture/security/token-and-oauth-notes.md).
-- Checklist exception for deferred data deletion: [docs/security/checklist-exception-data-deletion.md](../security/checklist-exception-data-deletion.md), **awaiting security team approval**.
+- Checklist exception for deferred data deletion: **awaiting security team approval**.
 
 **Gate:** +1 from the security team; route to `sc-team@wso2.com`.
 
 **Status:** outputs produced in this milestone; **security +1 pending**, and the data-deletion exception still needs sign-off. Owner: Sec / Scott. Actions:
 
-1. Book the threat-model review session; record notes and action items; raise GitHub issues for any open threat; update the risk registry ([threat model § risk registry](../security/WSO2%20Amplify%20Threat%20Model.docx)).
+1. Book the threat-model review session; record notes and action items; raise GitHub issues for any open threat; update the risk registry (threat model § risk registry).
 2. Move the threat model into Security Review Documents after review.
 3. Get the data-deletion checklist exception approved (Security + Legal/Privacy).
 
@@ -180,7 +180,7 @@ What changed since the first walk: the phase breakdown was updated (phase 1 = re
 
 What changed since 19 Oct: about 20 backend feature commits and the One WSO2 dashboards (role-gated boards, person board, CSV export, open leaderboards, headcount), Novera now carries the campaign announcement, and people-app returns the employee's house. The ADRs run to 037. The 24 Oct phase breakdown produced the [epic map](epic-map.md) and 108 issues. The workspace-level architecture, docs and plan moved into this repo. Nothing is in a deployed environment that I can see, and no PR is open upstream yet. I split the fork's work into 133 small PRs for review (the ledger lives with the upstream PR plan outside this repo).
 
-I re-ran the EA, integration-boundary, code, security and project-structure reviews today and replaced the 17 and 19 Oct versions. The threat model (v0.4) and security checklist (v0.2) are regenerated on the official WSO2 `.docx` templates, in [docs/security](../security/WSO2%20Amplify%20Threat%20Model.docx). They are drafts and need a manual read before they go to `sc-team@`.
+I re-ran the EA, integration-boundary, code, security and project-structure reviews today and replaced the 17 and 19 Oct versions. The threat model (v0.4) and security checklist (v0.2) are regenerated on the official WSO2 `.docx` templates, kept outside this repo for now. They are drafts and need a manual read before they go to `sc-team@`.
 
 **Headline.** Amplify is still at the end of Stage 4 with Stage 5 outputs written but stale. The team has kept the paper trail current: 37 ADRs, five fresh reviews with no High findings in the code or the security pass, and 458 backend tests passing (one stale database test fails, see R15). Still no skipped gate, because nothing is deployed. The risk is the calendar. Go-live is 31 Oct, five days out.
 

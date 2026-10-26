@@ -1,6 +1,6 @@
 # Runbook: Employee Data-Deletion Request (interim, phase 1 pilot)
 
-Status: Draft (2026-10-16). Valid while the [checklist exception](../security/checklist-exception-data-deletion.md) is open.
+Status: Draft (2026-10-16). Valid while the checklist exception is open.
 Owner: Amplify technical owner (Scott Bechtel). Backup: a second Amplify engineer with prod DB access.
 Why it's manual: [ADR-016](../../architecture/decisions/ADR-016-erasure-deferred.md).
 

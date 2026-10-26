@@ -2,7 +2,7 @@
 
 Verification notes for the security-critical claims in the threat model and the deployment checklist. Every claim below was checked against the code on `feat/phase1-build` (2026-10-17), and re-checked after deep review rounds 1 and 2 ([review docs](../../docs/reviews/)); the **file** is named so the control can be re-verified. Where a control is partial or missing it is marked **gap** and the required work is stated — nothing here claims a control the code does not have.
 
-Paths are under `projects/marketing-tools/apps/amplify/` unless noted. Companion docs: [WSO2 Amplify Threat Model.docx](../../docs/security/WSO2%20Amplify%20Threat%20Model.docx), [WSO2 Amplify Application Deployment Security Checklist.docx](../../docs/security/WSO2%20Amplify%20Application%20Deployment%20Security%20Checklist.docx).
+Paths are under `projects/marketing-tools/apps/amplify/` unless noted. Companion docs: WSO2 Amplify Threat Model.docx, WSO2 Amplify Application Deployment Security Checklist.docx.
 
 ## Claim verification summary
 

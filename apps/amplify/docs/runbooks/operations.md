@@ -4,7 +4,7 @@ Operational procedures for the Amplify phase 1 pilot. Every procedure gives the 
 
 Owner: Scott (technical). Escalation: PO team for product impact, WSO2 platform for Choreo/Aiven.
 
-**Companion runbooks** (linked, not duplicated): [choreo-deploy.md](choreo-deploy.md) · [identity-setup.md](identity-setup.md) · [google-chat-webhook.md](google-chat-webhook.md) · [data-deletion-interim.md](data-deletion-interim.md) · [resilience-targets.md](resilience-targets.md) · [checklist exception: data deletion](../security/checklist-exception-data-deletion.md).
+**Companion runbooks** (linked, not duplicated): [choreo-deploy.md](choreo-deploy.md) · [identity-setup.md](identity-setup.md) · [google-chat-webhook.md](google-chat-webhook.md) · [data-deletion-interim.md](data-deletion-interim.md) · [resilience-targets.md](resilience-targets.md) · checklist exception: data deletion.
 
 Paths: `apps/…` = `projects/marketing-tools/apps/amplify/…`. Local commands run from `projects/marketing-tools/apps/amplify/`. In Choreo the same work is a console action (no shell) — those steps are marked **[console]**.
 
@@ -145,7 +145,7 @@ The scheduler is the pinned image `akorn/scheduler:1.7.8@sha256:07462c…`, UID 
 
 ## 9. Data-deletion request
 
-Phase 1 defers the built-in deletion path (audit C3; ADR-016). Use the **manual interim process**: [data-deletion-interim.md](data-deletion-interim.md). The pilot runs under an exception: [checklist exception: data deletion](../security/checklist-exception-data-deletion.md) (awaiting Security + Legal approval).
+Phase 1 defers the built-in deletion path (audit C3; ADR-016). Use the **manual interim process**: [data-deletion-interim.md](data-deletion-interim.md). The pilot runs under an exception: checklist exception: data deletion (awaiting Security + Legal approval).
 
 Key points: Remove Connection deletes tokens at once; the interim process anonymizes the employee row and drops provider identity; backups retain deleted data until backup retention ends. Record every request as an audit `EMPLOYEE_DATA_DELETION_MANUAL` row with the ticket id.
 
