@@ -524,9 +524,12 @@ isolated function dashboardExport(string? correlationId, string 'from, string to
 #
 # + who - The person
 # + posts - Their posts, newest first
+# + pointsThisMonth - Points earned since the 1st (UTC)
 # + return - Body
-isolated function personBoard(reporting:PersonIdentity who, reporting:PersonPost[] posts) returns json {
+isolated function personBoard(reporting:PersonIdentity who, reporting:PersonPost[] posts, int pointsThisMonth = 0)
+        returns json {
     map<[int, int]> byCode = {};
+    map<int> pointsByCode = {};
     map<string> labels = {};
     int plain = 0;
     int commented = 0;
@@ -536,17 +539,20 @@ isolated function personBoard(reporting:PersonIdentity who, reporting:PersonPost
         [int, int] cur = byCode[p.categoryCode] ?: [0, 0];
         byCode[p.categoryCode] = [cur[0] + p.reposts, cur[1] + p.repostsWithCommentary];
         labels[p.categoryCode] = p.categoryLabel;
+        pointsByCode[p.categoryCode] = (pointsByCode[p.categoryCode] ?: 0) + p.points;
     }
     json[] categories = from string code in byCode.keys()
         let [int, int] n = byCode.get(code)
         order by n[0] + n[1] descending, labels.get(code) ascending
-        select {code, label: labels.get(code), reposts: n[0], repostsWithCommentary: n[1]};
+        select {code, label: labels.get(code), reposts: n[0], repostsWithCommentary: n[1],
+            points: pointsByCode[code] ?: 0};
     return {
         employeeId: who.employeeId,
         displayName: who.displayName,
         email: who.email,
         reposts: plain,
         repostsWithCommentary: commented,
+        pointsThisMonth,
         posts: from reporting:PersonPost p in posts
             select {
                 campaignId: p.campaignId,
@@ -557,7 +563,8 @@ isolated function personBoard(reporting:PersonIdentity who, reporting:PersonPost
                 opensAt: ts(p.opensAt),
                 closesAt: ts(p.closesAt),
                 reposts: p.reposts,
-                repostsWithCommentary: p.repostsWithCommentary
+                repostsWithCommentary: p.repostsWithCommentary,
+                points: p.points
             },
         byCategory: categories
     };
@@ -566,11 +573,11 @@ isolated function personBoard(reporting:PersonIdentity who, reporting:PersonPost
 isolated function dashboardPerson(string? correlationId, string employeeId) returns http:Response|ProblemResponse|error {
     do {
         check maxLen(employeeId, 255, "employeeId");
-        [reporting:PersonIdentity, reporting:PersonPost[]]? found = check personPosts(employeeId);
+        [reporting:PersonIdentity, reporting:PersonPost[], int]? found = check personPosts(employeeId);
         if found is () {
             return notFound("Person not found", correlationId);
         }
-        return boardResponse(personBoard(found[0], found[1]));
+        return boardResponse(personBoard(found[0], found[1], found[2]));
     } on fail error e {
         return failure(e, correlationId, "Person board");
     }
