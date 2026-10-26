@@ -15,7 +15,7 @@
 -- under the License.
 
 
--- S006: the rest of the pilot points table (business, 2026-10-19; docs/proposals/point-values.md), so no value is
+-- S006: the rest of the pilot points table (business, 2026-10-19; docs/requirements/point-values.md), so no value is
 -- overlooked when its phase arrives. Same effective date as S005; S005 stays as applied (forward-only).
 --   Like on an Amplify post on LinkedIn ............ REACTION = 1     (phase 4: Community Management)
 --   Comment on an Amplify post on LinkedIn ......... COMMENT = 1      (phase 4)
