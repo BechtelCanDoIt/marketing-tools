@@ -6772,7 +6772,7 @@
                 "body": {
                   "mode": "file",
                   "file": {
-                    "src": "/Users/sjambe/Desktop/TestDocument.pdf"
+                    "src": "sample-media/TestDocument.pdf"
                   }
                 },
                 "url": {
