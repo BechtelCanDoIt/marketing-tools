@@ -92,11 +92,11 @@ that never happened, and leaks the pool connection.
   - claim 6 / §2 gaps (ID-token validation): now implemented, behind `linkedinIdTokenValidation`, default off; no nonce, no PKCE (native-client-only at LinkedIn);
   - §2 gap 3 / api H6 (redirect URI assertion): unchanged by this round, still pending the docs pass;
   - the issuer disagreement (common RC-13).
-- `architecture/security/threat-model-phase1.md`:
+- `architecture/security/WSO2 Amplify Threat Model.docx`:
   - row 2.2 (ID token) and row 2.5;
   - AMP-R2 (key rotation);
   - row 4.6 wording (domain H-6, from round 1).
-- `architecture/security/deployment-security-checklist.md` lines ~100 and ~113: DB TLS goes from "Met w/ exception" to met once `BAL_CONFIG_VAR_DBSSLROOTCERT` is set per environment (the code default is `VERIFY_FULL`).
+- `architecture/security/WSO2 Amplify Application Deployment Security Checklist.docx` lines ~100 and ~113: DB TLS goes from "Met w/ exception" to met once `BAL_CONFIG_VAR_DBSSLROOTCERT` is set per environment (the code default is `VERIFY_FULL`).
 - `architecture/solution/Phase 1/phase1-data-model.md`:
   - "As built" should cover V011–V013;
   - the `idle_in_transaction_session_timeout` role setting;

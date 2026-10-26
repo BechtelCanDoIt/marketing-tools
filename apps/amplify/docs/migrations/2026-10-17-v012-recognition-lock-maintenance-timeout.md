@@ -1,7 +1,7 @@
 # V012: recognition writers serialized, upkeep lock waits bounded (2026-10-17)
 
 Script: `amplify-database/migrations/V012__recognition_lock_maintenance_timeout.sql`. Found in the deep
-review of jobs/db/infra (`docs/reviews/2026-10-17-deep-review-jobs-db-infra.md`, findings D1 and D2).
+review of jobs/db/infra (`docs/reviews/2026-10-26-code-review-backend.md`, findings D1 and D2).
 
 ## Context
 
