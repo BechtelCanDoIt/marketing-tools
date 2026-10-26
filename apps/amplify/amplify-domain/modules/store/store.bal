@@ -156,7 +156,7 @@ public const decimal RECOGNITION_LOCK_WAIT_SECONDS = 2;
 # `pg_advisory_xact_lock`, so a waiter never sits inside a JDBC call and gives up after `maxWaitSeconds`
 # with an error instead of hanging. In the review's concurrency test a blocking wait hung the process
 # for good when a holder stopped committing (a Ballerina runtime race, R-13 in
-# docs/reviews/2026-10-17-deep-review-amplify-domain.md); polling plus the idle timeout below bounds
+# docs/reviews/2026-10-26-code-review-backend.md); polling plus the idle timeout below bounds
 # that to seconds.
 #
 # Runs inside the transaction gate (`inTransaction`, round 2 item 12), so the poll is capped at

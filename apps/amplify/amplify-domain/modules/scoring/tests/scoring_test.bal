@@ -237,6 +237,19 @@ function adjustmentNeedsReasonAndNonZeroPoints() returns error? {
 }
 
 @test:Config
+function aPoCannotAdjustOrReverseTheirOwnPoints() returns error? {
+    InMemoryLedger ledger = new;
+    test:assertEquals(code(adjustPoints(ledger, "po-1", 10, "Top up", "po-1", (), (), T0)), types:ERR_SELF_REVIEW);
+    test:assertEquals(ledger.total("po-1"), 0, "nothing is written");
+    types:LedgerEntry own = check adjustPoints(ledger, "emp-1", 10, "Correction", "po-1", (), (), T0);
+    test:assertEquals(code(reverseEntry(ledger, own.reference, "Undo", "emp-1", (), T0)), types:ERR_SELF_REVIEW,
+        "the person the points belong to can't reverse them either");
+    test:assertEquals(ledger.total("emp-1"), 10);
+    types:LedgerEntry rev = check reverseEntry(ledger, own.reference, "Undo", "po-1", (), T0);
+    test:assertEquals(rev.points, -10);
+}
+
+@test:Config
 function settlementChangesOnlyStatusAndNoPaidInPhase1() returns error? {
     LedgerAppend a = check awardForEngagement(rules(), engagement(), (), T0);
     types:LedgerEntry flagged = check changeSettlement(a.entry, (), types:addDays(T0, 1));

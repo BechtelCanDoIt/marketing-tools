@@ -340,8 +340,9 @@ isolated function history(auth:Principal p, string? correlationId, string employ
             }
         }
         scoring:LedgerPage result = check ledgerHistory(target, page, size);
+        boolean po = isPo(p);
         return {employeeId: target, page, size, total: result.total,
-            items: from types:LedgerEntry e in result.items select ledgerDto(e).toJson()};
+            items: from types:LedgerEntry e in result.items select po ? ledgerDto(e).toJson() : ledgerDtoForTeammate(e)};
     } on fail error e {
         return failure(e, correlationId, "Points history");
     }

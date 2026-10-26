@@ -287,6 +287,22 @@ isolated function ledgerDto(types:LedgerEntry e) returns LedgerEntryDto => {
     status: e.status
 };
 
+# Label shown in place of a PO's free-text reason on adjustment and reversal rows.
+const string PO_ADJUSTMENT_LABEL = "Adjusted by the PO team";
+
+# A ledger row for someone who is not a PO. The PO's free-text reason and employee id stay internal (threat model
+# 5.4): adjustment and reversal rows carry a fixed label and no `actorId`.
+#
+# + e - Ledger row
+# + return - The row as JSON without `actorId`
+isolated function ledgerDtoForTeammate(types:LedgerEntry e) returns json {
+    map<json> row = <map<json>>ledgerDto(e).toJson();
+    _ = row.remove("actorId");
+    boolean byPo = e.sourceType == types:ADJUSTMENT || e.sourceType == types:REVERSAL;
+    row["reason"] = byPo ? PO_ADJUSTMENT_LABEL : ();
+    return row;
+}
+
 isolated function pointRuleDto(scoring:PointRule r, scoring:PointRule[] all, time:Utc now) returns PointRuleDto {
     scoring:PointRule|types:DomainError current = scoring:ruleInForce(all, r.action, now);
     return {

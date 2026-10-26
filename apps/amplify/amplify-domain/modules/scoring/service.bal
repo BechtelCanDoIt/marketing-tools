@@ -142,6 +142,9 @@ public isolated function amplifiedTopUp(PointRule[] rules, ExternalShareFact fac
 # + return - Row and event, or a domain error
 public isolated function reversal(types:LedgerEntry original, types:LedgerEntry? existingReversal, string reason,
         string actorId, string id, string? correlationId, time:Utc now) returns LedgerAppend|types:DomainError {
+    if original.employeeId == actorId {
+        return types:domainError(types:ERR_SELF_REVIEW, "You can't reverse your own points");
+    }
     if original.sourceType == types:REVERSAL {
         return types:domainError(types:ERR_CANNOT_REVERSE_REVERSAL, "A reversal can't be reversed; add an adjustment");
     }
@@ -180,9 +183,12 @@ public isolated function reversal(types:LedgerEntry original, types:LedgerEntry?
 # + id - New UUIDv7
 # + correlationId - Request correlation id
 # + now - Insert time
-# + return - Row and event, or a domain error
+# + return - Row and event, or a domain error (`SELF_REVIEW` when the PO adjusts their own points)
 public isolated function adjustment(types:EmployeeId employeeId, int points, string reason, types:EmployeeId actorId,
         string? campaignId, string id, string? correlationId, time:Utc now) returns LedgerAppend|types:DomainError {
+    if employeeId == actorId {
+        return types:domainError(types:ERR_SELF_REVIEW, "You can't adjust your own points");
+    }
     if points == 0 {
         return types:domainError(types:ERR_INVALID_POINTS, "An adjustment must change the points");
     }

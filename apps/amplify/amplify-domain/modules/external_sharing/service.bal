@@ -112,7 +112,7 @@ public isolated function reject(ExternalShare claim, types:EmployeeId poId, stri
 
 # Marks an approved claim as amplified by WSO2 or a senior leader (C4). Only once, only after approval,
 # and never by the claimant: marking pays the top-up, so a PO can't mark their own claim (same rule as
-# the decision, threat model 4.6).
+# the decision, threat model 5.6).
 #
 # + claim - Approved claim
 # + now - Current time
