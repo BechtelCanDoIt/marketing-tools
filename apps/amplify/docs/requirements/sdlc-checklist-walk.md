@@ -85,7 +85,7 @@ No **Skipped gate** (High) findings: nothing is in stage or prod yet, so no late
 
 - Security Checklist document: architecture/security/WSO2 Amplify Application Deployment Security Checklist.docx (M10).
 - Threat Model document: architecture/security/WSO2 Amplify Threat Model.docx (M10), built on the Stage 2 SAD.
-- Token/OAuth specifics: [architecture/security/token-and-oauth-notes.md](../../architecture/security/token-and-oauth-notes.md).
+- Token/OAuth specifics: token-and-oauth-notes.md.
 - Checklist exception for deferred data deletion: **awaiting security team approval**.
 
 **Gate:** +1 from the security team; route to `sc-team@wso2.com`.

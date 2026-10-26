@@ -61,7 +61,7 @@ The outbox is `messaging.outbox`, status ∈ {`PENDING`,`IN_PROGRESS`,`DONE`,`FA
 
 Keys live in the Choreo secret `TOKENKEYS` (`keyId:base64Key[,keyId:base64Key…]`) with `TOKENCURRENTKEYID` selecting the sealing key; both `amplify-api` and `amplify-jobs` read them (`amplify-api/outbound.bal`, `amplify-jobs/config.bal`).
 
-**Rotation re-encrypts automatically (deep review 2026-10-17).** Old-key rows move to the active key in two ways ([token-and-oauth-notes.md](../../architecture/security/token-and-oauth-notes.md) §1): `amplify-jobs` re-seals a token right after it opens it for a share, and the nightly `POST /maintenance/partitions` re-seals every remaining old-key row, up to 10,000 per pass. So an old key can leave the ring as soon as no row needs it; you don't have to wait for partitions to drop.
+**Rotation re-encrypts automatically (deep review 2026-10-17).** Old-key rows move to the active key in two ways (token-and-oauth-notes.md §1): `amplify-jobs` re-seals a token right after it opens it for a share, and the nightly `POST /maintenance/partitions` re-seals every remaining old-key row, up to 10,000 per pass. So an old key can leave the ring as soon as no row needs it; you don't have to wait for partitions to drop.
 
 1. Generate a new 32-byte key: `openssl rand -base64 32`.
 2. Append it to `TOKENKEYS`, e.g. `prod-1:<old>,prod-2:<new>`, and set `TOKENCURRENTKEYID=prod-2` **[console]** for **both** `amplify-api` and `amplify-jobs`, then redeploy both. (Keep the two in step: if api still seals with `prod-1`, new rows keep landing on the old key.)
