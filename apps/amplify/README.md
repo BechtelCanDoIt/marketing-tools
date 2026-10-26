@@ -3,7 +3,7 @@
 Amplify helps WSO2 employees share company LinkedIn posts, earn points and show up on the leaderboards in One WSO2.
 This folder (`apps/amplify` in the marketing-tools repo) holds the backend. The UI is the Amplify module in One WSO2, `webapp/src/features/amplify`.
 
-> Repo home (plan M0 D12): Amplify lives in marketing-tools, a fork of `wso2-open-operations/marketing-tools`, so it ships through a WSO2-managed org with the other marketing apps ([ADR-033](../../../../architecture/decisions/ADR-033-amplify-lives-in-marketing-tools.md), superseding ADR-030).
+> Repo home (plan M0 D12): Amplify lives in marketing-tools, a fork of `wso2-open-operations/marketing-tools`, so it ships through a WSO2-managed org with the other marketing apps ([ADR-033](architecture/decisions/ADR-033-amplify-lives-in-marketing-tools.md), superseding ADR-030).
 
 ## Layout
 
@@ -36,7 +36,7 @@ cd ../amplify-api && bal build && bal test
 
 Database: migrations, seeds and the integration-test recipe against PostgreSQL 18 are in [docs/migrations/README.md](docs/migrations/README.md).
 
-Docker images build from a clean checkout (the shared packages are packed inside the build stage). Each component has its own Docker context, because Choreo reads `<context>/.choreo/component.yaml` ([ADR-027](../../../../architecture/decisions/ADR-027-per-component-docker-contexts.md)):
+Docker images build from a clean checkout (the shared packages are packed inside the build stage). Each component has its own Docker context, because Choreo reads `<context>/.choreo/component.yaml` ([ADR-027](architecture/decisions/ADR-027-per-component-docker-contexts.md)):
 
 ```sh
 docker build -f amplify-api/Dockerfile -t amplify-api .
@@ -110,7 +110,7 @@ Every setting is a Ballerina `configurable`, set through `BAL_CONFIG_VAR_<NAME>`
 
 Scheduler: `DSN` (secret, its own database/user). Mock LinkedIn: `LISTENERHOST=0.0.0.0`, `WWWBASEURL`, `CLIENTID`, `CLIENTSECRET` (secret), `ENABLEMOCKADMIN`, and `BAL_CONFIG_DATA` for `redirectUris`. Tuning knobs with safe defaults (run batch sizes, timeouts, breakers, LinkedIn ceilings) are in each component's `config.bal`; set them the same way when needed.
 
-Deploying to Choreo: [docs/runbooks/choreo-deploy.md](../../../../docs/runbooks/choreo-deploy.md).
+Deploying to Choreo: [docs/runbooks/choreo-deploy.md](docs/runbooks/choreo-deploy.md).
 
 ### LinkedIn: mock or real
 
@@ -135,7 +135,7 @@ Before you switch:
 - **The mock container still starts** (Compose depends on it), but only ever gets the made-up mock credentials, never your real app's. That's harmless locally.
 - **The e2e script only works against the mock.** It scripts the mock's sign-in page and refuses to run when `LINKEDIN_USE_MOCK=false`. Set it back to `true` before `make e2e` or `make test-all`.
 
-In Choreo it's the same settings per environment. Dev uses the LinkedIn Mock component, and prod uses `https://api.linkedin.com` / `https://www.linkedin.com` with the prod app (see [choreo-deploy.md](../../../../docs/runbooks/choreo-deploy.md) C2 and C6). The go-live check is that no LinkedIn Mock URL is set in prod.
+In Choreo it's the same settings per environment. Dev uses the LinkedIn Mock component, and prod uses `https://api.linkedin.com` / `https://www.linkedin.com` with the prod app (see [choreo-deploy.md](docs/runbooks/choreo-deploy.md) C2 and C6). The go-live check is that no LinkedIn Mock URL is set in prod.
 
 Which tests use the mock:
 
@@ -150,9 +150,9 @@ Which tests use the mock:
 
 ## Docs
 
-- Plan: [`projectmanagement/phase1-planned-todos.md`](../../../../projectmanagement/phase1-planned-todos.md)
-- Design: [`architecture/solution/Phase 1/`](../../../../architecture/solution/Phase%201/)
-- Decisions: [`architecture/decisions/`](../../../../architecture/decisions/)
+- Plan: [`docs/requirements/phase1-planned-todos.md`](docs/requirements/phase1-planned-todos.md)
+- Design: [`architecture/solution/Phase 1/`](architecture/solution/Phase%201/)
+- Decisions: [`architecture/decisions/`](architecture/decisions/)
 
 ## License
 
