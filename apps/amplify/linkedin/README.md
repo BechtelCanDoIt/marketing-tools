@@ -1,7 +1,7 @@
 # LinkedIn Resources
 
 ## Learn API details
-[LinkedIn Learn MCP Server Install Directions](/Users/scottbechtel/dev/wso2/wso2-digital/wso2-amplify)
+[LinkedIn Learn MCP Server Install Directions](https://learn.microsoft.com/en-us/training/support/mcp)
 
 ## APIs
 

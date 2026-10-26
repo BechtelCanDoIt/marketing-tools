@@ -1472,7 +1472,7 @@
                 "body": {
                   "mode": "file",
                   "file": {
-                    "src": "/Users/sjambe/Downloads/2B-testing.mp4"
+                    "src": "sample-media/2B-testing.mp4"
                   }
                 },
                 "url": {
@@ -1503,7 +1503,7 @@
                     "body": {
                       "mode": "file",
                       "file": {
-                        "src": "/Users/sjambe/Downloads/2B-testing.mp4"
+                        "src": "sample-media/2B-testing.mp4"
                       }
                     },
                     "url": {
