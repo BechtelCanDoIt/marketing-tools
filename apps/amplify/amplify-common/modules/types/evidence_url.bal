@@ -50,6 +50,8 @@ public type EvidenceUrl record {|
 # IP literal or a single label like `localhost`. Normalization lowercases scheme and host, drops the
 # default port, the fragment and trailing slashes, strips tracking parameters (`utm_*`, `fbclid`,
 # `gclid`, `trk`, `trackingId`, `mc_cid`, `mc_eid`) and sorts the remaining query parameters.
+# A LinkedIn URL that names a post URN is keyed by that URN (`https://www.linkedin.com/feed/update/<urn>`),
+# so every URL form of one post gives the same `normalized`.
 # Path case is kept (paths are case sensitive). Percent-encoding is left as typed.
 #
 # + raw - URL as typed
@@ -139,15 +141,18 @@ public isolated function parseEvidenceUrl(string raw) returns EvidenceUrl|Domain
         kept.push(param);
     }
     string sortedQuery = string:'join("&", ...kept.sort());
-    string normalized = string `https://${host}${port}${path}` + (sortedQuery.length() > 0 ? "?" + sortedQuery : "");
-
     string provider = detectProvider(host);
+    PostUrn? resourceUrn = provider == EVIDENCE_PROVIDER_LINKEDIN ? linkedInResourceUrn(path) : ();
+    // One LinkedIn post has several URLs (www or not, /posts/ or /feed/update/, extra query), so its key is the URN.
+    string normalized = resourceUrn is PostUrn
+        ? string `https://www.linkedin.com/feed/update/${resourceUrn}`
+        : string `https://${host}${port}${path}` + (sortedQuery.length() > 0 ? "?" + sortedQuery : "");
     return {
         normalized,
         submitted,
         host,
         provider,
-        resourceUrn: provider == EVIDENCE_PROVIDER_LINKEDIN ? linkedInResourceUrn(path) : ()
+        resourceUrn
     };
 }
 
