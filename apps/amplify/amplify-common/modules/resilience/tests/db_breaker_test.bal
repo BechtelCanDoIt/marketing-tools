@@ -231,3 +231,12 @@ function transientClassificationEdges() {
     test:assertTrue(isTransientDbError(error("wrapper", connectionLost)), "judged by the cause");
     test:assertFalse(isTransientDbError(error("plain")));
 }
+
+@test:Config
+function sqlTextInMessageIsNotTransient() {
+    string query = "Error while executing SQL query: SELECT token FROM connection.provider_token WHERE member_id = ?. ";
+    test:assertFalse(isTransientDbError(error sql:ApplicationError(query + "Unsupported type")));
+    test:assertFalse(isTransientDbError(error sql:DatabaseError(query + "bad value", errorCode = 0, sqlState = ())));
+    test:assertTrue(isTransientDbError(error sql:ApplicationError(query + "Connection is not available")));
+    test:assertTrue(isTransientDbError(error sql:DatabaseError("I/O error occurred", errorCode = 0, sqlState = ())));
+}
