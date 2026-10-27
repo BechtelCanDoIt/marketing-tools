@@ -27,9 +27,9 @@ import ballerinax/postgresql.driver as _;
 configurable string migrationsDir = "migrations";
 # Folder holding the reference-data scripts, applied after the migrations.
 configurable string seedDir = "seed";
-# Connect and report each script as pending, applied or changed (fails on a changed one); apply nothing.
-# Creates nothing either: `public.schema_version` is only read, and a database without it reports every
-# script as pending.
+# Connect and report each script as pending, applied or changed; apply nothing. Fails on a changed script or
+# a pending one that sorts below an applied one (out of order). Creates nothing either: `public.schema_version`
+# is only read, and a database without it reports every script as pending.
 configurable boolean dryRun = false;
 
 # Database host.
@@ -181,6 +181,11 @@ public function migrate(postgresql:Client db, string migrationsPath, string seed
     check checkBootstrapRole(db);
     string[] migrations = check listMigrations(migrationsPath);
     string[] seeds = check listScripts(seedPath, SEED_FILE);
+    map<string> recorded = check readRecorded(db);
+    string[] outOfOrder = [...findOutOfOrder(migrations, recorded), ...findOutOfOrder(seeds, recorded)];
+    if outOfOrder.length() > 0 {
+        return error(string:'join("; ", ...outOfOrder));
+    }
     RunSummary summary = {applied: [], skipped: 0};
     foreach string script in migrations {
         check applyScript(db, migrationsPath, script, "MIGRATION", summary);
@@ -193,12 +198,12 @@ public function migrate(postgresql:Client db, string migrationsPath, string seed
 
 # Reports what a real run would do, without changing anything: connects, reads `public.schema_version` if it
 # exists (it is not created), logs each script as pending, applied or changed, and fails when an applied
-# script was changed.
+# script was changed or a pending script sorts below an applied one.
 #
 # + db - Client connected as the bootstrap admin
 # + migrationsPath - Migrations folder
 # + seedPath - Seed folder
-# + return - An error naming every changed script, or a read error
+# + return - An error naming every changed or out-of-order script, or a read error
 public function dryRunReport(postgresql:Client db, string migrationsPath, string seedPath) returns error? {
     string[] migrations = check listMigrations(migrationsPath);
     string[] seeds = check listScripts(seedPath, SEED_FILE);
@@ -207,7 +212,7 @@ public function dryRunReport(postgresql:Client db, string migrationsPath, string
     if !exists {
         log:printInfo("public.schema_version doesn't exist yet; every script is pending");
     }
-    string[] problems = [];
+    string[] problems = [...findOutOfOrder(migrations, recorded), ...findOutOfOrder(seeds, recorded)];
     int pending = 0;
     foreach [string, string] [dir, script] in [...from string m in migrations select [migrationsPath, m],
             ...from string s in seeds select [seedPath, s]] {
@@ -241,6 +246,33 @@ function classifyScript(string version, string checksum, map<string> recorded) r
         return "PENDING";
     }
     return was == checksum ? "APPLIED" : "CHANGED";
+}
+
+# Finds pending scripts that sort below an applied script of the same kind (V or S), which would run out
+# of order (Flyway's default, `outOfOrder=false`, rejects them too).
+#
+# + scripts - Script file names of one kind, sorted
+# + recorded - Version key to recorded checksum
+# + return - One message per out-of-order pending script
+function findOutOfOrder(string[] scripts, map<string> recorded) returns string[] {
+    string[] problems = [];
+    foreach string script in scripts {
+        string version = versionOf(script);
+        if recorded.hasKey(version) {
+            continue;
+        }
+        string prefix = version.substring(0, 1);
+        string? highest = ();
+        foreach string key in recorded.keys() {
+            if key.startsWith(prefix) && (highest is () || key.substring(0, 4) > highest.substring(0, 4)) {
+                highest = key;
+            }
+        }
+        if highest is string && version.substring(0, 4) < highest.substring(0, 4) {
+            problems.push(string `${version} is pending but ${highest} is already applied; renumber it`);
+        }
+    }
+    return problems;
 }
 
 # Reads the recorded checksums.
