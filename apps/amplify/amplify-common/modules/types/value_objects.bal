@@ -143,4 +143,4 @@ public isolated function resourceTypeOf(PostUrn urn) returns ResourceType {
 # + return - True when it starts with `https://` and has no whitespace
 public isolated function isHttpsUrl(string url) returns boolean =>
     url.toLowerAscii().startsWith("https://") && url.length() <= EVIDENCE_URL_MAX_LENGTH
-        && !re `.*\s.*`.isFullMatch(url) && url.length() > 8;
+        && re `\S+`.isFullMatch(url) && url.length() > 8;
