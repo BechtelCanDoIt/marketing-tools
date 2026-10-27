@@ -32,15 +32,18 @@ configurable string itDbName = "amplify_it";
 # Admin database used to drop and create `itDbName`.
 configurable string itAdminDb = "postgres";
 
-const string IT_JOBS_PASSWORD = "it-jobs-password-0001";
-const string IT_API_PASSWORD = "it-api-password-00001";
+# Login password the tests give `amplify_jobs`. Roles live on the server, not the database, so this only ever
+# runs against a local throwaway server (see the guard in `testFreshRunThenIdempotentRerun`).
+configurable string itJobsPassword = "it-jobs-password-0001";
+# Login password the tests give `amplify_api`.
+configurable string itApiPassword = "it-api-password-00001";
 
 function adminClient(string database) returns postgresql:Client|error =>
     new (host = dbHost, username = dbUser, password = dbPassword, database = database, port = dbPort,
         options = {ssl: {mode: dbSslMode}}, connectionPool = {maxOpenConnections: 2, minIdleConnections: 0});
 
 function jobsClient() returns postgresql:Client|error =>
-    new (host = dbHost, username = "amplify_jobs", password = IT_JOBS_PASSWORD, database = itDbName, port = dbPort,
+    new (host = dbHost, username = "amplify_jobs", password = itJobsPassword, database = itDbName, port = dbPort,
         options = {ssl: {mode: dbSslMode}}, connectionPool = {maxOpenConnections: 2, minIdleConnections: 0});
 
 function utcDay(int offsetDays) returns string =>
@@ -58,6 +61,11 @@ function partitionExists(postgresql:Client db, string schema, string name) retur
 function testFreshRunThenIdempotentRerun() returns error? {
     if !itEnabled {
         return;
+    }
+    // The tests reset cluster-wide role passwords (amplify_api, amplify_jobs, amplify_readonly), so they must
+    // never touch a shared or managed server.
+    if !isLocalHost(dbHost) {
+        return error(string `integration tests reset cluster-wide role passwords; refusing to run against ${dbHost}`);
     }
     postgresql:Client admin = check adminClient(itAdminDb);
     // Constant identifiers only; nothing user-supplied reaches this DDL.
@@ -101,7 +109,7 @@ function testFreshRunThenIdempotentRerun() returns error? {
           AND tableowner <> 'amplify_migrate'`);
     test:assertEquals(notMigrateOwned, 0);
 
-    check setRolePasswords(db, {amplify_jobs: IT_JOBS_PASSWORD, amplify_api: IT_API_PASSWORD});
+    check setRolePasswords(db, {amplify_jobs: itJobsPassword, amplify_api: itApiPassword});
     check db.close();
 }
 
