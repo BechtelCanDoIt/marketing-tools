@@ -181,6 +181,30 @@ function editBumpsVersionAndRechecksWindow() returns error? {
 }
 
 @test:Config
+function openedCampaignFreezesItsStart() returns error? {
+    InMemoryCampaigns repo = new;
+    Campaign c = check registerCampaign(repo, draft(), POLICY, "mkt-1", false, T0);
+    time:Utc later = types:addDays(T0, 1);
+    test:assertTrue(isOpen(c, later));
+    test:assertEquals(code(applyPatch(c, {opensAt: types:addDays(T0, 7)}, later)), types:ERR_INVALID_WINDOW);
+    test:assertEquals(code(applyPatch(c, {opensAt: types:addDays(T0, -1)}, later)), types:ERR_INVALID_WINDOW);
+    // A form that sends the stored start back, with a new end, still works.
+    Campaign extended = check applyPatch(c, {opensAt: c.opensAt, closesAt: types:addDays(T0, 60)}, later);
+    test:assertEquals(extended.opensAt, c.opensAt);
+    test:assertEquals(extended.closesAt, types:addDays(T0, 60));
+}
+
+@test:Config
+function scheduledCampaignCanStillMoveItsStart() returns error? {
+    InMemoryCampaigns repo = new;
+    CampaignDraft d = draft();
+    d.opensAt = types:addDays(T0, 3);
+    Campaign c = check registerCampaign(repo, d, POLICY, "mkt-1", false, T0);
+    Campaign moved = check applyPatch(c, {opensAt: types:addDays(T0, 4)}, T0);
+    test:assertEquals(moved.opensAt, types:addDays(T0, 4));
+}
+
+@test:Config
 function staleEditIsAVersionConflict() returns error? {
     InMemoryCampaigns repo = new;
     Campaign c = check registerCampaign(repo, draft(), POLICY, "mkt-1", false, T0);

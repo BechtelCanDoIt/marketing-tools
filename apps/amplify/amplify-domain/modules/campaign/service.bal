@@ -94,7 +94,8 @@ public isolated function newCampaign(CampaignDraft draft, CampaignPolicy policy,
     };
 }
 
-# Applies an edit. Archived campaigns can't change; the window rule is re-checked.
+# Applies an edit. Archived campaigns can't change; the window rule is re-checked. Once a campaign has opened its
+# start is frozen (only `closesAt` can move); resending the stored `opensAt` is fine.
 #
 # + campaign - Current campaign
 # + patch - Changes
@@ -127,7 +128,11 @@ public isolated function applyPatch(Campaign campaign, CampaignPatch patch, time
     if tags is string[] {
         changed.tags = check normalizeTags(tags);
     }
-    changed.opensAt = patch.opensAt ?: campaign.opensAt;
+    time:Utc? newOpensAt = patch.opensAt;
+    if newOpensAt is time:Utc && newOpensAt != campaign.opensAt && !types:isBefore(now, campaign.opensAt) {
+        return types:domainError(types:ERR_INVALID_WINDOW, "A campaign that has opened can't change its start");
+    }
+    changed.opensAt = newOpensAt ?: campaign.opensAt;
     changed.closesAt = patch.closesAt ?: campaign.closesAt;
     check validWindow(changed.opensAt, changed.closesAt);
     changed.updatedAt = now;
