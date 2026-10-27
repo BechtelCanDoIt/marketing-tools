@@ -28,9 +28,4 @@ The runner stops on a `.sql` file whose name doesn't match `V###__snake_name.sql
 the same number, so a misnamed script can't be skipped without a word.
 
 Dry run (`dryRun=true`): connects, reads `public.schema_version` when it exists (it creates nothing; without it every script is pending),
-logs each script as `PENDING`, `APPLIED` or `CHANGED`, applies nothing, and fails when an applied script was changed
-or a pending one is out of order (below).
-
-Out of order: a pending script numbered below an applied script of the same kind (V or S) stops the run, for example
-"V014__x is pending but V015__y is already applied; renumber it", so every environment applies scripts in the same order
-(Flyway's `outOfOrder=false`). The dry run reports it too. Rebase and renumber the later-merged script.
+logs each script as `PENDING`, `APPLIED` or `CHANGED`, applies nothing, and fails when an applied script was changed.
