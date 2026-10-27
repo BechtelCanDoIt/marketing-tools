@@ -90,6 +90,18 @@ function registerCampaign(postgresql:Client db, string actor) returns campaign:C
 
 // ---- campaign ------------------------------------------------------------------------------------
 
+// Token tables are partitioned by day and the migration only creates today..today+7, so on a later
+// day token inserts need upkeep to have run first. Do it once up front so no test depends on order.
+@test:BeforeSuite
+function ensureTokenPartitions() returns error? {
+    if !itEnabled {
+        return;
+    }
+    postgresql:Client db = check jobs();
+    store:MaintenanceResult _ = check store:runPartitionMaintenance(db);
+    check db.close();
+}
+
 @test:Config {groups: ["integration"], enable: itEnabled}
 function testCampaignRoundTripOutboxAndAudit() returns error? {
     postgresql:Client db = check api();
@@ -386,6 +398,9 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
 @test:Config {groups: ["integration"], enable: itEnabled}
 function testPartitionMaintenanceAsJobs() returns error? {
     postgresql:Client db = check jobs();
+    // The first run may create partitions (the migration only covered the day it ran); the second
+    // run, right after, must be a no-op.
+    store:MaintenanceResult _ = check store:runPartitionMaintenance(db);
     store:MaintenanceResult result = check store:runPartitionMaintenance(db);
     test:assertEquals(result.token_partitions_created, 0, "already 7 days ahead");
     postgresql:Client apiDb = check api();
