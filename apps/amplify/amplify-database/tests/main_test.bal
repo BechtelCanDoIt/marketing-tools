@@ -76,3 +76,17 @@ function testTlsWarningOnlyForUnverifiedRemoteHosts() {
     test:assertEquals(tlsWarning("127.0.0.1", postgresql:DISABLE), ());
     test:assertEquals(tlsWarning(" ", postgresql:DISABLE), ());
 }
+
+@test:Config
+function testClassifyScriptPendingAppliedChanged() {
+    map<string> recorded = {"V001__first": "aaa", "V002__second": "bbb"};
+    test:assertEquals(classifyScript("V001__first", "aaa", recorded), "APPLIED");
+    test:assertEquals(classifyScript("V002__second", "xxx", recorded), "CHANGED");
+    test:assertEquals(classifyScript("V003__third", "ccc", recorded), "PENDING");
+    test:assertEquals(classifyScript("V001__first", "aaa", {}), "PENDING", "no schema_version means all pending");
+}
+
+@test:Config
+function testChecksumOfMatchesSha256() {
+    test:assertEquals(checksumOf("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+}
