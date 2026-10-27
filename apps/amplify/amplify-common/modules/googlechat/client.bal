@@ -52,7 +52,7 @@ public type ChatErrorDetail record {|
     ChatErrorCode code;
     # HTTP status, when there was a response
     int? httpStatus;
-    # Whether a later retry may succeed
+    # Whether a later retry is safe and may succeed. False for a timeout: Chat may already have posted the message
     boolean retryable;
 |};
 
@@ -93,7 +93,8 @@ public isolated class WebhookClient {
     # + message - Message body, for example from `buildCampaignCard`
     # + threadKey - Thread key, for example from `threadKey(campaignId)`
     # + correlationId - Sent as `X-Correlation-ID`
-    # + return - The created message, or a chat error
+    # + return - The created message, or a chat error. A response timeout is `UNAVAILABLE` with `retryable = false`
+    # (the card may already be in the space); a refused connection or other no-response failure is retryable
     public isolated function post(json message, string threadKey, string? correlationId = ())
             returns ChatMessage|ChatError {
         string|url:Error encodedKey = url:encode(threadKey, "UTF-8");
@@ -104,6 +105,10 @@ public isolated class WebhookClient {
         string target = string `${self.path}${separator}threadKey=${encodedKey}&messageReplyOption=${REPLY_OPTION}`;
         http:Response|http:ClientError response = self.httpClient->post(target, message,
                 resilience:correlationHeaders(correlationId));
+        if response is http:IdleTimeoutError {
+            // Chat may already have created the message; a retry would post the card again (ADR-025)
+            return chatError("UNAVAILABLE", "Chat webhook call timed out; the card may have been posted", (), false);
+        }
         if response is http:ClientError {
             return chatError("UNAVAILABLE", "Chat webhook call failed: no response", (), true);
         }
