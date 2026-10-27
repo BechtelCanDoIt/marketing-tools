@@ -79,7 +79,7 @@ public isolated function newRuleVersion(PointRule[] rules, types:PointAction act
 # + rules - Rule versions
 # + fact - Engagement
 # + correlationId - Run correlation id
-# + now - Scoring time
+# + now - Engagement time: picks the rule version and stamps the row
 # + return - Row and event, or a domain error
 public isolated function awardForEngagement(PointRule[] rules, EngagementFact fact, string? correlationId, time:Utc now)
         returns LedgerAppend|types:DomainError {
