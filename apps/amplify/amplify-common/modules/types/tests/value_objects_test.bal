@@ -44,7 +44,7 @@ function employeeIdRejectsBlankSpacesAndTooLong() {
 
 @test:Config
 function emailIsLowercasedAndChecked() returns error? {
-    test:assertEquals(check parseEmail(" Avery.Mock@WSO2.com "), "avery.mock@wso2.com");
+    test:assertEquals(check parseEmail(" Avery.Mock@example.com "), "avery.mock@example.com");
     test:assertEquals(codeOf(parseEmail("not-an-email")), ERR_INVALID_EMAIL);
 }
 
