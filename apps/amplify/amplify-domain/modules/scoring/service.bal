@@ -73,8 +73,8 @@ public isolated function newRuleVersion(PointRule[] rules, types:PointAction act
 
 // ---- Ledger rows (pure) ---------------------------------------------------------------------------
 
-# Award row for an engagement (C1 → C2): `AMP-` reference, `HELD`, priced at the rule in force now
-# (a rule change applies from the next scoring pass).
+# Award row for an engagement (C1 → C2): `AMP-` reference, `HELD`, priced at the rule in force at `now`.
+# Callers pass the engagement time, so a rule change never reprices an engagement made before it.
 #
 # + rules - Rule versions
 # + fact - Engagement
