@@ -169,7 +169,8 @@ public isolated class LinkedInAdapter {
             headers[name] = value;
         }
         http:Response|http:ClientError response = self.api->post("/rest/posts", payload, headers);
-        http:Response created = check expectStatus(response, "create post", command.correlationId);
+        // Not `expectStatus`: after a timeout or 502/504 the post may be live, so a retry would post twice.
+        http:Response created = check expectCreateStatus(response, command.correlationId);
         string|http:HeaderNotFoundError postId = created.getHeader(HEADER_RESTLI_ID);
         if postId is http:HeaderNotFoundError {
             return providerError(BAD_RESPONSE, "LinkedIn create post returned no x-restli-id", http:STATUS_CREATED, (), false);
@@ -263,6 +264,31 @@ isolated function expectStatus(http:Response|http:ClientError response, string o
             retryable = retryable, correlationId = correlationId);
     return providerError(code, string `LinkedIn ${operation} failed with HTTP ${status}`, status, serviceErrorCode,
             retryable);
+}
+
+# Like `expectStatus` for `POST /rest/posts`, which isn't idempotent. A retry is only safe when nothing was
+# sent (`UpstreamServiceUnavailableError` from an open breaker) or LinkedIn answered that it didn't take the
+# request. A timeout, a dropped connection or a 502/504 from a gateway leaves the outcome unknown. A refused
+# connection can't be told from a reset one by type, so it is also `OUTCOME_UNKNOWN`.
+#
+# + response - Result of the create call
+# + correlationId - Correlation ID for the log line
+# + return - The response when 2xx, else a provider error
+isolated function expectCreateStatus(http:Response|http:ClientError response, string? correlationId = ())
+        returns http:Response|ProviderError {
+    if response is http:ClientError {
+        if response is http:UpstreamServiceUnavailableError {
+            return providerError(UNAVAILABLE, "LinkedIn create post failed: circuit open, nothing sent", (), (),
+                    true);
+        }
+        return providerError(OUTCOME_UNKNOWN, "LinkedIn create post failed: no response, the post may be live",
+                (), (), false);
+    }
+    if response.statusCode == http:STATUS_BAD_GATEWAY || response.statusCode == http:STATUS_GATEWAY_TIMEOUT {
+        return providerError(OUTCOME_UNKNOWN, string `LinkedIn create post failed with HTTP ${response.statusCode}, the post may be live`,
+                response.statusCode, (), false);
+    }
+    return expectStatus(response, "create post", correlationId);
 }
 
 isolated function classify(int status) returns [ProviderErrorCode, boolean] {
