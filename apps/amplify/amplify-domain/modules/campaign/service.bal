@@ -178,18 +178,22 @@ public isolated function registerCampaign(CampaignRepository repo, CampaignDraft
     return campaign;
 }
 
-# Edits a campaign.
+# Edits a campaign. The edit applies only if the campaign is still at the version the editor saw.
 #
 # + repo - Campaign repository
 # + id - Campaign id
+# + expectedVersion - Version the caller loaded; a different stored version is a lost-update `VERSION_CONFLICT`
 # + patch - Changes
 # + now - Current time
-# + return - The changed campaign, `NOT_FOUND`, a domain error, or a repository error
-public isolated function updateCampaign(CampaignRepository repo, string id, CampaignPatch patch, time:Utc now)
-        returns Campaign|error {
+# + return - The changed campaign, `NOT_FOUND`, `VERSION_CONFLICT`, a domain error, or a repository error
+public isolated function updateCampaign(CampaignRepository repo, string id, int expectedVersion, CampaignPatch patch,
+        time:Utc now) returns Campaign|error {
     Campaign current = check findOrFail(repo, id);
+    if current.version != expectedVersion {
+        return types:domainError(types:ERR_VERSION_CONFLICT, "The campaign was changed by someone else");
+    }
     Campaign changed = check applyPatch(current, patch, now);
-    check repo.update(changed, current.version);
+    check repo.update(changed, expectedVersion);
     return changed;
 }
 
