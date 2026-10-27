@@ -98,8 +98,8 @@ erDiagram
     EMPLOYEE ||..o{ MEMBER_CONNECTION : "connects"
     EMPLOYEE ||..o{ SHARE_REQUEST : "requests"
     CAMPAIGN ||..o{ SHARE_REQUEST : "reposted via"
-    SHARE_REQUEST ||--o| ENGAGEMENT : "results in"
-    CAMPAIGN ||..o{ ENGAGEMENT : "engaged on"
+    SHARE_REQUEST |o--o| ENGAGEMENT : "results in"
+    CAMPAIGN |o..o{ ENGAGEMENT : "engaged on"
     EMPLOYEE ||..o{ EXTERNAL_SHARE : "submits"
     CAMPAIGN |o..o{ EXTERNAL_SHARE : "optionally about"
     ENGAGEMENT ||..o| LEDGER : "scored"
@@ -535,7 +535,7 @@ erDiagram
         text coin_reference "phase 2"
     }
 
-    POINT_RULE ||--o{ POINTS_LEDGER : "priced by"
+    POINT_RULE |o--o{ POINTS_LEDGER : "priced by"
     POINTS_LEDGER |o--o| POINTS_LEDGER : "reversed by"
 ```
 
@@ -737,7 +737,7 @@ erDiagram
 
 ## Domain events → which table changes
 
-**This is the one event catalogue** for phase 1 (B9). [phase1-domains](../architecture/solution/Phase%201/phase1-domains.md#domain-events-outbox--jobs-table) and the plan link here instead of keeping their own lists. Every event is a `messaging.outbox` row (`event_type` = the name below), written in the same transaction as the producer's change, and claimed by `amplify-jobs` with `FOR UPDATE SKIP LOCKED`.
+**This is the one event catalogue** for phase 1 (B9). [phase1-domains](../architecture/solution/Phase%201/phase1-domains.md#domain-events-outbox--jobs-table) and the plan link here instead of keeping their own lists. Every event is a `messaging.outbox` row (`event_type` = the name below), written in the same transaction as the producer's change. The row is the queue record: `amplify-jobs` claims `PENDING` rows with `FOR UPDATE SKIP LOCKED` so two runs never take the same row, then marks each `DONE`, retries it with backoff, or marks it `FAILED`. The side effects (webhook, LinkedIn call, ledger write) belong to the consumer in the Consumer column. Where that column says "same transaction in api", `amplify-api` has already applied the consumer's writes in the producer's transaction, so the row only records the event. Where it says "—", no consumer acts on it beyond the admin view or read models.
 
 | Event (outbox `event_type`) | Publisher | Producer writes | Consumer | Consumer writes | Idempotency key |
 | --- | --- | --- | --- | --- | --- |
