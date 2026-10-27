@@ -171,13 +171,13 @@ function registerIsUniquePerResourceAndQueuesAnnouncement() returns error? {
 function editBumpsVersionAndRechecksWindow() returns error? {
     InMemoryCampaigns repo = new;
     Campaign c = check registerCampaign(repo, draft(), POLICY, "mkt-1", false, T0);
-    Campaign edited = check updateCampaign(repo, c.id, {title: "New title", tags: ["X"]}, T0);
+    Campaign edited = check updateCampaign(repo, c.id, 1, {title: "New title", tags: ["X"]}, T0);
     test:assertEquals(edited.title, "New title");
     test:assertEquals(edited.tags, ["x"]);
     test:assertEquals(edited.version, 2);
     test:assertEquals(edited.resourceUrn, c.resourceUrn, "resource can't change");
-    test:assertEquals(code(updateCampaign(repo, c.id, {closesAt: types:addDays(T0, -1)}, T0)), types:ERR_INVALID_WINDOW);
-    test:assertEquals(code(updateCampaign(repo, "missing", {}, T0)), types:ERR_NOT_FOUND);
+    test:assertEquals(code(updateCampaign(repo, c.id, 2, {closesAt: types:addDays(T0, -1)}, T0)), types:ERR_INVALID_WINDOW);
+    test:assertEquals(code(updateCampaign(repo, "missing", 1, {}, T0)), types:ERR_NOT_FOUND);
 }
 
 @test:Config
@@ -208,9 +208,14 @@ function scheduledCampaignCanStillMoveItsStart() returns error? {
 function staleEditIsAVersionConflict() returns error? {
     InMemoryCampaigns repo = new;
     Campaign c = check registerCampaign(repo, draft(), POLICY, "mkt-1", false, T0);
-    _ = check updateCampaign(repo, c.id, {title: "A"}, T0);
+    _ = check updateCampaign(repo, c.id, 1, {title: "A"}, T0);
     Campaign stale = check applyPatch(c, {title: "B"}, T0);
     test:assertEquals(code(repo.update(stale, c.version)), types:ERR_VERSION_CONFLICT);
+    // The use case checks the version the editor saw, not the one it just read.
+    test:assertEquals(code(updateCampaign(repo, c.id, 1, {title: "B"}, T0)), types:ERR_VERSION_CONFLICT);
+    Campaign? stored = check repo.findById(c.id);
+    test:assertEquals((<Campaign>stored).title, "A", "the stale edit changed nothing");
+    test:assertEquals((<Campaign>stored).version, 2);
 }
 
 @test:Config
@@ -221,7 +226,7 @@ function deleteArchivesAndArchivedIsFrozen() returns error? {
     test:assertEquals(archived.archivedAt, types:addDays(T0, 1));
     test:assertTrue(check repo.findById(c.id) is Campaign, "soft delete keeps the row");
     test:assertEquals(code(archiveCampaign(repo, c.id, T0)), types:ERR_CAMPAIGN_ARCHIVED);
-    test:assertEquals(code(updateCampaign(repo, c.id, {title: "x"}, T0)), types:ERR_CAMPAIGN_ARCHIVED);
+    test:assertEquals(code(updateCampaign(repo, c.id, 2, {title: "x"}, T0)), types:ERR_CAMPAIGN_ARCHIVED);
 }
 
 @test:Config
