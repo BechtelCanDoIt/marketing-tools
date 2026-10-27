@@ -90,3 +90,19 @@ function testClassifyScriptPendingAppliedChanged() {
 function testChecksumOfMatchesSha256() {
     test:assertEquals(checksumOf("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 }
+
+@test:Config
+function testPendingBelowAppliedIsOutOfOrder() {
+    map<string> recorded = {"V013__a": "1", "V015__y": "2", "S004__s": "3"};
+    string[] found = findOutOfOrder(["V013__a.sql", "V014__x.sql", "V015__y.sql", "V016__z.sql"], recorded);
+    test:assertEquals(found, ["V014__x is pending but V015__y is already applied; renumber it"]);
+}
+
+@test:Config
+function testOutOfOrderIsPerKind() {
+    map<string> recorded = {"V020__a": "1", "S004__s": "3"};
+    test:assertEquals(findOutOfOrder(["S005__new.sql"], recorded), [], "a seed is not judged by migrations");
+    test:assertEquals(findOutOfOrder(["S003__old.sql"], recorded),
+        ["S003__old is pending but S004__s is already applied; renumber it"]);
+    test:assertEquals(findOutOfOrder(["V001__a.sql"], {}), [], "nothing applied, nothing out of order");
+}
