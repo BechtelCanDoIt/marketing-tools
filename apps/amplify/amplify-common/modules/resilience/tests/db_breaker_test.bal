@@ -251,3 +251,22 @@ function transientClassificationEdges() {
     test:assertTrue(isTransientDbError(error("wrapper", connectionLost)), "judged by the cause");
     test:assertFalse(isTransientDbError(error("plain")));
 }
+
+@test:Config
+function contentionDoesNotCountAgainstTheBreaker() {
+    sql:DatabaseError deadlock = error sql:DatabaseError("x", errorCode = 0, sqlState = "40P01");
+    sql:DatabaseError serialization = error sql:DatabaseError("x", errorCode = 0, sqlState = "40001");
+    // Still worth a retry...
+    test:assertTrue(isTransientDbError(deadlock));
+    test:assertTrue(isTransientDbError(serialization));
+    // ...but not evidence of an unhealthy database.
+    DbBreaker b = new ({failureThreshold: 2}, fakeClock);
+    test:assertFalse(b.onFailure(deadlock));
+    test:assertFalse(b.onFailure(serialization));
+    test:assertFalse(b.onFailure(error("wrapper", deadlock)), "judged by the cause");
+    test:assertFalse(b.onFailure(deadlock));
+    test:assertEquals(b.state(), "CLOSED");
+    test:assertEquals(b.openCount(), 0);
+    // A real connection failure still counts.
+    test:assertTrue(b.onFailure(connectionLost));
+}
