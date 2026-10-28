@@ -602,6 +602,7 @@ Boards for PO, Marketing and SLT: Operations board, Post performance, Participat
 - [ ] UI: Posts / Leaderboard pages gain BU and team filters (One WSO2).
 - [ ] Threat model: note that rank and points are now visible company-wide (ADR-035), and the data classification of points.
 - [ ] ADR-019 settings: decide whether `team.visibility` stays (Team page only) or goes.
+- [ ] **Editing a campaign re-registers it (found 2026-10-28, demo rehearsal).** Save from the editor creates a new `campaign` row, and each new row counts as a post. Dashboard stats (posts, funnel, scorecard) overcount after edits. The Chat card is not duplicated: each save posts one card for its new campaign. Fix: an edit updates the existing campaign and only a first save registers one. Check the `CampaignRegistered` outbox events and the Operations/Campaigns board counts before and after. Until fixed, tell the PO that stats include edit-saves. Not a fix for the demo freeze.
 
 ### Phase 2
 
