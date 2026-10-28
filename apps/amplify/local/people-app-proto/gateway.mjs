@@ -50,6 +50,9 @@ http
     })}.unsigned`;
     const headers = { ...req.headers, "x-jwt-assertion": assertion, host: UPSTREAM.host };
     delete headers.authorization;
+    // Hop-by-hop headers stay on this leg: a Ballerina client's HTTP/2 upgrade offer would otherwise reach
+    // people-app, which accepts it, and this HTTP/1 relay then never completes the response.
+    for (const h of ["connection", "upgrade", "http2-settings", "keep-alive", "te", "proxy-connection"]) delete headers[h];
     const up = http.request(
       { hostname: UPSTREAM.hostname, port: UPSTREAM.port, path: req.url, method: req.method, headers },
       (upRes) => {
