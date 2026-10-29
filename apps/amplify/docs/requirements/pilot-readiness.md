@@ -2,7 +2,7 @@
 
 Pilot operations for the 90-day pilot that starts at go-live (31 Oct 2026) and ends 29 Jan 2027. Written 2026-10-17. Complements the [SDLC walk](sdlc-checklist-walk.md) and the [runbook suite](../runbooks/operations.md).
 
-Owner: Scott (technical). Comms owner: PO team.
+Owner: Developer (technical). Comms owner: PO team.
 
 ## 1. LinkedIn version watch
 
@@ -42,7 +42,7 @@ The LinkedIn Marketing API is versioned by a `YYYYMM` string sent on every call 
 - Roll-out options: (a) enable the flag per-user for the pilot group via One WSO2's preview-feature mechanism, or (b) enable it org-wide but rely on the Amplify rail being visible only after the user visits. **Decision needed:** confirm which mechanism One WSO2 supports for a group-scoped preview; the recommended path is group-scoped so non-pilot employees see nothing.
 - Fail-closed: `useAmplifyGate` → `GET /me`; while resolving, features are hidden (plan M7).
 
-**Owner:** One WSO2 UI owner (preview flag mechanism) + Scott (Asgardeo group). **Status: open** (both are console/UI work).
+**Owner:** One WSO2 UI owner (preview flag mechanism) + Developer (Asgardeo group). **Status: open** (both are console/UI work).
 
 ## 3. Pilot comms (WSO2 Club space)
 
@@ -62,7 +62,7 @@ Announcements go to the **WSO2 Club Group** Google Chat space (ADR-007, plan M6a
 ## 4. Feedback channel
 
 - **Primary:** a dedicated **Google Chat space "Amplify pilot feedback"** (or a topic in the Club space) where Champions post issues and ideas. Owner: PO.
-- **Bug/feature capture:** issues raised from feedback are recorded as GitHub issues in the Amplify repo, labelled `pilot-feedback`, triaged by Scott into the [phase 2 backlog](#6-phase-1-retro-and-phase-2-entry-criteria).
+- **Bug/feature capture:** issues raised from feedback are recorded as GitHub issues in the Amplify repo, labelled `pilot-feedback`, triaged by Developer into the [phase 2 backlog](#6-phase-1-retro-and-phase-2-entry-criteria).
 - **Direct channel:** the runbook suite ([operations.md](../runbooks/operations.md)) and the data-deletion path ([data-deletion-interim.md](../runbooks/data-deletion-interim.md)) cover operational incidents and privacy requests separately from product feedback.
 - **Cadence:** PO reviews feedback weekly; a summary goes back to the Champions so they see their input land (matching "credit the team" comms).
 
@@ -113,9 +113,9 @@ These also feed the PO dashboard tiles 2–7 ([po-dashboard.md](../../architectu
 
 | Criterion | Owner | Why it gates phase 2 |
 | --- | --- | --- |
-| **Community Management approval** | Scott / PO | Share verification (pre-coin) and the share-metrics pass need `r_member_postAnalytics` and the Community Management product (ADR-018, [deletion/analytics research](../research/2026-10-16-linkedin-deletion-and-analytics.md)). Points stay `HELD` until verification can run; nothing becomes a Coin until then. |
-| **Coin contract** | Scott / PO / Coin team | Points → Coins needs the ratio, the `reference`/`source` on the Coin master/transfer, and the email → wallet mapping (L2 open items; ADR-018 keeps points `HELD` meanwhile). The ledger's settlement columns and the phase-2 `CHECK` drop are already designed in. |
-| **HR Entity access** | Scott / PO | SLT reports (points by team/location) need HR Entity GraphQL (`org_dim`); phase 1 deliberately stores no HR data (ADR-009). |
+| **Community Management approval** | Developer / PO | Share verification (pre-coin) and the share-metrics pass need `r_member_postAnalytics` and the Community Management product (ADR-018, [deletion/analytics research](../research/2026-10-16-linkedin-deletion-and-analytics.md)). Points stay `HELD` until verification can run; nothing becomes a Coin until then. |
+| **Coin contract** | Developer / PO / Coin team | Points → Coins needs the ratio, the `reference`/`source` on the Coin master/transfer, and the email → wallet mapping (L2 open items; ADR-018 keeps points `HELD` meanwhile). The ledger's settlement columns and the phase-2 `CHECK` drop are already designed in. |
+| **HR Entity access** | Developer / PO | SLT reports (points by team/location) need HR Entity GraphQL (`org_dim`); phase 1 deliberately stores no HR data (ADR-009). |
 
 **Also required to close the pilot's open items (not strictly phase 2 gates):**
 

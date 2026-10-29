@@ -2,7 +2,7 @@
 
 - **Status:** **Decided 2026-10-19** (pilot points table from the business; see "Decided values" below). The original proposal follows for history.
 - **Date:** 2026-10-16, decided 2026-10-19
-- **Owner:** Scott
+- **Owner:** Lead Developer
 - **Decides:** the `scoring.point_rule` seed for phase 1 (plan M3 seed scripts, D6)
 - **Scope:** points only. Coins and any Coin conversion rate are phase 2 and not part of this proposal.
 

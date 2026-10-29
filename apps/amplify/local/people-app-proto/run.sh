@@ -42,8 +42,9 @@ COMPOSE=("$ROOT/scripts/compose.sh")
 
 mysql_q() { docker exec -i -e MYSQL_PWD="$MYSQL_PASSWORD" people-proto-mysql mysql -uroot "$@"; }
 
-render_config() {  # $1 = directory client ids, TOML array body
-  sed -e "s|__MYSQL_PASSWORD__|$MYSQL_PASSWORD|g" -e "s|__DIRECTORY_CLIENT_IDS__|$1|" \
+render_config() {  # $1 = bare client id (a quoted TOML key never matches) allowed to read the directory, or empty for none
+  local route=""; [ -n "$1" ] && route="$1 = [\"GET employees/basic-info\"]"
+  sed -e "s|__MYSQL_PASSWORD__|$MYSQL_PASSWORD|g" -e "s|__CLIENT_ROUTE__|$route|" \
     "$HERE/Config.toml.template" > "$HERE/Config.toml"
   chmod 600 "$HERE/Config.toml"
 }
@@ -88,7 +89,7 @@ up() {
   docker run -d --name people-proto-gateway --network "$NET" -p 127.0.0.1:19093:8080 \
     -e CLIENTS="$CLIENT_ID:$CLIENT_SECRET,unused:unused" -e UPSTREAM=http://people-proto-app:9090 \
     -v "$HERE/gateway.mjs:/gateway.mjs:ro" "$NODE_IMAGE" node /gateway.mjs >/dev/null
-  render_config "\"$CLIENT_ID\""
+  render_config "$CLIENT_ID"
   start_app
 
 
@@ -132,24 +133,23 @@ demo() {
 
   echo "== people-app, service client through the gateway"
   local rows; rows=$(curl -s -H "Authorization: Bearer $token" "$gw/employees/basic-info")
-  check "directory read as $CLIENT_ID" "11" "$(jq length <<<"$rows")"
-  check "Left employees still excluded" "0" "$(jq '[.[] | select(.workEmail == "lee@wso2.com")] | length' <<<"$rows")"
-  check "one employee record refused" "403" "$(status -H "Authorization: Bearer $token" "$gw/employees/E-PO")"
-  check "personal info refused" "403" "$(status -H "Authorization: Bearer $token" "$gw/employees/E-PO/personal-info")"
+  check "directory read as $CLIENT_ID" "13" "$(jq length <<<"$rows")"
+  check "one employee record refused" "403" "$(status -H "Authorization: Bearer $token" "$gw/employees/dff9b5e5-625f-46fa-b529-2bccf9d89ddc")"
+  check "personal info refused" "403" "$(status -H "Authorization: Bearer $token" "$gw/employees/dff9b5e5-625f-46fa-b529-2bccf9d89ddc/personal-info")"
   check "search refused" "403" "$(status -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '{}' "$gw/employees/search")"
 
   echo "== people-app, other callers unchanged"
-  check "unlisted client id refused (as before)" "500" "$(status -H "x-jwt-assertion: $(jwt '{"azp":"someone-else","aut":"APPLICATION"}')" "$app/employees/basic-info")"
+  check "unlisted client id refused" "403" "$(status -H "x-jwt-assertion: $(jwt '{"azp":"someone-else","aut":"APPLICATION"}')" "$app/employees/basic-info")"
   check "listed id on a user token (no email) refused" "500" "$(status -H "x-jwt-assertion: $(jwt '{"azp":"'"$CLIENT_ID"'","aut":"APPLICATION_USER"}')" "$app/employees/basic-info")"
-  check "employee user reads the directory" "200" "$(status -H "x-jwt-assertion: $(jwt '{"email":"grace@wso2.com","groups":["people-employee"]}')" "$app/employees/basic-info")"
-  check "user without a people group refused" "403" "$(status -H "x-jwt-assertion: $(jwt '{"email":"grace@wso2.com","groups":[]}')" "$app/employees/basic-info")"
+  check "employee user reads the directory" "200" "$(status -H "x-jwt-assertion: $(jwt '{"email":"avery@example.com","groups":["people-employee"]}')" "$app/employees/basic-info")"
+  check "user without a people group refused" "403" "$(status -H "x-jwt-assertion: $(jwt '{"email":"avery@example.com","groups":[]}')" "$app/employees/basic-info")"
 
   echo "== amplify-api My Team from the real directory"
   local mint="$ROOT/local/dev-jwt/mint-dev-jwt.sh" board
-  board=$(curl -s -H "x-jwt-assertion: $("$mint" token 01a15208-fb4a-751d-8b8e-a8c218889485 01a15208-fb4a-751d-8b8e-a8c218889485@wso2.com amplify_po)" http://127.0.0.1:9090/leaderboard)
+  board=$(curl -s -H "x-jwt-assertion: $("$mint" token avery avery@example.com amplify_po)" http://127.0.0.1:9090/leaderboard)
   check "teamStatus" "OK" "$(jq -r .teamStatus <<<"$board")"
-  check "team is the sub-team" "Forward Deployed Engineering" "$(jq -r .myTeam.teamName <<<"$board")"
-  check "headcount (Paula, Adam, Grace, Scott + 5 Demo)" "9" "$(jq -r .myTeam.headcount <<<"$board")"
+  check "team is the sub-team" "PO" "$(jq -r .myTeam.teamName <<<"$board")"
+  check "headcount (Avery, Blake, Casey, Finley, Kai)" "5" "$(jq -r .myTeam.headcount <<<"$board")"
 
   echo "== $pass passed, $fail failed"
   [[ $fail -eq 0 ]]

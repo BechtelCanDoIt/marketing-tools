@@ -168,11 +168,11 @@ Outbox workers claim rows with `FOR UPDATE SKIP LOCKED` in bounded batches.
 
 | # | Item | Owner | Blocks |
 | --- | --- | --- | --- |
-| 1 | Prototype: can LinkedIn tell a plain repost from a repost with commentary, and who reposted? | Scott | `REPOST` / `REPOST_COMMENTARY` scoring tiers |
+| 1 | Prototype: can LinkedIn tell a plain repost from a repost with commentary, and who reposted? | Developer | `REPOST` / `REPOST_COMMENTARY` scoring tiers |
 | 2 | **Points are only defined for reposts and own posts.** The requirements also track reactions and comments. Do those earn points? | PO | `point_rule` seed data |
 | 3 | Coin changes: a caller `reference` + `source` on master/transfer, recipient by email (or a lookup), and what to do when the employee has no wallet yet | Nikeshala S. / Coin team | B8 go-live |
-| 4 | Points → coin conversion rate | Shashini K. | B8 amount |
+| 4 | Points → coin conversion rate | Business Team | B8 amount |
 | 5 | Novera change: `space` target on `/internal/notifications`, plus the two Amplify tools | Visal R. | B2, B7 |
 | 6 | Approval for Amplify to be its own One WSO2 app (new perspective and left-menu icon), and who reviews the upstream PR (`wso2-open-operations/one-wso2`) | One WSO2 owner | B1 UI |
-| 7 | How to verify an employee's own-post submission is really theirs (can the API read member posts, or is it PO review only?) | Scott (prototype) | Flow 5 |
+| 7 | How to verify an employee's own-post submission is really theirs (can the API read member posts, or is it PO review only?) | Developer (prototype) | Flow 5 |
 | 8 | Postgres and TypeScript differ from the team's usual MySQL/Ballerina. Confirm Choreo-managed Postgres is available in the target org | WSO2 Digital | Deployment L2 |

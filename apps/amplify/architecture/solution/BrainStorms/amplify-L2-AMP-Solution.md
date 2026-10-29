@@ -153,7 +153,7 @@ Same tables as [L2](amplify-L2-Choreo-Solution.md#data-model-postgres). Changes:
 
 | # | Item | Owner | Blocks |
 | --- | --- | --- | --- |
-| 1 | Identity bridge between ThunderID (Novera, Amplify Link, agents) and Asgardeo (One WSO2, Choreo gateway). amplify-api must resolve one employee from either token, and `employee_link` is keyed on `asgardeo_sub` today. Likely key on email or add a ThunderID `sub` | Scott with the AMP team | B2, B3, B14 |
+| 1 | Identity bridge between ThunderID (Novera, Amplify Link, agents) and Asgardeo (One WSO2, Choreo gateway). amplify-api must resolve one employee from either token, and `employee_link` is keyed on `asgardeo_sub` today. Likely key on email or add a ThunderID `sub` | Developer with the AMP team | B2, B3, B14 |
 | 2 | Which queue service and broker, and whether it is Choreo-hosted or platform-managed | WSO2 Digital | B12, jobs (a) and (b) |
 | 3 | Which Google Chat app posts the cards (Novera's or a new Amplify app), and whether card buttons need a callback into amplify-api | Visal R. | B7 |
 | 4 | Gateway model aliases, quotas and per-user metadata. Which models back `amplify-classify` and `amplify-answer` | AMP team | B4 |

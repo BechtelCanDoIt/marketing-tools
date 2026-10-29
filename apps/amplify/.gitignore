@@ -19,3 +19,6 @@ local/*.env
 
 # Load-test scratch (dev JWTs), scripts/load-test.sh
 local/.load/
+
+# Local people-stub roster (real names and emails); copy directory.json.example to start
+local/people-stub/directory.json

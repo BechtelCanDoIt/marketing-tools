@@ -1,6 +1,6 @@
 # Code review: Amplify backend (2026-10-26)
 
-Reviewer: Claude (agent), for Scott Bechtel. Branch `main` of the marketing-tools fork at `e1620d9`, plus the uncommitted working tree.
+Reviewer: Claude (agent), for Developer Bechtel. Branch `main` of the marketing-tools fork at `e1620d9`, plus the uncommitted working tree.
 
 ## Scope
 
@@ -27,7 +27,7 @@ I did not use the `code-reviewer` subagent. I did the review directly.
 | Should fix | 9 | Fix before the slice it belongs to goes out. |
 | Consider | 12 | Improvements, or decisions to record. |
 
-All three blockers are resolved on 2026-10-26. The stale seed-count test now asserts `>= 7`. The `posts` property on the person board is renamed `campaigns` (contract, handler, tests and the One WSO2 popup), so `lint-openapi-names.sh` and `make check` are green. The comment edits in four scripts stay, because Scott confirmed no database has applied them. After the fixes `amplify-database` passes 23 tests, `amplify-domain` 109 and `amplify-api` 111, and the One WSO2 Amplify tests, type check and lint pass.
+All three blockers are resolved on 2026-10-26. The stale seed-count test now asserts `>= 7`. The `posts` property on the person board is renamed `campaigns` (contract, handler, tests and the One WSO2 popup), so `lint-openapi-names.sh` and `make check` are green. The comment edits in four scripts stay, because Developer confirmed no database has applied them. After the fixes `amplify-database` passes 23 tests, `amplify-domain` 109 and `amplify-api` 111, and the One WSO2 Amplify tests, type check and lint pass.
 
 Most carried-forward findings are Fixed. Still open: api 23 (cron minimum interval), RC-12 (no nonce, by design) and D4/D5 (unused grants). Superseded: api 1 and R-13. The Won't fix decisions from October still stand. A few handoffs belong to the UI, docs or mock owners and are marked Not checked.
 
@@ -51,7 +51,7 @@ Line numbers are in the current working tree.
 | ID | Where | Finding | Fix |
 | --- | --- | --- | --- |
 | B1 | [amplify-database/tests/main_test.bal:49](../../amplify-database/tests/main_test.bal) | `testShippedScriptsAreWellFormed` asserts 6 seed scripts. There are 7 since S007 (commit `ff4d031`). `bal test` in amplify-database fails: 22 passed, 1 failed (`expected '6' actual '7'`). The same test would fail again on every future seed. | Resolved 2026-10-26: asserts `>= 7`. |
-| B2 | [V014:18](../../amplify-database/migrations/V014__point_actions_all_phases.sql), [S001:17](../../amplify-database/seed/S001__point_rules.sql), [S005:17](../../amplify-database/seed/S005__point_rules_pilot.sql), [S006:18](../../amplify-database/seed/S006__point_rules_all_values.sql) | Uncommitted edits change the comment path `docs/proposals/point-values.md` to `docs/requirements/point-values.md` in four applied scripts. The runner stores a SHA-256 of each script and stops on any change ([main.bal:245-248](../../amplify-database/main.bal): "was changed after it was applied; add a new script instead"). Every database that already applied these scripts (the local Compose volume, any dev database) will refuse to start the migrate step. The new path is correct, but the old one is frozen in the applied script. | Resolved by decision. No database has applied these scripts (confirmed by Scott, 2026-10-26), so the corrected comment path stays. If any database ever does apply them before this merges, put the corrected path in a README and revert the comments. |
+| B2 | [V014:18](../../amplify-database/migrations/V014__point_actions_all_phases.sql), [S001:17](../../amplify-database/seed/S001__point_rules.sql), [S005:17](../../amplify-database/seed/S005__point_rules_pilot.sql), [S006:18](../../amplify-database/seed/S006__point_rules_all_values.sql) | Uncommitted edits change the comment path `docs/proposals/point-values.md` to `docs/requirements/point-values.md` in four applied scripts. The runner stores a SHA-256 of each script and stops on any change ([main.bal:245-248](../../amplify-database/main.bal): "was changed after it was applied; add a new script instead"). Every database that already applied these scripts (the local Compose volume, any dev database) will refuse to start the migrate step. The new path is correct, but the old one is frozen in the applied script. | Resolved by decision. No database has applied these scripts (confirmed by Developer, 2026-10-26), so the corrected comment path stays. If any database ever does apply them before this merges, put the corrected path in a README and revert the comments. |
 | B3 | [amplify-api/openapi.yaml:1669](../../amplify-api/openapi.yaml) | `scripts/lint-openapi-names.sh` fails: the `posts` property on `DashboardPersonBoard` uses a banned L2-era word. `make check` is red on `main`. | Resolved 2026-10-26: renamed `posts` to `campaigns` in the contract, handler, tests and UI. |
 
 ### Should fix

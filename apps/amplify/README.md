@@ -65,7 +65,7 @@ make down    # stop and REMOVE volumes
 |---|---|---|
 | amplify-api | `127.0.0.1:9090` | Published directly (no gateway). Call it with a dev JWT: `curl -H "x-jwt-assertion: $(local/dev-jwt/mint-dev-jwt.sh token emp-1 ada@wso2.com amplify_po)" localhost:9090/me` (ADR-023, `environment=local` only) |
 | mock-linkedin | `127.0.0.1:19091` (www/OAuth only) | The browser follows the authorization redirect here; api port 9090 stays internal. One mock member signs in every time |
-| people-stub | `127.0.0.1:19092` | people-app directory stub (`GET /employees/basic-info`) for team rosters and One WSO2 photos/names. Edit `local/people-stub/directory.json`; ThunderID users are keyed `<sub>@wso2.com` (the dev proxy's fallback when the token has no email) |
+| people-stub | `127.0.0.1:19092` | people-app directory stub (`GET /employees/basic-info`) for team rosters and One WSO2 photos/names. First run `cp local/people-stub/directory.json.example local/people-stub/directory.json` (the real file is gitignored, so it never gets committed), then edit `directory.json`; ThunderID users are keyed `<sub>@wso2.com` (the dev proxy's fallback when the token has no email) |
 | postgres, amplify-db-migrate, amplify-jobs, scheduler, scheduler-db, chat-stub | none | Compose network only. Scheduler UI: `docker compose --env-file local/.env exec amplify-api wget -qO- http://scheduler:8080/jobs` |
 | apim (`make up PROFILE=apim`) | `127.0.0.1:9443`, `8243` | Optional WSO2 API Manager 4.7.0. **Pending the non-prod Asgardeo org** (key manager); steps in `compose.yaml`. Until then the default profile is the supported one |
 
