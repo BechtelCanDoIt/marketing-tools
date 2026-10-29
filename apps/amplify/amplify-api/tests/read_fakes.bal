@@ -294,7 +294,16 @@ isolated function mockDashboardData(string month, int slaHours, time:Utc now) re
 // ---- LinkedIn OAuth, cipher, OAuth state, tokens ----------------------------------------------------
 
 # How the fake LinkedIn answers the code exchange.
-type LinkedInMode "OK"|"REJECTED"|"DOWN"|"OFF";
+type LinkedInMode "OK"|"REJECTED"|"DOWN"|"OFF"|"REVOKE_DOWN";
+
+// Tokens the fake LinkedIn was asked to revoke.
+isolated string[] revokedTokens = [];
+
+function revokedSoFar() returns string[] {
+    lock {
+        return revokedTokens.clone();
+    }
+}
 
 isolated LinkedInMode linkedInMode = "OK";
 
@@ -333,6 +342,16 @@ isolated class FakeLinkedIn {
     public isolated function userInfo(string accessToken) returns linkedin:MemberProfile|linkedin:ProviderError =>
         {sub: "li-" + accessToken, memberUrn: "urn:li:person:" + accessToken.substring(accessToken.length() - 6),
             name: (), email: ()};
+
+    public isolated function revokeToken(string accessToken) returns linkedin:ProviderError? {
+        if currentLinkedInMode() == "REVOKE_DOWN" {
+            return error linkedin:ProviderError("down", code = linkedin:UNAVAILABLE, httpStatus = 503,
+                serviceErrorCode = (), retryable = true);
+        }
+        lock {
+            revokedTokens.push(accessToken);
+        }
+    }
 
     public isolated function publishShare(string accessToken, linkedin:ShareCommand command)
             returns types:PostUrn|linkedin:ProviderError =>
@@ -403,7 +422,20 @@ isolated class FakeTokens {
         }
     }
 
-    public isolated function find(connection:TokenRef ref) returns connection:StoredToken|error? => ();
+    private map<connection:StoredToken> seeded = {};
+
+    # Makes `find` return this row (a connection whose token can be opened and revoked).
+    isolated function seed(connection:StoredToken token) {
+        lock {
+            self.seeded[token.tokenId] = token.clone();
+        }
+    }
+
+    public isolated function find(connection:TokenRef ref) returns connection:StoredToken|error? {
+        lock {
+            return self.seeded[ref.tokenId].clone();
+        }
+    }
 
     isolated function count() returns int {
         lock {
