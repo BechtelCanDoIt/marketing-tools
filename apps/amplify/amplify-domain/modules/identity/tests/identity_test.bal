@@ -23,10 +23,10 @@ final time:Utc T0 = [1790000000, 0];
 
 @test:Config
 function firstSeenStaysLastSeenMoves() returns error? {
-    Employee first = check recordSeen((), {sub: "emp-1", email: "Avery.Mock@example.com"}, T0);
-    test:assertEquals(first.email, "avery.mock@example.com");
+    Employee first = check recordSeen((), {sub: "emp-1", email: "Avery.Mock@WSO2.com"}, T0);
+    test:assertEquals(first.email, "avery.mock@wso2.com");
     test:assertEquals(first.displayName, "avery.mock", "falls back to the email local part");
-    Employee later = check recordSeen(first, {sub: "emp-1", email: "avery.mock@example.com", name: "Avery Mock"},
+    Employee later = check recordSeen(first, {sub: "emp-1", email: "avery.mock@wso2.com", name: "Avery Mock"},
             types:addDays(T0, 1));
     test:assertEquals(later.firstSeenAt, T0);
     test:assertEquals(later.lastSeenAt, types:addDays(T0, 1));
@@ -35,7 +35,7 @@ function firstSeenStaysLastSeenMoves() returns error? {
 
 @test:Config
 function badClaimsAreRejected() {
-    Employee|types:DomainError noSub = recordSeen((), {sub: " ", email: "a@example.com"}, T0);
+    Employee|types:DomainError noSub = recordSeen((), {sub: " ", email: "a@wso2.com"}, T0);
     test:assertTrue(noSub is types:DomainError);
     Employee|types:DomainError badEmail = recordSeen((), {sub: "e", email: "nope"}, T0);
     test:assertTrue(badEmail is types:DomainError);
