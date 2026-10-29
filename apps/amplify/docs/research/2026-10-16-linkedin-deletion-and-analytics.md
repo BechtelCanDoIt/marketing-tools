@@ -1,7 +1,7 @@
 # LinkedIn deletion check and share analytics (M0b research)
 
 - **Date:** 2026-10-16
-- **Owner:** Scott
+- **Owner:** Lead Developer
 - **Plan items:** M0b "Investigate the deletion API" and "Research the analytics API"; feeds M6 pre-coin verification (C6) and the share-metrics pass
 - **Decision record:** [ADR-018](../../architecture/decisions/ADR-018-share-verification-and-metrics-need-community-management.md)
 - **Docs version checked:** LinkedIn Marketing API `li-lms-2026-09` on Microsoft Learn
