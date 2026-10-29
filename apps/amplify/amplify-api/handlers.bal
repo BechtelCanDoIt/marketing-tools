@@ -206,8 +206,7 @@ isolated function completeConnect(auth:Principal p, string? correlationId, Conne
         }
         // Server-side redirect URI check (token-and-oauth-notes §2): the page that received the code must be
         // the one the authorize request named, which is also what the token exchange sends.
-        string? landedOn = body.redirectUri;
-        if landedOn is string && landedOn != redirectUri() {
+        if body.redirectUri != redirectUri() {
             log:printWarn("LinkedIn callback on an unexpected redirect URI", correlationId = correlationId);
             return unprocessable(OAUTH_REDIRECT_MISMATCH, "This sign-in didn't come back to Amplify's page; start again",
                     correlationId);

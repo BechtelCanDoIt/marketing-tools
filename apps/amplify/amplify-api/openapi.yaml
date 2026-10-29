@@ -1245,14 +1245,14 @@ components:
     ConnectComplete:
       type: object
       additionalProperties: false
-      required: [code, state]
+      required: [code, state, redirectUri]
       properties:
         code: {type: string, minLength: 1, maxLength: 2048}
         state: {type: string, minLength: 32, maxLength: 128}
         redirectUri:
           type: string
           maxLength: 2048
-          description: The callback page that received the code (no query). When sent, it must equal the redirect URI Amplify put on the authorize request, else 422 `OAUTH_REDIRECT_MISMATCH`.
+          description: The callback page that received the code (no query). Required. It must equal the redirect URI Amplify put on the authorize request, else 422 `OAUTH_REDIRECT_MISMATCH`.
     LinkedInConnection:
       type: object
       required: [status, memberUrn, connectedAt, expiresAt]
