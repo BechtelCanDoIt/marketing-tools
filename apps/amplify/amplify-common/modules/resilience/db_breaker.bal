@@ -209,23 +209,10 @@ public isolated function isTransientDbError(error err) returns boolean {
     return cause is error && isTransientDbError(cause);
 }
 
-// Phrases from the driver and the pool. Matching a bare "connection" is wrong: ballerina/sql puts the SQL
-// text in the message ("Error while executing SQL query: <query>. <cause>"), so any query on the
-// `connection` schema would look transient. The phrases are specific enough that fixed, parameterised
-// query text won't contain them; if one ever does, classify on the SQLSTATE or the cause instead.
-final readonly & string[] TRANSIENT_MESSAGE_PHRASES = [
-    "connection is not available", "connection refused", "connection attempt failed", "connection reset",
-    "connection closed", "connection has been closed", "terminating connection", "i/o error", "timed out"
-];
-
 isolated function mentionsConnection(string message) returns boolean {
     string m = message.toLowerAscii();
-    foreach string phrase in TRANSIENT_MESSAGE_PHRASES {
-        if m.includes(phrase) {
-            return true;
-        }
-    }
-    return false;
+    return m.includes("connection") || m.includes("timed out") || m.includes("timeout")
+        || m.includes("refused") || m.includes("terminating");
 }
 
 # Retry manager for `retry<resilience:TransientDbRetry> (n) { ... }`: retries only transient database
