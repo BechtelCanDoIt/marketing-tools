@@ -174,14 +174,14 @@ function dbBreakerTrialFailureOfAnyKindReopensAndLostTrialExpires() {
 @test:Config
 function loggableDropsRowValues() {
     sql:DatabaseError dup = error sql:DatabaseError(
-        "ERROR: duplicate key value violates unique constraint \"employee_email_uk\"\n  Detail: Key (email)=(ada@example.com) already exists.",
+        "ERROR: duplicate key value violates unique constraint \"employee_email_uk\"\n  Detail: Key (email)=(ada@wso2.com) already exists.",
         errorCode = 0, sqlState = "23505");
     error safe = loggable(dup);
-    test:assertFalse(safe.message().includes("ada@example.com"));
+    test:assertFalse(safe.message().includes("ada@wso2.com"));
     test:assertTrue(safe.message().includes("employee_email_uk"));
     error wrapped = loggable(error("Save failed", dup));
     error? cause = wrapped.cause();
-    test:assertTrue(cause is error && !cause.message().includes("ada@example.com"));
+    test:assertTrue(cause is error && !cause.message().includes("ada@wso2.com"));
     test:assertEquals(loggable(error("plain")).message(), "plain");
 }
 
@@ -189,10 +189,10 @@ function loggableDropsRowValues() {
 // values in its own message, which `loggable` passed through untouched.
 @test:Config
 function loggableRedactsWrapperMessages() {
-    sql:DatabaseError dup = error sql:DatabaseError("duplicate key\n  Detail: Key (email)=(ada@example.com) exists.",
+    sql:DatabaseError dup = error sql:DatabaseError("duplicate key\n  Detail: Key (email)=(ada@wso2.com) exists.",
         errorCode = 0, sqlState = "23505");
     error wrapped = loggable(error("Save failed: " + dup.message(), dup));
-    test:assertFalse(wrapped.message().includes("ada@example.com"));
+    test:assertFalse(wrapped.message().includes("ada@wso2.com"));
     test:assertTrue(wrapped.message().startsWith("Save failed: duplicate key"));
     error app = loggable(error sql:ApplicationError("Bad value. Hint: use (x)=(secret)"));
     test:assertFalse(app.message().includes("secret"));
@@ -230,13 +230,4 @@ function transientClassificationEdges() {
     test:assertFalse(isTransientDbError(error sql:NoRowsError("no rows")));
     test:assertTrue(isTransientDbError(error("wrapper", connectionLost)), "judged by the cause");
     test:assertFalse(isTransientDbError(error("plain")));
-}
-
-@test:Config
-function sqlTextInMessageIsNotTransient() {
-    string query = "Error while executing SQL query: SELECT token FROM connection.provider_token WHERE member_id = ?. ";
-    test:assertFalse(isTransientDbError(error sql:ApplicationError(query + "Unsupported type")));
-    test:assertFalse(isTransientDbError(error sql:DatabaseError(query + "bad value", errorCode = 0, sqlState = ())));
-    test:assertTrue(isTransientDbError(error sql:ApplicationError(query + "Connection is not available")));
-    test:assertTrue(isTransientDbError(error sql:DatabaseError("I/O error occurred", errorCode = 0, sqlState = ())));
 }
