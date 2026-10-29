@@ -141,15 +141,15 @@ demo() {
   echo "== people-app, other callers unchanged"
   check "unlisted client id refused" "403" "$(status -H "x-jwt-assertion: $(jwt '{"azp":"someone-else","aut":"APPLICATION"}')" "$app/employees/basic-info")"
   check "listed id on a user token (no email) refused" "500" "$(status -H "x-jwt-assertion: $(jwt '{"azp":"'"$CLIENT_ID"'","aut":"APPLICATION_USER"}')" "$app/employees/basic-info")"
-  check "employee user reads the directory" "200" "$(status -H "x-jwt-assertion: $(jwt '{"email":"aloka@wso2.com","groups":["people-employee"]}')" "$app/employees/basic-info")"
-  check "user without a people group refused" "403" "$(status -H "x-jwt-assertion: $(jwt '{"email":"aloka@wso2.com","groups":[]}')" "$app/employees/basic-info")"
+  check "employee user reads the directory" "200" "$(status -H "x-jwt-assertion: $(jwt '{"email":"avery@example.com","groups":["people-employee"]}')" "$app/employees/basic-info")"
+  check "user without a people group refused" "403" "$(status -H "x-jwt-assertion: $(jwt '{"email":"avery@example.com","groups":[]}')" "$app/employees/basic-info")"
 
   echo "== amplify-api My Team from the real directory"
   local mint="$ROOT/local/dev-jwt/mint-dev-jwt.sh" board
-  board=$(curl -s -H "x-jwt-assertion: $("$mint" token aloka aloka@wso2.com amplify_po)" http://127.0.0.1:9090/leaderboard)
+  board=$(curl -s -H "x-jwt-assertion: $("$mint" token avery avery@example.com amplify_po)" http://127.0.0.1:9090/leaderboard)
   check "teamStatus" "OK" "$(jq -r .teamStatus <<<"$board")"
   check "team is the sub-team" "PO" "$(jq -r .myTeam.teamName <<<"$board")"
-  check "headcount (Aloka, Charuka, Eryn, Inthira, Shashini)" "5" "$(jq -r .myTeam.headcount <<<"$board")"
+  check "headcount (Avery, Blake, Casey, Finley, Kai)" "5" "$(jq -r .myTeam.headcount <<<"$board")"
 
   echo "== $pass passed, $fail failed"
   [[ $fail -eq 0 ]]
