@@ -26,7 +26,7 @@ function totals() returns EmployeeTotal[] => [
 ];
 
 function total(string id, string name, int points) returns EmployeeTotal =>
-    {employeeId: id, displayName: name, email: name.toLowerAscii() + "@example.com", totalPoints: points, lastActivityAt: ()};
+    {employeeId: id, displayName: name, email: name.toLowerAscii() + "@wso2.com", totalPoints: points, lastActivityAt: ()};
 
 @test:Config
 function denseRankSharesTies() {
@@ -54,7 +54,7 @@ function fewerPeopleThanTopN() {
 @test:Config
 function myTeamRanksWithinTheTeam() {
     Standing[] company = rankStandings(PERIOD_ALL, totals());
-    Standing[] team = teamStandings(PERIOD_ALL, company, ["DEVON@example.com", "emery@example.com"]);
+    Standing[] team = teamStandings(PERIOD_ALL, company, ["DEVON@wso2.com", "emery@wso2.com"]);
     test:assertEquals(team.map(r => [r.employeeId, r.rank]), [["e4", 1], ["e5", 2]]);
 }
 

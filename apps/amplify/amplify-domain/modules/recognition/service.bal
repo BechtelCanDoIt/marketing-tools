@@ -52,7 +52,7 @@ public isolated function rankStandings(string periodKey, EmployeeTotal[] totals,
             rank,
             previousRank: previousRanks[t.employeeId],
             pointsToNextRank: rank == 1 ? 0 : rankPoints[rank - 2] - t.totalPoints,
-            pointsToTopN: rank <= topN ? 0 : topNFloor - t.totalPoints,
+            pointsToTopN: rank <= topN ? 0 : topNFloor - t.totalPoints + 1,
             lastActivityAt: t.lastActivityAt
         });
     }
