@@ -98,8 +98,8 @@ erDiagram
     EMPLOYEE ||..o{ MEMBER_CONNECTION : "connects"
     EMPLOYEE ||..o{ SHARE_REQUEST : "requests"
     CAMPAIGN ||..o{ SHARE_REQUEST : "reposted via"
-    SHARE_REQUEST |o--o| ENGAGEMENT : "results in"
-    CAMPAIGN |o..o{ ENGAGEMENT : "engaged on"
+    SHARE_REQUEST ||--o| ENGAGEMENT : "results in"
+    CAMPAIGN ||..o{ ENGAGEMENT : "engaged on"
     EMPLOYEE ||..o{ EXTERNAL_SHARE : "submits"
     CAMPAIGN |o..o{ EXTERNAL_SHARE : "optionally about"
     ENGAGEMENT ||..o| LEDGER : "scored"
@@ -335,7 +335,7 @@ The token references are virtual **inside** the context on purpose: Postgres won
 **Token partitions (ADR-002; retention research is plan D7, open):**
 - `PARTITION BY RANGE (issued_on)`, **one partition per day** (`provider_token_p20261016`, …), created 7 days ahead.
 - PK `(token_id, issued_on)` because Postgres requires the partition key in every PK/UNIQUE.
-- **Drop rule works for any token life:** a day's partition is dropped when `max(expires_at)` in it `+ token_grace_days (5) < now()`, or when it's empty. Member access tokens (~60 days) clear their day at ~65 days. A day holding a future Community Management **refresh token** (~1 year) survives until that token is past expiry + grace.
+- **Drop rule works for any token life:** a day's partition is dropped when `max(expires_at)` in it `+ token_grace_days (1) < now()`, or when it's empty. Member access tokens (~60 days) clear their day at ~61 days. A day holding a future Community Management **refresh token** (~1 year) survives until that token is past expiry + grace.
 - Upkeep: `DETACH PARTITION` then `DROP` (plain, not `CONCURRENTLY`: that can't run inside the `SECURITY DEFINER` function; the day dropped is old, so the lock is brief), via the scheduler (ADR-026) → `amplify-jobs POST /maintenance/partitions` once a day (`maintenance.schedule`); each drop is audited. **This is the only token-drop rule** (B11): no age-based drop anywhere, so a long-lived refresh token is never deleted early. The same daily call also handles audit partitions, the outbox purge and the `oauth_state` sweep (B10, see [infrastructure](#messaging-audit-config--infrastructure)).
 - Reconnect and Remove Connection **delete the old token row right away**. The partition drop is the backstop.
 - Backups keep dropped days until backup retention ends. That window is the true maximum time at rest, and it goes in the security checklist.
@@ -535,7 +535,7 @@ erDiagram
         text coin_reference "phase 2"
     }
 
-    POINT_RULE |o--o{ POINTS_LEDGER : "priced by"
+    POINT_RULE ||--o{ POINTS_LEDGER : "priced by"
     POINTS_LEDGER |o--o| POINTS_LEDGER : "reversed by"
 ```
 
@@ -731,13 +731,13 @@ erDiagram
 
 - **Outbox:** written in the same transaction as the aggregate change. Jobs claim with `FOR UPDATE SKIP LOCKED`. Partial index on `next_attempt_at WHERE status = 'PENDING'`. `DONE` rows older than 30 days are purged by the daily `POST /maintenance/partitions` call (B10). (Outbox keeps a `bigint` identity id because strict queue order matters more than global uniqueness.)
 - **Audit:** **retained 5 years** (decided; B17 closed the audit part of plan D7). Monthly partitions on `at`, created 3 months ahead. Partitions older than 60 months are detached and dropped by the same daily `/maintenance/partitions` call (which also creates partitions ahead and sweeps expired `oauth_state` rows), and each drop is itself audited. Append-only: insert/select grants only.
-- **Settings seed:** `leaderboard.top_n = 3`, `team.visibility = TEAM` ([leaderboards.md](../architecture/solution/Phase%201/leaderboards.md)), `campaign.default_window_days = 30` (C7), `po.review_sla_hours = 48` ([po-dashboard.md](../architecture/solution/Phase%201/po-dashboard.md)), `posts.window_days = 14`, `connection.reminder_days = 7`, `connection.token_grace_days = 5`, `audit.retention_months = 60`, `sharing.enabled = true`, `announcements.enabled = true`.
+- **Settings seed:** `leaderboard.top_n = 3`, `team.visibility = TEAM` ([leaderboards.md](../architecture/solution/Phase%201/leaderboards.md)), `campaign.default_window_days = 30` (C7), `po.review_sla_hours = 48` ([po-dashboard.md](../architecture/solution/Phase%201/po-dashboard.md)), `posts.window_days = 14`, `connection.reminder_days = 7`, `connection.token_grace_days = 1`, `audit.retention_months = 60`, `sharing.enabled = true`, `announcements.enabled = true`.
 
 ---
 
 ## Domain events → which table changes
 
-**This is the one event catalogue** for phase 1 (B9). [phase1-domains](../architecture/solution/Phase%201/phase1-domains.md#domain-events-outbox--jobs-table) and the plan link here instead of keeping their own lists. Every event is a `messaging.outbox` row (`event_type` = the name below), written in the same transaction as the producer's change. The row is the queue record: `amplify-jobs` claims `PENDING` rows with `FOR UPDATE SKIP LOCKED` so two runs never take the same row, then marks each `DONE`, retries it with backoff, or marks it `FAILED`. The side effects (webhook, LinkedIn call, ledger write) belong to the consumer in the Consumer column. Where that column says "same transaction in api", `amplify-api` has already applied the consumer's writes in the producer's transaction, so the row only records the event. Where it says "—", no consumer acts on it beyond the admin view or read models.
+**This is the one event catalogue** for phase 1 (B9). [phase1-domains](../architecture/solution/Phase%201/phase1-domains.md#domain-events-outbox--jobs-table) and the plan link here instead of keeping their own lists. Every event is a `messaging.outbox` row (`event_type` = the name below), written in the same transaction as the producer's change, and claimed by `amplify-jobs` with `FOR UPDATE SKIP LOCKED`.
 
 | Event (outbox `event_type`) | Publisher | Producer writes | Consumer | Consumer writes | Idempotency key |
 | --- | --- | --- | --- | --- | --- |
