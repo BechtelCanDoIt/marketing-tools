@@ -206,8 +206,7 @@ isolated function completeConnect(auth:Principal p, string? correlationId, Conne
         }
         // Server-side redirect URI check (token-and-oauth-notes §2): the page that received the code must be
         // the one the authorize request named, which is also what the token exchange sends.
-        string? landedOn = body.redirectUri;
-        if landedOn is string && landedOn != redirectUri() {
+        if body.redirectUri != redirectUri() {
             log:printWarn("LinkedIn callback on an unexpected redirect URI", correlationId = correlationId);
             return unprocessable(OAUTH_REDIRECT_MISMATCH, "This sign-in didn't come back to Amplify's page; start again",
                     correlationId);
@@ -334,12 +333,65 @@ isolated function providerFailure(linkedin:ProviderError err, string? correlatio
 
 isolated function removeConnection(auth:Principal p, string? correlationId) returns http:NoContent|ProblemResponse {
     do {
-        _ = check connection:removeConnection(check connectionRepository(actorOf(p, correlationId)), p.employeeId,
-                time:utcNow());
+        time:Utc now = time:utcNow();
+        connection:ConnectionRepository repo = check connectionRepository(actorOf(p, correlationId));
+        connection:LinkedInConnection? existing = check repo.findByEmployee(p.employeeId, types:LINKEDIN);
+        if existing is connection:LinkedInConnection {
+            // Revoke at LinkedIn first; only a confirmed (or already dead) token lets the local delete go on.
+            http:ServiceUnavailable? refused = check revokeAtLinkedIn(existing, correlationId, now);
+            if refused is http:ServiceUnavailable {
+                return refused;
+            }
+        }
+        _ = check connection:removeConnection(repo, p.employeeId, now);
         return http:NO_CONTENT;
     } on fail error e {
         return failure(e, correlationId, "Remove LinkedIn connection");
     }
+}
+
+# Revokes the connection's access token at LinkedIn before Amplify deletes it. Nothing to revoke when the
+# connection is already removed, has no token row, or the token expired on its own. LinkedIn saying the token
+# is already invalid counts as done. Any other failure keeps the connection so the employee can try again.
+#
+# + c - The employee's connection
+# + correlationId - Request correlation id
+# + now - Current time
+# + return - A 503 to return when LinkedIn couldn't confirm, `()` to go on with the delete, or an error
+isolated function revokeAtLinkedIn(connection:LinkedInConnection c, string? correlationId, time:Utc now)
+        returns http:ServiceUnavailable?|error {
+    connection:TokenRef? ref = c.currentToken;
+    if c.removedAt !is () || ref is () || time:utcDiffSeconds(c.accessExpiresAt, now) <= 0d {
+        return ();
+    }
+    linkedin:ProviderAdapter? adapter = linkedInProvider();
+    var sealer = cipher();
+    if adapter is () || sealer is () {
+        log:printWarn("LinkedIn revoke is not configured", correlationId = correlationId);
+        return unavailable(DEPENDENCY_UNAVAILABLE, correlationId);
+    }
+    connection:StoredToken? token = check (check tokenRepository()).find(ref);
+    if token is () {
+        return ();
+    }
+    string|error bearer = connection:openToken(sealer, token);
+    if bearer is error {
+        // Can't open it, so can't revoke it; the local delete still removes our copy.
+        log:printWarn("Stored LinkedIn token did not open; removing without revoking", correlationId = correlationId);
+        return ();
+    }
+    linkedin:ProviderError? revoked = adapter.revokeToken(bearer);
+    if revoked is linkedin:ProviderError {
+        linkedin:ProviderErrorCode code = revoked.detail().code;
+        if code == linkedin:UNAUTHORIZED || code == linkedin:REJECTED {
+            log:printInfo("LinkedIn token was already invalid", correlationId = correlationId);
+            return ();
+        }
+        log:printWarn("LinkedIn revoke failed; connection kept", errorCode = code, correlationId = correlationId);
+        return unavailable(DEPENDENCY_UNAVAILABLE, correlationId,
+                "LinkedIn couldn't be reached, so the connection was not removed. Try again shortly.");
+    }
+    return ();
 }
 
 // ---- C1 Sharing -----------------------------------------------------------------------------------
