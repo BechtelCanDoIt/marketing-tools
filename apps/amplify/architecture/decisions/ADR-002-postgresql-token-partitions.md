@@ -10,7 +10,7 @@ Phase 1 needs a relational store with clear context boundaries. LinkedIn member 
 
 ## Decision
 
-PostgreSQL, one schema per bounded context. LinkedIn tokens live in a **daily time-partitioned** table; a partition is dropped once every token in it is past expiry plus a grace period (default 5 days).
+PostgreSQL, one schema per bounded context. LinkedIn tokens live in a **daily time-partitioned** table; a partition is dropped once every token in it is past expiry plus a grace period (default 1 day).
 
 ## Consequences
 

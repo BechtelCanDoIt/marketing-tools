@@ -70,7 +70,8 @@ public final Rule[] & readonly ACTIVITY_MATRIX = [
     // S2 Connection
     {method: "POST", path: "/connections/linkedin/start", allowed: ALL, capability: "linkedin.connect", useCase: "Own; issues state"},
     {method: "POST", path: "/connections/linkedin/complete", allowed: ALL, capability: "linkedin.connect", useCase: "Own; state matches, unused, unexpired, same employee"},
-    {method: "DELETE", path: "/connections/linkedin", allowed: ALL, capability: "linkedin.connect", useCase: "Own"},
+    {method: "POST", path: "/connections/linkedin/decline", allowed: ALL, capability: "linkedin.connect", useCase: "Own; records the decline and an optional LinkedIn profile URL"},
+    {method: "DELETE", path: "/connections/linkedin", allowed: ALL, capability: "linkedin.connect", useCase: "Own; revokes the token at LinkedIn, then deletes it"},
     // C1 Sharing
     {method: "POST", path: "/campaigns/{id}/shares", allowed: ALL, capability: "shares.create", useCase: "Own; campaign OPEN; connection ACTIVE/EXPIRING; one per campaign (retry reuses row, ADR-015); sharing.enabled"},
     {method: "GET", path: "/me/shares", allowed: ALL, capability: "shares.read_own"},
