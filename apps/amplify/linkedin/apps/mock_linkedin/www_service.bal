@@ -135,6 +135,30 @@ service http:InterceptableService /oauth/v2 on wwwListener {
             }
         };
     }
+
+    # Revokes an access token (RFC 7009): client credentials in the form, then the token is forgotten.
+    # Answers 200 for an unknown token too.
+    #
+    # + ctx - Request context
+    # + req - Form-encoded revoke request
+    # + return - 200, or an OAuth error
+    isolated resource function post revoke(http:RequestContext ctx, http:Request req)
+            returns http:Ok|OAuthErrorBadRequest|OAuthErrorUnauthorized {
+        map<string>|http:ClientError form = req.getFormParams();
+        if form is http:ClientError {
+            return oauthBadRequest(OAUTH_INVALID_REQUEST, "Request body must be application/x-www-form-urlencoded");
+        }
+        if form["client_id"] != clientId || form["client_secret"] != clientSecret {
+            return <OAuthErrorUnauthorized>{body: {'error: OAUTH_INVALID_CLIENT, error_description: "Client authentication failed"}};
+        }
+        string? tokenValue = form["token"];
+        if tokenValue is () || tokenValue.trim() == "" {
+            return oauthBadRequest(OAUTH_INVALID_REQUEST, "token is required");
+        }
+        boolean removed = store:removeAccessToken(tokenValue);
+        log:printInfo("Access token revoke", correlationId = correlationId(ctx), removed = removed);
+        return http:OK;
+    }
 }
 
 # Parses the `scope` parameter and checks every scope is one the mock supports.
