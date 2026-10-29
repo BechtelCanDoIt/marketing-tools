@@ -275,6 +275,28 @@ paths:
         "409": {$ref: "#/components/responses/Problem"}
         "422": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
+  /connections/linkedin/decline:
+    post:
+      tags: [S2 Connection]
+      operationId: declineLinkedInConnect
+      x-roles: [EMP, PO, MKT, SLT, ADM]
+      description: Records "I don't consent" from the Link Me pop-up with the caller's LinkedIn profile URL (`https://www.linkedin.com/in/<name>`), which is optional; blank or missing stores nothing. No LinkedIn link or token is created.
+      parameters:
+        - {$ref: "#/components/parameters/CorrelationId"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profileUrl: {type: string, maxLength: 255, nullable: true, example: "https://www.linkedin.com/in/your-name"}
+      responses:
+        "204": {description: Recorded}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/Problem"}
   /connections/linkedin:
     delete:
       tags: [S2 Connection]

@@ -176,6 +176,9 @@ isolated function employeeRepository() returns identity:EmployeeRepository|error
 isolated function connectionRepository(store:Actor actor) returns connection:ConnectionRepository|error =>
     new connection:PgConnectionRepository(check db(), actor);
 
+isolated function consentRepository() returns connection:ConsentRepository|error =>
+    new connection:PgConsentRepository(check db());
+
 isolated function tokenRepository() returns connection:TokenRepository|error =>
     new connection:PgTokenRepository(check db());
 
