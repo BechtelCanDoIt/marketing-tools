@@ -26,7 +26,7 @@ VALUES ('leaderboard.top_n', '3'),                  -- B16
        ('po.review_sla_hours', '48'),               -- po-dashboard.md
        ('posts.window_days', '14'),
        ('connection.reminder_days', '7'),
-       ('connection.token_grace_days', '1'),        -- ADR-002: a day is dropped 1 day after its last token expires
+       ('connection.token_grace_days', '5'),        -- ADR-002, D7 open
        ('audit.retention_months', '60'),            -- B17
        ('sharing.enabled', 'true'),                 -- kill switch
        ('announcements.enabled', 'true')            -- kill switch
