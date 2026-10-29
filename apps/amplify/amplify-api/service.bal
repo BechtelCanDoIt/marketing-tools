@@ -267,6 +267,21 @@ service http:InterceptableService / on apiListener {
                 isolated function() returns http:StatusCodeResponse => completeConnect(p, id, b));
     }
 
+    # Records that the caller doesn't consent to link LinkedIn, with their LinkedIn profile URL.
+    #
+    # + ctx - Request context
+    # + req - Request
+    # + body - Profile URL
+    # + return - 204, or problem details
+    resource function post connections/linkedin/decline(http:RequestContext ctx, http:Request req,
+            @http:Payload ConnectDeclineBody body) returns http:Response|error {
+        final auth:Principal & readonly p = (check principalOf(ctx)).cloneReadOnly();
+        final string? id = cid(ctx);
+        final readonly & ConnectDeclineBody b = body.cloneReadOnly();
+        return idempotent(ctx, req, p, "/connections/linkedin/decline", b.toJson(),
+                isolated function() returns http:StatusCodeResponse => declineConnect(p, id, b));
+    }
+
     # Removes the caller's LinkedIn connection.
     #
     # + ctx - Request context

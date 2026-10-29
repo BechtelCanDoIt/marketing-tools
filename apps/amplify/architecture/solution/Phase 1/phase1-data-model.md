@@ -95,7 +95,7 @@ erDiagram
 | --- | --- | --- | --- |
 | `identity` | shared kernel | `employee` | api |
 | `campaign` | S1 Campaign | `campaign` (AR), `campaign_tag`, `category` | api |
-| `connection` | S2 Connection | `member_connection` (AR), `org_connection` (AR, future phase), `provider_token` (partitioned), `oauth_state` | api, jobs |
+| `connection` | S2 Connection | `member_connection` (AR), `org_connection` (AR, future phase), `provider_token` (partitioned), `oauth_state`, `linkedin_consent` (V015: CONSENTED/DECLINED per employee; DECLINED holds the optional typed LinkedIn profile URL, personal data) | api, jobs |
 | `sharing` | C1 Sharing | `share_request` (AR), `engagement` (AR), `engagement_verification`; *future:* `engagement_metric`, `sync_cursor` | api, jobs |
 | `external_sharing` | S3 External Sharing (UI: "My Campaign") | `external_share` (AR) | api |
 | `scoring` | C2 Scoring & Points Ledger | `point_rule` (AR), `points_ledger` (AR) | api, jobs |
@@ -291,13 +291,20 @@ erDiagram
         timestamptz created_at
         timestamptz expires_at "10 min"
     }
+    LINKEDIN_CONSENT["connection.linkedin_consent (V015)"] {
+        text employee_id PK
+        enum decision "CONSENTED DECLINED"
+        text profile_url "optional, set when DECLINED and typed; max 255, personal data"
+        timestamptz decided_at
+        int version
+    }
 ```
 
 **Virtual FKs**
 
 | Domain | table.key | Domain | table.fk |
 | --- | --- | --- | --- |
-| identity | `employee.employee_id` | connection | `member_connection.employee_id` |
+| identity | `employee.employee_id` | connection | `member_connection.employee_id`, `linkedin_consent.employee_id` |
 | identity | `employee.employee_id` | connection | `oauth_state.employee_id` |
 | identity | `employee.employee_id` | connection | `org_connection.connected_by` |
 | connection | `provider_token.(token_id, issued_on)` | connection | `member_connection.(current_token_id, current_token_issued_on)` |
