@@ -163,11 +163,11 @@ function testTokenDayDropRuleAndAudit() returns error? {
         INSERT INTO connection.provider_token (issued_on, owner_type, owner_id, provider, token_kind, ciphertext, nonce,
                                                key_id, expires_at)
         VALUES (CAST(${expiredDay} AS date), 'MEMBER', 'emp-old', 'linkedin', 'ACCESS', '\x00'::bytea,
-                '\x000000000000000000000000'::bytea, 'k1', now() - interval '6 days'),
+                '\x000000000000000000000000'::bytea, 'k1', now() - interval '2 days'),
                (CAST(${validDay} AS date), 'MEMBER', 'emp-new', 'linkedin', 'REFRESH', '\x00'::bytea,
                 '\x000000000000000000000000'::bytea, 'k1', now() + interval '300 days')`);
-    // Grace boundary: a token expired 6 days ago is past a 5-day grace, so its day goes.
-    int dropped = check jobs->queryRow(`SELECT connection.drop_expired_token_partitions(5)`);
+    // Grace boundary: a token expired 2 days ago is past a 1-day grace, so its day goes.
+    int dropped = check jobs->queryRow(`SELECT connection.drop_expired_token_partitions(1)`);
     test:assertEquals(dropped, 2, "expired day and empty day dropped");
     test:assertFalse(check partitionExists(jobs, "connection", dayName(-70)));
     test:assertFalse(check partitionExists(jobs, "connection", dayName(-20)));
