@@ -71,6 +71,12 @@ type ConnectCompleteBody record {|
     string? redirectUri = ();
 |};
 
+# `POST /connections/linkedin/decline` body.
+type ConnectDeclineBody record {|
+    // The person's LinkedIn profile URL, https://www.linkedin.com/in/<name>; optional
+    string? profileUrl = ();
+|};
+
 # `POST /campaigns/{id}/shares` body.
 type ShareBody record {|
     string kind;

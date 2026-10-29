@@ -248,6 +248,12 @@ isolated function completeConnect(auth:Principal p, string? correlationId, Conne
             token: connection:tokenRef(token),
             expiresInSeconds: grant.expiresInSeconds
         }, now, token);
+        // The consent record is best effort: the link itself is already stored, so a failure here must not
+        // strand the person on an error page after LinkedIn.
+        error? consentRecorded = recordConsent(p.employeeId, connection:CONSENTED, (), now);
+        if consentRecorded is error {
+            log:printWarn("Could not record LinkedIn consent", 'error = consentRecorded, correlationId = correlationId);
+        }
         return <http:Ok>{
             body: {
                 status: connection:connectionStatus(linked, now),
@@ -260,6 +266,26 @@ isolated function completeConnect(auth:Principal p, string? correlationId, Conne
         };
     } on fail error e {
         return failure(e, correlationId, "Complete LinkedIn connect");
+    }
+}
+
+isolated function recordConsent(string employeeId, connection:ConsentDecision decision, string? profileUrl,
+        time:Utc now) returns error? => (check consentRepository()).save(employeeId, decision, profileUrl, now);
+
+isolated function declineConnect(auth:Principal p, string? correlationId, ConnectDeclineBody body)
+        returns http:StatusCodeResponse {
+    do {
+        // Optional: blank means they chose not to give it. A value must be a LinkedIn profile URL.
+        string? given = body.profileUrl;
+        string? url = given is string && given.trim().length() > 0 ? given.trim() : ();
+        if url is string && !connection:isProfileUrl(url) {
+            return badRequest("profileUrl must be a LinkedIn profile URL like https://www.linkedin.com/in/your-name",
+                    correlationId);
+        }
+        check recordConsent(p.employeeId, connection:DECLINED, url, time:utcNow());
+        return <http:NoContent>{};
+    } on fail error e {
+        return failure(e, correlationId, "Record LinkedIn consent decline");
     }
 }
 
