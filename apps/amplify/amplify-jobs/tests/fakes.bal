@@ -563,6 +563,8 @@ isolated class FakeLinkedIn {
     public isolated function userInfo(string accessToken) returns linkedin:MemberProfile|linkedin:ProviderError =>
         {sub: "s", memberUrn: "urn:li:person:s", name: (), email: ()};
 
+    public isolated function revokeToken(string accessToken) returns linkedin:ProviderError? => ();
+
     public isolated function publishShare(string accessToken, linkedin:ShareCommand command)
             returns types:PostUrn|linkedin:ProviderError {
         lock {

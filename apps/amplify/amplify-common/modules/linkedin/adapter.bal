@@ -140,6 +140,20 @@ public isolated class LinkedInAdapter {
         return {sub: body.sub, memberUrn, name: body.name, email: body.email};
     }
 
+    public isolated function revokeToken(string accessToken) returns ProviderError? {
+        string|url:Error form = buildQuery({
+            "client_id": self.clientId,
+            "client_secret": self.clientSecret,
+            "token": accessToken
+        });
+        if form is url:Error {
+            return providerError(BAD_RESPONSE, "Could not encode the revoke request", (), (), false);
+        }
+        http:Response|http:ClientError response = self.auth->post("/oauth/v2/revoke", form,
+                mediaType = mime:APPLICATION_FORM_URLENCODED);
+        _ = check expectStatus(response, http:STATUS_OK, "token revoke");
+    }
+
     # Breaker states of the REST API and OAuth clients.
     #
     # + return - `{api, auth}`
