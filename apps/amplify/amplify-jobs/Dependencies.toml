@@ -428,7 +428,7 @@ version = "1.7.0"
 [[package]]
 org = "wso2"
 name = "amplify_common"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
 	{org = "ballerina", name = "crypto"},
 	{org = "ballerina", name = "file"},
@@ -438,6 +438,7 @@ dependencies = [
 	{org = "ballerina", name = "lang.array"},
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "lang.runtime"},
+	{org = "ballerina", name = "log"},
 	{org = "ballerina", name = "mime"},
 	{org = "ballerina", name = "observe"},
 	{org = "ballerina", name = "os"},
@@ -460,7 +461,7 @@ modules = [
 [[package]]
 org = "wso2"
 name = "amplify_domain"
-version = "0.3.0"
+version = "0.4.1"
 dependencies = [
 	{org = "ballerina", name = "file"},
 	{org = "ballerina", name = "io"},
