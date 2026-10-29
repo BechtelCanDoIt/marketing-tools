@@ -2,8 +2,4 @@
 **/generated
 **/Config.toml
 local/.env
-local/*.env
-local/dev-jwt/
-local/.load/
-*.secret
 .git
