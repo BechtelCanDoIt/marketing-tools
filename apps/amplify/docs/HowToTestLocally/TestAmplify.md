@@ -37,7 +37,7 @@ make up        # first run writes local/.env and the dev-JWT keys, builds images
 
 The Compose project is always `wso2-amplify`, so your data survives restarts. `make down` **deletes the volumes**; use `docker compose --env-file local/.env stop` to stop without losing data.
 
-Team rosters come from people-stub. Edit `local/people-stub/directory.json`: it's re-read on every call, but amplify-api keeps its team index for 3 days, so restart amplify-api after an edit (`docker compose --env-file local/.env restart amplify-api`). Match `workEmail` to the email your sign-in reaches Amplify with (step 4).
+Team rosters come from people-stub. First copy the sample once: `cp local/people-stub/directory.json.example local/people-stub/directory.json` (the real file is gitignored, so keep real names and emails out of commits). Then edit `local/people-stub/directory.json`: it's re-read on every call, but amplify-api keeps its team index for 3 days, so restart amplify-api after an edit (`docker compose --env-file local/.env restart amplify-api`). Match `workEmail` to the email your sign-in reaches Amplify with (step 4).
 
 ## 4. Start the dev proxy
 
