@@ -67,8 +67,14 @@ type ConnectStartBody record {|
 type ConnectCompleteBody record {|
     string code;
     string state;
-    // Callback page the browser landed on (no query); when sent it must equal the configured redirect URI.
-    string? redirectUri = ();
+    // Callback page the browser landed on (no query); must equal the configured redirect URI.
+    string redirectUri;
+|};
+
+# `POST /connections/linkedin/decline` body.
+type ConnectDeclineBody record {|
+    // The person's LinkedIn profile URL, https://www.linkedin.com/in/<name>; optional
+    string? profileUrl = ();
 |};
 
 # `POST /campaigns/{id}/shares` body.
