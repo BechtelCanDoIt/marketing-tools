@@ -170,9 +170,9 @@ function testConstraintsRejectBadRows() returns error? {
             VALUES ('linkedin', 'urn:li:share:it-owner', 'SHARE', 'urn:li:person:1', 'T', 'PRODUCT',
                     now(), now() + interval '1 day', 'po-1')`), "campaign_owner_urn_check");
     _ = check api->execute(`INSERT INTO identity.employee (employee_id, email, display_name)
-            VALUES ('it-citext-1', 'Case.Person@example.com', 'Case Person') ON CONFLICT DO NOTHING`);
+            VALUES ('it-citext-1', 'Case.Person@WSO2.com', 'Case Person') ON CONFLICT DO NOTHING`);
     assertViolates(failure(api, `INSERT INTO identity.employee (employee_id, email, display_name)
-            VALUES ('it-citext-2', 'case.person@example.com', 'Case Person')`), "employee_email_key");
+            VALUES ('it-citext-2', 'case.person@wso2.com', 'Case Person')`), "employee_email_key");
 
     // Connection (ADR-002, B13).
     assertViolates(failure(api, `INSERT INTO connection.member_connection (employee_id, provider, member_urn, provider_api,
@@ -223,7 +223,7 @@ function testGrantsDenyPerRole() returns error? {
     assertDenied(selectFailure(ro, `SELECT count(*)::int FROM audit.audit_log`), "readonly audit");
     assertDenied(selectFailure(ro, `SELECT count(*)::int FROM config.app_setting`), "readonly config");
     assertDenied(failure(ro, `INSERT INTO identity.employee (employee_id, email, display_name)
-            VALUES ('ro', 'ro@example.com', 'ro')`), "readonly insert");
+            VALUES ('ro', 'ro@wso2.com', 'ro')`), "readonly insert");
     int visible = check ro->queryRow(`SELECT count(*)::int FROM sharing.share_request_v`);
     test:assertTrue(visible >= 0, "readonly reads the view without commentary");
     int standings = check ro->queryRow(`SELECT count(*)::int FROM recognition.standing`);
@@ -245,7 +245,7 @@ function testGrantsDenyPerRole() returns error? {
     assertDenied(failure(jobs, `UPDATE config.app_setting SET value = 'false' WHERE key = 'sharing.enabled'`),
             "jobs settings write");
     assertDenied(failure(jobs, `INSERT INTO identity.employee (employee_id, email, display_name)
-            VALUES ('j', 'j@example.com', 'j')`), "jobs employee insert");
+            VALUES ('j', 'j@wso2.com', 'j')`), "jobs employee insert");
     assertDenied(failure(jobs, `UPDATE campaign.campaign SET title = 'x'`), "jobs campaign update");
     assertDenied(failure(jobs, `UPDATE scoring.points_ledger SET points = 0`), "jobs ledger rewrite");
     assertDenied(failure(jobs, `DELETE FROM audit.audit_log`), "jobs audit delete");
