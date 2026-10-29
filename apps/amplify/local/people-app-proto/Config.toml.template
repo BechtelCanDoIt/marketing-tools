@@ -14,7 +14,9 @@ EXTERNAL_USER_ROLES = []
 clientIdClaim = "azp"
 applicationClaim = "aut"
 applicationValue = "APPLICATION"
-directoryClientIds = [__DIRECTORY_CLIENT_IDS__]
+
+[people.authorization.serviceClients.clientRoutes]
+__CLIENT_ROUTE__
 
 [people.database.dbConfig]
 host = "people-proto-mysql"

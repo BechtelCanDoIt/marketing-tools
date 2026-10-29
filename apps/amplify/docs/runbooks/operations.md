@@ -2,7 +2,7 @@
 
 Operational procedures for the Amplify phase 1 pilot. Every procedure gives the exact command or console action. Written 2026-10-17.
 
-Owner: Scott (technical). Escalation: PO team for product impact, WSO2 platform for Choreo/Aiven.
+Owner: Developer. Escalation: PO team for product impact, WSO2 platform for Choreo/Aiven.
 
 **Companion runbooks** (linked, not duplicated): [choreo-deploy.md](choreo-deploy.md) · [identity-setup.md](identity-setup.md) · [google-chat-webhook.md](google-chat-webhook.md) · [data-deletion-interim.md](data-deletion-interim.md) · [resilience-targets.md](resilience-targets.md) · checklist exception: data deletion.
 

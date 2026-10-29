@@ -104,7 +104,7 @@ Employee and up. `?period=ALL` (default). ETag `<period>:<standing_version>:<vie
   "topN": 3,                             // leaderboard.top_n
   "generatedAt": "2026-10-30T09:12:00Z",
   "company": [                           // rank <= topN, ties included
-    { "employeeId": "a1b2…", "displayName": "Jane Doe", "email": "jane@wso2.com",
+    { "employeeId": "a1b2…", "displayName": "Jane Doe", "email": "jane@example.com",
       "points": 120, "rank": 1, "previousRank": 2 }
   ],
   "me": {                                // null fields when the viewer has no points yet
@@ -117,7 +117,7 @@ Employee and up. `?period=ALL` (default). ETag `<period>:<standing_version>:<vie
     "headcount": 18,                     // roster size
     "activeCount": 11,                   // roster members with a standing row
     "entries": [
-      { "employeeId": "e5f6…", "displayName": "Sam Lee", "email": "sam@wso2.com",
+      { "employeeId": "e5f6…", "displayName": "Sam Lee", "email": "sam@example.com",
         "points": 60, "teamRank": 1, "companyRank": 6, "isMe": false }
     ]
   },
@@ -136,7 +136,7 @@ Employee and up. `?period=ALL` (default). ETag `<period>:<standing_version>:<vie
   "page": 0, "size": 25, "total": 18,
   "summary": { "headcount": 18, "activeCount": 11 },   // C8: headcount from the people-app directory, active from standing
   "entries": [
-    { "employeeId": "e5f6…", "displayName": "Sam Lee", "email": "sam@wso2.com",
+    { "employeeId": "e5f6…", "displayName": "Sam Lee", "email": "sam@example.com",
       "points": 60, "rank": 6, "teamRank": 1, "previousRank": 6,
       "lastActivityAt": "2026-10-28T10:02:00Z",
       "actions": { "canAdjust": false, "canReverse": false } }   // true only for amplify_po

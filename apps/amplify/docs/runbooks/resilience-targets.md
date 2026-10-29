@@ -2,7 +2,7 @@
 
 Resilience, recovery and detection targets for the Amplify phase 1 pilot (30 Oct 2026 – 29 Jan 2027). Written 2026-10-17. Pairs with [operations.md](operations.md) (the procedures) and WSO2 Amplify Threat Model.docx §6 (dependencies).
 
-Owner: Scott. Escalation: PO team (product impact), WSO2 platform (Choreo/Aiven).
+Owner: Developer. Escalation: PO team (product impact), WSO2 platform (Choreo/Aiven).
 
 ## 1. Service level (pilot)
 
@@ -79,7 +79,7 @@ Kill switches ([operations.md](operations.md) §10) let a PO stop new shares or 
 | Restore test | **Pending** — restore one backup into dev once and record the result ([operations.md](operations.md) §8, plan M3 "Backups") |
 | Deletion caveat | Deleted data (and dropped token partitions) live in backups until **backup retention** ends — the true RPO floor for erasure |
 
-**Gap:** no `pg_dump`/restore automation or runbook in the repo; backup config is a console step. Owner: Scott / Aiven.
+**Gap:** no `pg_dump`/restore automation or runbook in the repo; backup config is a console step. Owner: Developer / Aiven.
 
 ## 7. End-user messaging when Amplify is down
 
