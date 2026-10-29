@@ -19,6 +19,7 @@ import amplify_common.types;
 
 import ballerina/http;
 import ballerina/lang.regexp;
+import ballerina/log;
 import ballerina/mime;
 import ballerina/url;
 
@@ -37,8 +38,12 @@ type UserInfoResponse record {
     string email?;
 };
 
+# Longest LinkedIn error text written to a log line.
+const int MAX_REASON_LENGTH = 200;
+
 type ErrorBody record {
     int serviceErrorCode?;
+    string message?;
 };
 
 # LinkedIn implementation of `ProviderAdapter`: OAuth 2.0 code exchange, OIDC userinfo and
@@ -135,6 +140,20 @@ public isolated class LinkedInAdapter {
         return {sub: body.sub, memberUrn, name: body.name, email: body.email};
     }
 
+    public isolated function revokeToken(string accessToken) returns ProviderError? {
+        string|url:Error form = buildQuery({
+            "client_id": self.clientId,
+            "client_secret": self.clientSecret,
+            "token": accessToken
+        });
+        if form is url:Error {
+            return providerError(BAD_RESPONSE, "Could not encode the revoke request", (), (), false);
+        }
+        http:Response|http:ClientError response = self.auth->post("/oauth/v2/revoke", form,
+                mediaType = mime:APPLICATION_FORM_URLENCODED);
+        _ = check expectStatus(response, http:STATUS_OK, "token revoke");
+    }
+
     # Breaker states of the REST API and OAuth clients.
     #
     # + return - `{api, auth}`
@@ -228,14 +247,20 @@ isolated function expectStatus(http:Response|http:ClientError response, int expe
         return response;
     }
     int? serviceErrorCode = ();
+    string reason = "";
     json|http:ClientError body = response.getJsonPayload();
     if body is json {
         ErrorBody|error parsed = body.cloneWithType();
         if parsed is ErrorBody {
             serviceErrorCode = parsed.serviceErrorCode;
+            string text = parsed.message ?: "";
+            reason = text.length() > MAX_REASON_LENGTH ? text.substring(0, MAX_REASON_LENGTH) : text;
         }
     }
     [ProviderErrorCode, boolean] [code, retryable] = classify(status);
+    // log-pii: ok LinkedIn's error text names the failing field, never the member's content; capped in length
+    log:printWarn(string `LinkedIn ${operation} refused`, httpStatus = status, serviceErrorCode = serviceErrorCode,
+            retryable = retryable, linkedinMessage = reason);
     return providerError(code, string `LinkedIn ${operation} failed with HTTP ${status}`, status, serviceErrorCode,
             retryable);
 }
