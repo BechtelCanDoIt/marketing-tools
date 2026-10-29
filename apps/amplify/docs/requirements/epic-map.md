@@ -227,7 +227,7 @@ Status is written in the feature body. "Built, ahead of phase N" means the code 
 | F3.2 | LinkedIn OAuth connect and callback | Built | `/connections/linkedin/start` and `/complete`; `LinkedInCallbackPage`, `LinkLinkedInDialog`; `fa716b93`, `de0f133d` |
 | F3.3 | Encrypted LinkedIn token storage, re-seal on use | Built | `amplify-common` crypto; `db4d9c5` |
 | F3.4 | Unlink a LinkedIn user (support script) | Built | `scripts/unlink-linkedin-user.sh`; `061645e` |
-| F3.5 | Opt-in consent copy for profile linking | Open, waiting on Legal | Requirements map K3; plan M0c |
+| F3.5 | Opt-in consent copy for profile linking | Copy in Link Me pop-up (I consent / I don't consent, profile URL on decline, `linkedin_consent`); Legal sign-off and Privacy Notice URL (`ONE_WSO2_AMPLIFY_PRIVACY_NOTICE_URL`) pending | Requirements map K3; plan M0c |
 
 ### R4a: Record reposts (phase 1)
 
