@@ -134,10 +134,10 @@ Where no artefact exists yet, the row says **no artefact yet** — nothing here 
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Mark R1–R11 must or should (A2) | Console-blocked | PO | M0c | — | no artefact yet |
 | 2 | Consent copy and privacy notice (A9) | Console-blocked | Legal | M0c, M10 | — | placeholder in plan M0c A9 |
-| 3 | Asgardeo federation for LinkedIn tokens (A8) | Console-blocked / research | Research (Scott) | M0c | — | no ADR yet |
+| 3 | Asgardeo federation for LinkedIn tokens (A8) | Console-blocked / research | Research (Developer) | M0c | — | no ADR yet |
 | 4 | PO dashboard + My Team data source and visibility | Done (design); roster source is people-app `/employees/basic-info` (2026-10-19); **pending: service credential (D13)** | D13 owner | M0 D13, M7 | ADR-013, ADR-019 | [po-dashboard.md](po-dashboard.md), [leaderboards.md](leaderboards.md); `amplify-api/outbound.bal` reads the directory (3-day cache) |
 | 5 | Security checklist exception for deferring data deletion (C3) | Console-blocked — security team approval pending | Security team | M0c, M10 | ADR-016 | checklist-exception, [interim runbook](../../../docs/runbooks/data-deletion-interim.md) |
-| 6 | Every mitigation recorded and docs match | Docs applied | Scott | M0c | — | plan M0c; [phase1-domains.md](phase1-domains.md), [phase1-data-model.md](phase1-data-model.md), L2 banner |
+| 6 | Every mitigation recorded and docs match | Docs applied | Developer | M0c | — | plan M0c; [phase1-domains.md](phase1-domains.md), [phase1-data-model.md](phase1-data-model.md), L2 banner |
 
 ## 7 · Other phases (deferred by design)
 
@@ -196,4 +196,4 @@ Everything in the build is done; these are the non-code steps still outstanding,
 | **Choreo / Asgardeo console** | Asgardeo app + groups + scopes (M4); Choreo project, BYOR, API Proxy, connections and secrets (M8b); extension check on the real DB (B18); pilot group (P2/M12). |
 | **WSO2 GitHub org admin** | Provision the WSO2-managed repo (D12, ADR-030). |
 | **LinkedIn / Chat console** | Real Chat space + webhook secret (A7); LinkedIn developer apps on team accounts (M4). |
-| **Research (Scott)** | D5 repost spike (done 2026-10-20); D4 SDK callback check; A8 Asgardeo-federation research; D13 roster endpoint. |
+| **Research (Developer)** | D5 repost spike (done 2026-10-20); D4 SDK callback check; A8 Asgardeo-federation research; D13 roster endpoint. |

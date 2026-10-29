@@ -52,10 +52,10 @@ L0 keeps product names out on purpose. This table is the hand-off to L1.
 
 | L0 component | System | Change type | Owner |
 | --- | --- | --- | --- |
-| WSO2 Amplify (Agent + Back-office) | WSO2 Amplify | New system | Scott Bechtel |
+| WSO2 Amplify (Agent + Back-office) | WSO2 Amplify | New system | Developer |
 | Chat Assistant | Google Chat app "Novera" (PO Agent repo) | Update | Visal Rajapakse |
-| Employee Portal | One WSO2 | Add features | Scott Bechtel |
-| Identity Provider | Asgardeo (WSO2 production) | Add config | Scott Bechtel |
-| Social Network | LinkedIn Community Management API | External vendor | Scott Bechtel |
+| Employee Portal | One WSO2 | Add features | Developer |
+| Identity Provider | Asgardeo (WSO2 production) | Add config | Developer |
+| Social Network | LinkedIn Community Management API | External vendor | Developer |
 | Rewards System | WSO2 Coins | New system, other team | Nikeshala Samanthilake (business), technical TBD |
 | *(out of scope)* | Agent Orchestrator | n/a | Visal Rajapakse |

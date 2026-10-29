@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-22
-- **Source:** Scott, 2026-10-22; boards agreed with the business team's review pending; builds on ADR-013 and ADR-035
+- **Source:** Lead Developer, 2026-10-22; boards agreed with the business team's review pending; builds on ADR-013 and ADR-035
 
 ## Context
 
