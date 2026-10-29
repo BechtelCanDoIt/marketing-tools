@@ -3,7 +3,7 @@
 Amplify helps WSO2 employees share company LinkedIn posts, earn points and show up on the leaderboards in One WSO2.
 This folder (`apps/amplify` in the marketing-tools repo) holds the backend. The UI is the Amplify module in One WSO2, `webapp/src/features/amplify`.
 
-> Repo home (plan M0 D12): Amplify lives in marketing-tools, a fork of `wso2-open-operations/marketing-tools`, so it ships through a WSO2-managed org with the other marketing apps (ADR-033, superseding ADR-030).
+> Repo home (plan M0 D12): Amplify lives in marketing-tools, a fork of `wso2-open-operations/marketing-tools`, so it ships through a WSO2-managed org with the other marketing apps ([ADR-033](architecture/decisions/ADR-033-amplify-lives-in-marketing-tools.md), superseding ADR-030).
 
 ## Layout
 
@@ -34,21 +34,20 @@ cd ../amplify-domain && bal pack && bal push --repository=local
 cd ../amplify-api && bal build && bal test
 ```
 
-Database: migrations, seeds and the integration-test recipe against PostgreSQL 18 are in docs/migrations/README.md.
+Database: migrations, seeds and the integration-test recipe against PostgreSQL 18 are in [docs/migrations/README.md](docs/migrations/README.md).
 
-Once every component is in, Docker images build from a clean checkout (the shared packages are packed inside the build stage). Each component has its own Docker context, because Choreo reads `<context>/.choreo/component.yaml` (ADR-027):
+Docker images build from a clean checkout (the shared packages are packed inside the build stage). Each component has its own Docker context, because Choreo reads `<context>/.choreo/component.yaml` ([ADR-027](architecture/decisions/ADR-027-per-component-docker-contexts.md)):
 
 ```sh
+docker build -f amplify-api/Dockerfile -t amplify-api .
+docker build -f amplify-jobs/Dockerfile -t amplify-jobs .
 docker build -t amplify-database amplify-database
 docker build -t amplify-scheduler amplify-scheduler
-# planned: amplify-api and amplify-jobs Dockerfiles land with their components
-# docker build -f amplify-api/Dockerfile -t amplify-api .
-# docker build -f amplify-jobs/Dockerfile -t amplify-jobs .
 ```
 
-## Local stack (planned; not available in this revision)
+## Local stack
 
-The local stack is planned for M8a. Don't run these commands until the `Makefile`, `compose.yaml` and supporting scripts land. Needs Docker (Compose v2), `openssl`, `curl`, `jq`. From this folder:
+Needs Docker (Compose v2), `openssl`, `curl`, `jq`. From this folder:
 
 ```sh
 make up      # first run writes local/.env (random local-only secrets) and the dev JWT keys, builds, starts, waits for health
@@ -66,7 +65,7 @@ make down    # stop and REMOVE volumes
 |---|---|---|
 | amplify-api | `127.0.0.1:9090` | Published directly (no gateway). Call it with a dev JWT: `curl -H "x-jwt-assertion: $(local/dev-jwt/mint-dev-jwt.sh token emp-1 ada@wso2.com amplify_po)" localhost:9090/me` (ADR-023, `environment=local` only) |
 | mock-linkedin | `127.0.0.1:19091` (www/OAuth only) | The browser follows the authorization redirect here; api port 9090 stays internal. One mock member signs in every time |
-| people-stub | `127.0.0.1:19092` | people-app directory stub (`GET /employees/basic-info`) for team rosters and One WSO2 photos/names. Edit `local/people-stub/directory.json`; ThunderID users are keyed `<sub>@wso2.com` (the dev proxy's fallback when the token has no email) |
+| people-stub | `127.0.0.1:19092` | people-app directory stub (`GET /employees/basic-info`) for team rosters and One WSO2 photos/names. First run `cp local/people-stub/directory.json.example local/people-stub/directory.json` (the real file is gitignored, so it never gets committed), then edit `directory.json`; ThunderID users are keyed `<sub>@wso2.com` (the dev proxy's fallback when the token has no email) |
 | postgres, amplify-db-migrate, amplify-jobs, scheduler, scheduler-db, chat-stub | none | Compose network only. Scheduler UI: `docker compose --env-file local/.env exec amplify-api wget -qO- http://scheduler:8080/jobs` |
 | apim (`make up PROFILE=apim`) | `127.0.0.1:9443`, `8243` | Optional WSO2 API Manager 4.7.0. **Pending the non-prod Asgardeo org** (key manager); steps in `compose.yaml`. Until then the default profile is the supported one |
 
@@ -111,7 +110,7 @@ Every setting is a Ballerina `configurable`, set through `BAL_CONFIG_VAR_<NAME>`
 
 Scheduler: `DSN` (secret, its own database/user). Mock LinkedIn: `LISTENERHOST=0.0.0.0`, `WWWBASEURL`, `CLIENTID`, `CLIENTSECRET` (secret), `ENABLEMOCKADMIN`, and `BAL_CONFIG_DATA` for `redirectUris`. Tuning knobs with safe defaults (run batch sizes, timeouts, breakers, LinkedIn ceilings) are in each component's `config.bal`; set them the same way when needed.
 
-Deploying to Choreo: docs/runbooks/choreo-deploy.md.
+Deploying to Choreo: [docs/runbooks/choreo-deploy.md](docs/runbooks/choreo-deploy.md).
 
 ### LinkedIn: mock or real
 
@@ -136,7 +135,7 @@ Before you switch:
 - **The mock container still starts** (Compose depends on it), but only ever gets the made-up mock credentials, never your real app's. That's harmless locally.
 - **The e2e script only works against the mock.** It scripts the mock's sign-in page and refuses to run when `LINKEDIN_USE_MOCK=false`. Set it back to `true` before `make e2e` or `make test-all`.
 
-In Choreo it's the same settings per environment. Dev uses the LinkedIn Mock component, and prod uses `https://api.linkedin.com` / `https://www.linkedin.com` with the prod app (see choreo-deploy.md C2 and C6). The go-live check is that no LinkedIn Mock URL is set in prod.
+In Choreo it's the same settings per environment. Dev uses the LinkedIn Mock component, and prod uses `https://api.linkedin.com` / `https://www.linkedin.com` with the prod app (see [choreo-deploy.md](docs/runbooks/choreo-deploy.md) C2 and C6). The go-live check is that no LinkedIn Mock URL is set in prod.
 
 Which tests use the mock:
 
@@ -151,9 +150,9 @@ Which tests use the mock:
 
 ## Docs
 
-- Plan: `docs/requirements/phase1-planned-todos.md`
-- Design: `architecture/solution/Phase 1/`
-- Decisions: `architecture/decisions/`
+- Plan: [`docs/requirements/phase1-planned-todos.md`](docs/requirements/phase1-planned-todos.md)
+- Design: [`architecture/solution/Phase 1/`](architecture/solution/Phase%201/)
+- Decisions: [`architecture/decisions/`](architecture/decisions/)
 
 ## License
 
