@@ -55,7 +55,7 @@ function connectWith(string who, string code, string? idToken) returns http:Resp
     string token = check employee(who);
     string state = check stateOf(check startFor(token));
     setIdTokenOnExchange(idToken);
-    http:Response res = check send("POST", "/connections/linkedin/complete", {code, state}, token);
+    http:Response res = check send("POST", "/connections/linkedin/complete", {code, state, redirectUri: TEST_REDIRECT_URI}, token);
     setIdTokenOnExchange(());
     return res;
 }

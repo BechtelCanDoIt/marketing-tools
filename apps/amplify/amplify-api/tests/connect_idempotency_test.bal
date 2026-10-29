@@ -59,7 +59,7 @@ function testConnectCompleteFlowAndStateRules() returns error? {
     test:assertEquals(wrongPage.statusCode, 422);
     test:assertEquals(check codeIn(wrongPage), "OAUTH_REDIRECT_MISMATCH");
 
-    http:Response otherEmployee = check send("POST", "/connections/linkedin/complete", {code: "c-1", state},
+    http:Response otherEmployee = check send("POST", "/connections/linkedin/complete", {code: "c-1", state, redirectUri: TEST_REDIRECT_URI},
             check employee("emp-conn-3"));
     test:assertEquals(otherEmployee.statusCode, 409, "state is bound to the employee who started");
     test:assertEquals(check codeIn(otherEmployee), "OAUTH_STATE_INVALID");
@@ -77,11 +77,12 @@ function testConnectCompleteFlowAndStateRules() returns error? {
     test:assertEquals(fakeTokens.count(), tokens, "and is never inserted on its own (api H3)");
     test:assertFalse(body.toJsonString().includes("li-token"), "the access token never reaches the caller");
 
-    http:Response reused = check send("POST", "/connections/linkedin/complete", {code: "c-abcdef", state}, token);
+    http:Response reused = check send("POST", "/connections/linkedin/complete", {code: "c-abcdef", state, redirectUri: TEST_REDIRECT_URI}, token);
     test:assertEquals(check codeIn(reused), "OAUTH_STATE_INVALID", "state is single use");
 
-    foreach [json, string] [bad, why] in [[{code: "", state}, "empty code"], [{code: "c", state: "short"}, "short state"],
-            [{code: "c", state, extra: 1}, "unknown field"]] {
+    foreach [json, string] [bad, why] in [[{code: "", state, redirectUri: TEST_REDIRECT_URI}, "empty code"],
+            [{code: "c", state: "short", redirectUri: TEST_REDIRECT_URI}, "short state"], [{code: "c", state, redirectUri: TEST_REDIRECT_URI, extra: 1}, "unknown field"],
+            [{code: "c", state}, "missing redirectUri"]] {
         test:assertEquals((check send("POST", "/connections/linkedin/complete", bad, token)).statusCode, 400, why);
     }
 }
@@ -92,7 +93,7 @@ function testConnectProviderFailures() returns error? {
     setLinkedInMode("OK");
     string rejectedState = check stateOf(check startFor(token));
     setLinkedInMode("REJECTED");
-    http:Response rejected = check send("POST", "/connections/linkedin/complete", {code: "c-2", state: rejectedState},
+    http:Response rejected = check send("POST", "/connections/linkedin/complete", {code: "c-2", state: rejectedState, redirectUri: TEST_REDIRECT_URI},
             token);
     test:assertEquals(rejected.statusCode, 422);
     test:assertEquals(check codeIn(rejected), "OAUTH_STATE_INVALID");
@@ -101,13 +102,13 @@ function testConnectProviderFailures() returns error? {
     setLinkedInMode("OK");
     string downState = check stateOf(check startFor(token));
     setLinkedInMode("DOWN");
-    http:Response down = check send("POST", "/connections/linkedin/complete", {code: "c-3", state: downState}, token);
+    http:Response down = check send("POST", "/connections/linkedin/complete", {code: "c-3", state: downState, redirectUri: TEST_REDIRECT_URI}, token);
     test:assertEquals(down.statusCode, 503);
     test:assertEquals(check codeIn(down), "DEPENDENCY_UNAVAILABLE");
 
     setLinkedInMode("OFF");
     test:assertEquals((check startFor(token)).statusCode, 503, "LinkedIn not configured");
-    test:assertEquals((check send("POST", "/connections/linkedin/complete", {code: "c", state: downState}, token)).statusCode,
+    test:assertEquals((check send("POST", "/connections/linkedin/complete", {code: "c", state: downState, redirectUri: TEST_REDIRECT_URI}, token)).statusCode,
             503);
     setLinkedInMode("OK");
 }
