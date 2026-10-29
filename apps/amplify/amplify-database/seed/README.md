@@ -17,3 +17,4 @@ Every insert is `ON CONFLICT DO NOTHING`, so an admin's later change is never ov
   `announcements.enabled`.
 - `S004__scheduler_settings.sql`: `run.schedule = @every 5m`, `run.enabled = true`,
   `maintenance.schedule = 0 2 * * *` (UTC), pushed to the scheduler by amplify-api (ADR-026).
+- `S008__token_grace_one_day.sql`: moves `connection.token_grace_days` from 5 to 1 (ADR-002). S003 can't be edited once applied; V016 does the same for databases that already have the 5.

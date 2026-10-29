@@ -26,6 +26,7 @@ const int STUB_PORT = 18210;
 const string GOOD_TOKEN = "stub-token";
 
 isolated json lastPostBody = ();
+isolated string lastRevokedToken = "";
 
 listener http:Listener stubListener = new (STUB_PORT);
 
@@ -51,6 +52,20 @@ service / on stubListener {
             return <http:BadRequest>{body: {'error: "invalid_request"}};
         }
         return <http:Ok>{body: {access_token: GOOD_TOKEN, expires_in: 5184000, scope: "openid,profile,w_member_social", token_type: "Bearer"}};
+    }
+
+    resource function post oauth/v2/revoke(http:Request req) returns http:Ok|http:BadRequest|error {
+        map<string> form = check req.getFormParams();
+        if form["client_id"] != "cid" || form["client_secret"] != "secret" {
+            return <http:BadRequest>{body: {'error: "invalid_client"}};
+        }
+        if form["token"] == "refuse-me" {
+            return <http:BadRequest>{body: {'error: "invalid_request"}};
+        }
+        lock {
+            lastRevokedToken = form["token"] ?: "";
+        }
+        return <http:Ok>{};
     }
 
     resource function get v2/userinfo(@http:Header string Authorization) returns json|http:Unauthorized {
@@ -302,4 +317,17 @@ function repostCarriesNoArticle() {
     json body = buildPostPayload({authorUrn: "urn:li:person:a", kind: types:REPOST, targetUrn: "urn:li:ugcPost:1",
         targetTitle: "ignored"});
     test:assertTrue(body is map<json> && !body.hasKey("content"));
+}
+
+@test:Config
+function revokeSendsTheClientCredentialsAndTheToken() returns error? {
+    test:assertEquals((check adapter()).revokeToken("tok-to-revoke"), ());
+    lock {
+        test:assertEquals(lastRevokedToken, "tok-to-revoke");
+    }
+}
+
+@test:Config
+function revokeRefusedByLinkedInIsAProviderError() returns error? {
+    test:assertEquals(providerCode((check adapter()).revokeToken("refuse-me")), REJECTED);
 }

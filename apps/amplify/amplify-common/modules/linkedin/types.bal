@@ -163,6 +163,12 @@ public type ProviderAdapter isolated object {
     # + return - Member profile, or a provider error
     public isolated function userInfo(string accessToken) returns MemberProfile|ProviderError;
 
+    # Revokes an access token at LinkedIn (RFC 7009), so a removed connection can't be used any more.
+    #
+    # + accessToken - Token to revoke
+    # + return - `()` once LinkedIn confirms, or a provider error
+    public isolated function revokeToken(string accessToken) returns ProviderError?;
+
     # Publishes a share as the member.
     #
     # + accessToken - Bearer token
