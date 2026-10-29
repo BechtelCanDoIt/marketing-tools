@@ -132,6 +132,16 @@ public isolated function getAccessToken(string value) returns AccessToken? {
     }
 }
 
+# Forgets an access token (the mock's revoke). Unknown tokens are fine, as RFC 7009 says.
+#
+# + value - Token value
+# + return - True when a token was removed
+public isolated function removeAccessToken(string value) returns boolean {
+    lock {
+        return accessTokens.removeIfHasKey(value) !is ();
+    }
+}
+
 # Adds one to a request counter and returns the new count.
 #
 # + key - Counter key, for example the member and UTC day
