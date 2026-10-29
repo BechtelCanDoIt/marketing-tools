@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Local demo helper: unlinks a user's LinkedIn connection in the local stack so the link flow can be shown again.
 #
-#   scripts/unlink-linkedin-user.sh scott@wso2.com
+#   scripts/unlink-linkedin-user.sh <Developer Email>
 #
 # The employee id is the JWT `sub`, so it is looked up by email in the local database (identity.employee).
 # The user must have signed in to Amplify at least once. Works from any directory.

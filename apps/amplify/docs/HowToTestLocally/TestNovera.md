@@ -4,7 +4,7 @@ Novera (internal codename PO Agent) is the Google Chat agent in `projects/wso2-d
 
 Source of truth: `po-agent/CLAUDE.md` (quick start), `RUNBOOK.md`, `docs/google-setup.md`, `SECURITY.md`, `src/config.ts`. Line references below are as of 2026-10-16.
 
-> Heads-up: Novera and One WSO2 both default to **port 3000**. If you run them together, start Novera with a different port and use it in its Asgardeo redirect URI. `3001` is a good choice unless something already holds it: on Scott's machine a Colima SSH forward does, so the examples below use **3002**.
+> Heads-up: Novera and One WSO2 both default to **port 3000**. If you run them together, start Novera with a different port and use it in its Asgardeo redirect URI. `3001` is a good choice unless something already holds it: on Lead Developer's machine a Colima SSH forward does, so the examples below use **3002**.
 
 ---
 

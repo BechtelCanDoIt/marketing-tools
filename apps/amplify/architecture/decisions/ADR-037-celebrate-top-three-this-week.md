@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-22
-- **Source:** Scott, 2026-10-22; amends ADR-014 (top N is no longer always all-time)
+- **Source:** Lead Developer, 2026-10-22; amends ADR-014 (top N is no longer always all-time)
 
 ## Context
 
