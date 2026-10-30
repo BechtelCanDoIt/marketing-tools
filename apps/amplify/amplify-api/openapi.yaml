@@ -1437,6 +1437,7 @@ components:
           required: [teamName, headcount, activeCount, entries]
           properties:
             teamName: {type: string}
+            houseName: {type: string, nullable: true, description: "The viewer's house from the people directory"}
             headcount: {type: integer}
             activeCount: {type: integer}
             entries:

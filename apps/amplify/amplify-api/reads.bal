@@ -172,7 +172,7 @@ isolated function rosterStatus(auth:Principal p, string? correlationId) returns 
 # + roster - Viewer's roster, if any
 # + return - 16 hex characters
 isolated function viewerTag(string employeeId, Roster? roster) returns string {
-    string team = roster is Roster ? string `${roster.teamName}:${roster.emails.length()}` : "";
+    string team = roster is Roster ? string `${roster.teamName}:${roster.emails.length()}:${roster.houseName ?: ""}` : "";
     byte[] digest = crypto:hashSha256(string `${employeeId}|${team}`.toBytes());
     return digest.toBase16().substring(0, 16);
 }
@@ -204,6 +204,7 @@ isolated function leaderboard(auth:Principal p, string? correlationId, string pe
             recognition:TeamPage team = check teamPageOf(period, roster.emails, (), recognition:SORT_RANK, 0, 1000);
             myTeam = {
                 teamName: roster.teamName,
+                houseName: roster.houseName,
                 headcount: roster.emails.length(),
                 activeCount: team.total,
                 entries: from recognition:TeamEntry e in team.items
