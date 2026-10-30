@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// The Celebrate top board: the weekly totals are read once and shared, and the scope setting.
+// The Celebrate top board: the monthly totals are read once and shared, and the scope setting.
 
 import amplify_domain.recognition;
 
@@ -23,10 +23,10 @@ import ballerina/time;
 
 final time:Utc THURSDAY = checkpanic time:utcFromString("2026-10-22T16:00:00Z");
 
-function seedWeek(time:Utc now, decimal ageSeconds) {
+function seedMonth(time:Utc now, decimal ageSeconds) {
     lock {
-        weeklyCache = {
-            weekStart: recognition:weekStartOf(now),
+        monthlyCache = {
+            monthStart: recognition:monthStartOf(now),
             totals: [{employeeId: "e1", displayName: "Avery", email: "a@wso2.com", totalPoints: 9, lastActivityAt: ()}],
             loadedAt: now,
             readAt: time:monotonicNow() - ageSeconds
@@ -35,39 +35,57 @@ function seedWeek(time:Utc now, decimal ageSeconds) {
 }
 
 @test:Config
-function testFreshWeeklyTotalsAreReusedWithoutAnotherRead() returns error? {
-    seedWeek(THURSDAY, 60);
-    WeeklyTotals first = check weeklyTotals(THURSDAY);
-    WeeklyTotals second = check weeklyTotals(THURSDAY);
+function testFreshMonthlyTotalsAreReusedWithoutAnotherRead() returns error? {
+    seedMonth(THURSDAY, 60);
+    MonthlyTotals first = check monthlyTotals(THURSDAY);
+    MonthlyTotals second = check monthlyTotals(THURSDAY);
     test:assertEquals(first.loadedAt, THURSDAY);
     test:assertEquals(second.totals, first.totals);
-    test:assertEquals(weeklyCacheSize(), 1);
-    dropWeeklyCache();
+    test:assertEquals(monthlyCacheSize(), 1);
+    dropMonthlyCache();
 }
 
 @test:Config
-function testExpiredTotalsOfTheSameWeekAreServedWhenTheReloadFails() returns error? {
+function testExpiredTotalsOfTheSameMonthAreServedWhenTheReloadFails() returns error? {
     // Older than the 2 hour lifetime, and no database in this test: the previous totals carry on.
-    seedWeek(THURSDAY, topBoardCacheSeconds + 1d);
-    WeeklyTotals served = check weeklyTotals(THURSDAY);
+    seedMonth(THURSDAY, topBoardCacheSeconds + 1d);
+    MonthlyTotals served = check monthlyTotals(THURSDAY);
     test:assertEquals(served.totals.length(), 1);
-    dropWeeklyCache();
+    dropMonthlyCache();
 }
 
 @test:Config
-function testANewWeekNeverServesLastWeeksTotals() {
-    seedWeek(THURSDAY, 60);
-    time:Utc nextMonday = checkpanic time:utcFromString("2026-10-26T00:00:01Z");
-    WeeklyTotals|error week = weeklyTotals(nextMonday);
-    test:assertTrue(week is error, "last week's cache must not answer for the new week");
-    dropWeeklyCache();
+function testANewMonthNeverServesLastMonthsTotals() {
+    seedMonth(THURSDAY, 60);
+    time:Utc nextMonth = checkpanic time:utcFromString("2026-11-01T00:00:01Z");
+    MonthlyTotals|error month = monthlyTotals(nextMonth);
+    test:assertTrue(month is error, "last month's cache must not answer for the new month");
+    dropMonthlyCache();
 }
 
 @test:Config
-function testTopScopeSettingDefaultsToWeekAndAcceptsAll() {
-    test:assertEquals(settingsOf([]).topScope, "WEEK");
+function testOnlyPeopleWithTheMinimumQualifyForTheTopThree() {
+    recognition:EmployeeTotal[] totals = [
+        {employeeId: "a", displayName: "A", email: "a@wso2.com", totalPoints: 100, lastActivityAt: ()},
+        {employeeId: "b", displayName: "B", email: "b@wso2.com", totalPoints: 99, lastActivityAt: ()},
+        {employeeId: "c", displayName: "C", email: "c@wso2.com", totalPoints: 250, lastActivityAt: ()}
+    ];
+    test:assertEquals(qualifying(totals, 100).map(t => t.employeeId), ["a", "c"], "100 qualifies, 99 does not");
+    test:assertEquals(qualifying(totals, 0).length(), 3, "a minimum of 0 lets everyone in");
+}
+
+@test:Config
+function testTopMinPointsSettingDefaultsTo100() {
+    test:assertEquals(settingsOf([]).topMinPoints, 100);
+    test:assertEquals(settingsOf([{key: SETTING_TOP_MIN_POINTS, value: 150, updatedBy: "t", updatedAt: THURSDAY, version: 1}]).topMinPoints, 150);
+    test:assertEquals(settingsOf([{key: SETTING_TOP_MIN_POINTS, value: -5, updatedBy: "t", updatedAt: THURSDAY, version: 1}]).topMinPoints, 100);
+}
+
+@test:Config
+function testTopScopeSettingDefaultsToMonthAndAcceptsAll() {
+    test:assertEquals(settingsOf([]).topScope, "MONTH");
     test:assertEquals(settingsOf([{key: SETTING_TOP_SCOPE, value: "ALL", updatedBy: "t", updatedAt: THURSDAY, version: 1}]).topScope, "ALL");
-    test:assertEquals(settingsOf([{key: SETTING_TOP_SCOPE, value: "MONTH", updatedBy: "t", updatedAt: THURSDAY, version: 1}]).topScope, "WEEK");
+    test:assertEquals(settingsOf([{key: SETTING_TOP_SCOPE, value: "WEEK", updatedBy: "t", updatedAt: THURSDAY, version: 1}]).topScope, "MONTH");
     test:assertEquals(checkSettingChange(SETTING_TOP_SCOPE, "ALL"), ());
-    test:assertTrue(checkSettingChange(SETTING_TOP_SCOPE, "MONTH") is [string, string]);
+    test:assertTrue(checkSettingChange(SETTING_TOP_SCOPE, "WEEK") is [string, string]);
 }
