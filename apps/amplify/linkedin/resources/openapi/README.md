@@ -1,47 +1,54 @@
+# LinkedIn OpenAPI specs
 
-# Claude conversion from PostMan json to OpenAPI Spec
-I need you to create openapi specs for each of these files.
+One OpenAPI 3.0.3 file per LinkedIn Postman collection, in `openapi/`. They are a reading aid for the LinkedIn APIs
+Amplify touches (and the ones it might later), not a contract LinkedIn publishes. The source collections are in
+`../postman-exports/`. The specs were generated from them by a script, not written by hand, so a change to a
+collection means regenerating its spec, not editing the YAML.
 
-I’ll start by inspecting the collections’ structure, since several are large (mostly embedded response examples), then build a converter rather than hand-writing 14 specs.
+| Spec | Covers |
+| --- | --- |
+| `w-member-social.openapi.yaml` | Share on LinkedIn (`w_member_social`), the scope Amplify posts with |
+| `member-posts-management.openapi.yaml` | Member posts |
+| `community-management.openapi.yaml` | Community Management |
+| `content-apis.openapi.yaml` | Content APIs |
+| `campaign-management.openapi.yaml`, `reporting-roi.openapi.yaml`, `media-planning.openapi.yaml` | Advertising: campaigns, reporting, media planning |
+| `audiences.openapi.yaml`, `audience-insights.openapi.yaml` | Audiences and audience insights |
+| `lead-sync.openapi.yaml`, `conversions-api.openapi.yaml` | Lead sync, conversions |
+| `company-intelligence-api.openapi.yaml`, `events-management-api.openapi.yaml`, `lms-api-siteup.openapi.yaml`, `people-typeahead-mention-search-api.openapi.yaml` | The smaller APIs |
 
-Ran 11 commands, updated tasks, and 4 more tools
-I’ve generated one OpenAPI 3.0.3 YAML spec per collection, 14 in all, bundled in the zip. Every spec passes openapi-spec-validator. They come from a script that parses the Postman files, not from hand-writing, so the same script can re-run if the collections change.
+## How the collections were converted
 
-I assumed `https://api.linkedin.com/rest` as the base URL, because `{{baseUrl}}` wasn’t defined in the files. `/me` is given a `/v2` server override.
+- **Base URL.** `https://api.linkedin.com/rest`, assumed, because `{{baseUrl}}` is not defined in the collections.
+  `/me` carries a `/v2` server override.
+- **Auth.** A collection with OAuth settings gets an `authorizationCode` flow with LinkedIn's authorization and token
+  URLs and the scopes the collection lists. The others get bearer auth. `LinkedIn-Version` and
+  `X-Restli-Protocol-Version` are shared header parameters.
+- **Paths.** `{{vars}}`, literal IDs and URNs in a path became typed path parameters, for example
+  `/adAccounts/{adAccountId}/adCampaigns/{adCampaignId}`. Composite keys such as `(account:...,user:...)` became a
+  single `...Key` parameter.
+- **Finders and actions.** An OpenAPI path can't hold several operations that differ only by `?q=` or `?action=`.
+  Each path and method is one operation, `q` and `action` are enum selectors, and each Postman variant is listed in
+  the description. `adAnalytics` is the extreme case: 27 requests folded into one operation.
+- **Batch calls.** `X-RestLi-Method` (batch create, batch get and so on) is an enum header.
+- **Request bodies** are inferred from the saved examples. Four collections held invalid JSON in saved bodies
+  (missing commas, `...` placeholders); those were repaired where possible.
+- **Responses** are inferred from the saved responses, so every field is optional and undocumented. A call with no
+  saved example gets an inferred success code, marked as inferred in its description. One shared `Error` response
+  covers the errors.
+- **Uploads.** The `PUT {{upload_url}}` steps became a `/dms-uploads/{uploadPath}` operation on `www.linkedin.com`.
+- **Redaction.** Signed query strings on upload URLs were redacted in the example responses, and the files were
+  scanned for emails and tokens.
 
-Auth: collections with OAuth settings get an authorizationCode flow with LinkedIn’s auth and token URLs and the scopes from the collection. The rest get bearer auth. LinkedIn-Version and X-Restli-Protocol-Version are shared header parameters.
+All specs pass `openapi-spec-validator`.
 
-Paths: `{{vars}}`, literal IDs and URNs in paths became typed path parameters (for example `/adAccounts/{adAccountId}/adCampaigns/{adCampaignId}`). Composite keys like (account:…,user:…) became a single …Key parameter.
+## Open questions
 
-Finders and actions: a spec can’t give one path several operations that differ only by ?q= or ?action=. So each path plus method is one operation, with q and action as enum selectors and each Postman variant listed in the description. adAnalytics is the extreme case, with 27 requests folded into one operation.
-Batch calls: `X-RestLi-Method` (batch create, get and so on) is an enum header.
-Request bodies: bodies are inferred from the examples. Four collections have invalid JSON in saved bodies (missing commas, ... placeholders), which I repaired where I could.
-Responses: schemas are inferred from the saved responses, so every field is optional and undocumented. Calls with no saved example get an inferred success code, marked as inferred in the description. A shared Error response covers errors.
+Check these against LinkedIn's documentation before relying on the specs for them:
 
-Uploads: the `PUT {{upload_url}}` steps became a `/dms-uploads/{uploadPath}` operation on www.linkedin.com.
-Redaction: I redacted the signed query strings on upload URLs in the example responses and scanned for emails and tokens.
-Check these when you review:
-
-A few legacy-looking calls (`/shares`, `/adCampaigns`, `/adCreatives`, `/creatives`) sit under the same base URL, but they may belong under /v2.
-Content APIs has one request with an empty URL, which I skipped.
-
-Two requests there use a path with {shared ID}/{ugcPosts ID}, which came out as `/posts/{postId}/{postId2}`. Please confirm what that endpoint really is.
-Three Media Planning requests and the 4 Audience Insights POST examples are merged under shared selectors, so their request examples are named but not split into separate operations.
-Files are in openapi-specs.zip:
-
-```
-audience-insights.openapi.yaml
-audiences.openapi.yaml
-campaign-management.openapi.yaml
-community-management.openapi.yaml
-company-intelligence-api.openapi.yaml
-content-apis.openapi.yaml
-conversions-api.openapi.yaml
-events-management-api.openapi.yaml
-lead-sync.openapi.yaml
-lms-api-siteup.openapi.yaml
-media-planning.openapi.yaml
-member-posts-management.openapi.yaml
-people-typeahead-mention-search-api.openapi.yaml
-reporting-roi.openapi.yaml
-```
+- A few legacy-looking calls (`/shares`, `/adCampaigns`, `/adCreatives`, `/creatives`) sit under the same base URL but
+  may belong under `/v2`.
+- Content APIs has one request with an empty URL; it was skipped.
+- Two Content APIs requests use `{shared ID}/{ugcPosts ID}` in the path, which became `/posts/{postId}/{postId2}`.
+  What that endpoint really is has not been confirmed.
+- Three Media Planning requests and the four Audience Insights POST examples are merged under shared selectors, so
+  their request examples are named but not split into separate operations.

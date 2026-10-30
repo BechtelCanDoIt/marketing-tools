@@ -14,7 +14,7 @@
 
 ## Decision
 
-Option 3. `projects/marketing-tools/apps/amplify/amplify-common` is a library package (`wso2/amplify_common`). `amplify-api` and `amplify-jobs` declare it in `Ballerina.toml`:
+Option 3. `apps/amplify/amplify-common` is a library package (`wso2/amplify_common`). `amplify-api` and `amplify-jobs` declare it in `Ballerina.toml`:
 
 ```toml
 [[dependency]]
@@ -24,7 +24,7 @@ version = "0.1.0"
 repository = "local"
 ```
 
-Their Dockerfiles build from `projects/marketing-tools/apps/amplify` and pack/push `amplify-common` in the build stage before `bal build`. `amplify-cron` and `amplify-database` don't depend on it.
+Their Dockerfiles build from `apps/amplify` and pack/push `amplify-common` in the build stage before `bal build`. `amplify-cron` and `amplify-database` don't depend on it.
 
 M1 scaffolds only the default module and `types` (health types). `outbox`, `crypto`, `linkedin`, `googlechat` and `resilience` arrive as exported modules in M2/M6. Bounded-context logic stays in `amplify-api` modules; the library holds only what both services need.
 
@@ -32,7 +32,7 @@ M1 scaffolds only the default module and `types` (health types). `outbox`, `cryp
 
 - One copy of shared code, one change, both services rebuilt from the same commit.
 - Developers run `bal pack && bal push --repository=local` in `amplify-common` before building a consumer (documented in the root README and CLAUDE.md).
-- Choreo components must set a Docker context that contains `amplify-common` (M8b). **Amended by [ADR-027](ADR-027-per-component-docker-contexts.md):** api builds from `projects/marketing-tools/apps/amplify`, jobs from `projects/marketing-tools/apps/amplify` too (see ADR-027 note), because Choreo reads `.choreo/component.yaml` from the Docker context.
+- Choreo components must set a Docker context that contains `amplify-common` (M8b). **Amended by [ADR-027](ADR-027-per-component-docker-contexts.md):** api builds from `apps/amplify`, jobs from `apps/amplify` too (see ADR-027 note), because Choreo reads `.choreo/component.yaml` from the Docker context.
 - `Dependencies.toml` in consumers pins `amplify_common` 0.1.0; bump the version when its public API changes.
 - If the repo moves (D12) or more teams consume it, switch to option 2 with no code change beyond dropping `repository = "local"`. B19 stays open to review this.
 

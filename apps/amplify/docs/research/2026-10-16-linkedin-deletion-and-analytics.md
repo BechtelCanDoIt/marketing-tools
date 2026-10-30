@@ -27,9 +27,9 @@ So with the phase 1 scope (`w_member_social` only), Amplify can't confirm that a
 
 ### Local evidence
 
-- `projects/marketing-tools/apps/amplify/linkedin/resources/openapi/openapi/member-posts-management.openapi.yaml` (`getAMemberAuthoredPost`, `/posts/{postUrn}`): GET of a person-authored post goes through `getPartnerAccessRestrictionsToPass()`, which checks `r_member_social`. BATCH_GET of member posts returns `400 "Member permissions must be used when using member as author"` without it.
-- `projects/marketing-tools/apps/amplify/linkedin/README.md` capability table: `/rest/posts` GET, BATCH_GET and FINDER marked ❌ "Needs r_member_social (restricted) or r_organization_social". The scopes our Community Management dev app lists also exclude `r_member_social`.
-- The mock (`projects/marketing-tools/apps/amplify/linkedin/apps/mock_linkedin/api_service.bal`) implements create, partial update and DELETE on `/rest/posts`, and **no GET**. That matches the real permission model, so we haven't been hiding a gap.
+- `apps/amplify/linkedin/resources/openapi/openapi/member-posts-management.openapi.yaml` (`getAMemberAuthoredPost`, `/posts/{postUrn}`): GET of a person-authored post goes through `getPartnerAccessRestrictionsToPass()`, which checks `r_member_social`. BATCH_GET of member posts returns `400 "Member permissions must be used when using member as author"` without it.
+- `apps/amplify/linkedin/README.md` capability table: `/rest/posts` GET, BATCH_GET and FINDER marked ❌ "Needs r_member_social (restricted) or r_organization_social". The scopes our Community Management dev app lists also exclude `r_member_social`.
+- The mock (`apps/amplify/linkedin/apps/mock_linkedin/api_service.bal`) implements create, partial update and DELETE on `/rest/posts`, and **no GET**. That matches the real permission model, so we haven't been hiding a gap.
 
 ### Verdict
 
@@ -85,4 +85,4 @@ Open points for a live test once Community Management is approved:
 10. Community Management App Review: https://learn.microsoft.com/linkedin/marketing/community-management-app-review?view=li-lms-2026-09
 11. LinkedIn API Partner Support FAQ (Community Management must be the only product): https://learn.microsoft.com/linkedin/shared/linkedin-api-partner-support-guide#faqs-and-troubleshooting
 
-Local: `projects/marketing-tools/apps/amplify/linkedin/README.md`, `projects/marketing-tools/apps/amplify/linkedin/resources/openapi/openapi/member-posts-management.openapi.yaml`, `projects/marketing-tools/apps/amplify/linkedin/resources/openapi/openapi/w-member-social.openapi.yaml`, `projects/marketing-tools/apps/amplify/linkedin/apps/mock_linkedin/api_service.bal`.
+Local: `apps/amplify/linkedin/README.md`, `apps/amplify/linkedin/resources/openapi/openapi/member-posts-management.openapi.yaml`, `apps/amplify/linkedin/resources/openapi/openapi/w-member-social.openapi.yaml`, `apps/amplify/linkedin/apps/mock_linkedin/api_service.bal`.

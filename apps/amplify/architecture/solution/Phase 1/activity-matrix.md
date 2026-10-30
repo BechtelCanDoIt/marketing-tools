@@ -4,7 +4,7 @@ Grant × endpoint, with the CRUD verb and the state conditions the backend check
 
 Enforced twice: API proxy scopes per resource, then the Ballerina request interceptor in `amplify-api`. The backend is the real gate; the UI only hides.
 
-**In code:** `projects/marketing-tools/apps/amplify/amplify-api/modules/auth/matrix.bal` mirrors this table row for row; change both together (ADR-022). The interceptor checks grant × method × route only; routes not listed are denied. Everything in the "State conditions" column (status such as `PENDING`/`OPEN`, ownership "own" and `employeeId` = caller, PO-not-own-claim, kill switches, reasons required) is checked by the use case behind the resource, and the code row's `useCase` note says so. A missing `groups` claim means plain `EMPLOYEE`.
+**In code:** `apps/amplify/amplify-api/modules/auth/matrix.bal` mirrors this table row for row; change both together (ADR-022). The interceptor checks grant × method × route only; routes not listed are denied. Everything in the "State conditions" column (status such as `PENDING`/`OPEN`, ownership "own" and `employeeId` = caller, PO-not-own-claim, kill switches, reasons required) is checked by the use case behind the resource, and the code row's `useCase` note says so. A missing `groups` claim means plain `EMPLOYEE`.
 
 **Grants ([ADR-038](../../decisions/ADR-038-group-based-access-by-capability.md)).** Each row needs one grant. `EMPLOYEE` = any signed-in employee. Each `CAN_*` grant is given to a configured list of Asgardeo groups (`can*Groups` in `amplify-api/config.bal`, `BAL_CONFIG_VAR_CAN*GROUPS` in Choreo); holding any one group in the list is enough. No group name is fixed in code.
 
