@@ -41,16 +41,20 @@ perl -e '
         for (my $i = 0; $i < @lines; $i++) {
             next unless $lines[$i] =~ /\blog:print(Info|Warn|Error|Debug)\s*\(/;
             my $start = $i; my $call = $lines[$i];
-            my $depth = () = $call =~ /\(/g; $depth -= () = $call =~ /\)/g;
+            # Brackets inside string literals ("user )") are not call brackets.
+            my $code = sub { my $s = shift; $s =~ s/"(?:[^"\\]|\\.)*"//g; $s =~ s/`[^`]*`//g; return $s; };
+            my $depth = () = $code->($call) =~ /\(/g; $depth -= () = $code->($call) =~ /\)/g;
             while ($depth > 0 && $i + 1 < @lines) {
                 $i++; $call .= $lines[$i];
-                $depth += () = $lines[$i] =~ /\(/g; $depth -= () = $lines[$i] =~ /\)/g;
+                $depth += () = $code->($lines[$i]) =~ /\(/g; $depth -= () = $code->($lines[$i]) =~ /\)/g;
             }
             $calls++;
             next if $lines[$start] =~ m{//\s*log-pii:\s*ok};
             my @hits;
             # Key-value fields: `email = x`, `\x27token = x` (not `==`).
             while ($call =~ /[,(]\s*\x27?($sensitive)\s*=(?!=)/gi) { push @hits, "field \x27$1\x27"; }
+            # A sensitive value passed as the message itself: `log:printInfo(email)`, `log:printWarn(p.email)`.
+            if ($call =~ /\blog:print\w+\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)*($sensitive)\s*[,)]/i) { push @hits, "message \x27$1\x27"; }
             # Interpolations: `${p.email}`, `${token}`, `${body.commentary}`.
             while ($call =~ /\$\{([^}]*)\}/g) {
                 my $expr = $1;

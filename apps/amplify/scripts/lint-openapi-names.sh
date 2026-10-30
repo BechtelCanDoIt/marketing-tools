@@ -27,11 +27,19 @@
 #
 # Usage: scripts/lint-openapi-names.sh [openapi.yaml ...]   (default: every amplify-*/openapi.yaml)
 set -euo pipefail
+caller="$PWD"
 cd "$(dirname "$0")/.."
-files=("$@")
+files=()
+for a in "$@"; do
+  # Arguments are relative to where the caller ran this, not to the folder the script moves into.
+  case "$a" in /*) files+=("$a") ;; *) files+=("$caller/$a") ;; esac
+done
 if [ ${#files[@]} -eq 0 ]; then
   files=(amplify-*/openapi.yaml)
 fi
+for f in "${files[@]}"; do
+  [ -r "$f" ] || { echo "lint-openapi-names: cannot read $f" >&2; exit 2; }
+done
 # A banned word as a whole name segment: at the start (any case) or a camel/snake segment (`Post`,
 # `_post`). `reposters` and `OWN_POST`-style enum values don't match.
 seg='(post|submission)'
@@ -40,8 +48,9 @@ external='^(linkedin)[A-Z]'
 
 status=0
 for f in "${files[@]}"; do
-  # 1. Paths: top-level keys under `paths:` (two-space indent, start with /).
-  hits=$(grep -nE '^  /' "$f" | grep -iE "/[^ ]*${seg}" || true)
+  # 1. Paths: top-level keys under `paths:` (two-space indent, start with /). Same whole-segment rule as the
+  # names below, so `/campaigns/{id}/reposts` passes and `/posts` does not.
+  hits=$(grep -nE '^  /' "$f" | grep -E "$word" || true)
   # 2. operationId values.
   hits+=$'\n'$(grep -nE 'operationId:' "$f" | sed -E 's/.*operationId: *//' | grep -E "$word" || true)
   # 3. Mapping keys (schema and property names), minus the HTTP method keys at four-space indent.
