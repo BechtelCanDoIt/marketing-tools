@@ -103,6 +103,14 @@ public isolated class WebhookClient {
         }
         string separator = self.path.includes("?") ? "&" : "?";
         string target = string `${self.path}${separator}threadKey=${encodedKey}&messageReplyOption=${REPLY_OPTION}`;
+        // Accepted risk (review of PR #232): `target` carries the webhook key and token, and with tracing on
+        // the HTTP client stamps it on the client span as `http.url`. Ballerina 2201.x has no per-client
+        // observability switch, and the client span is finished before this call returns
+        // (`ObserveUtils.stopObservation` closes it, then restores the parent context), so a
+        // `observe:addTagToSpan` here would tag the caller's span, not that one. Exposure is limited to
+        // whoever can read amplify-jobs traces; the token reaches one Chat space and can be rotated. The way
+        // out is the Chat API with a bearer credential (`spaces.messages.create`), which keeps the secret out
+        // of the URL.
         http:Response|http:ClientError response = self.httpClient->post(target, message,
                 resilience:correlationHeaders(correlationId));
         if response is http:IdleTimeoutError {

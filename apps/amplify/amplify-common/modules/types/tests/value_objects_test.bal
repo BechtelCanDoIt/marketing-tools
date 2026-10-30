@@ -89,6 +89,21 @@ function organizationUrnIsChecked() returns error? {
     test:assertEquals(codeOf(parseOrganizationUrn("urn:li:person:1477")), ERR_INVALID_POST_URN);
 }
 
+// ---- Host literals ----
+
+// One predicate for both callers (evidence URLs, card image hosts): every IP literal form ends in a
+// numeric label, and no DNS name does.
+@test:Config
+function ipLiteralHostsAreDetectedInEveryForm() {
+    foreach string host in ["127.0.0.1", "8.8.8.8", "2130706433", "0x7f000001", "0177.0.0.1", "10.1.2.3"] {
+        test:assertTrue(isIpLiteralHost(host), host);
+    }
+    foreach string host in ["example.com", "media.licdn.com", "10.cdn.example.com", "x0x7f.example.com",
+            "example.co1", "localhost", ""] {
+        test:assertFalse(isIpLiteralHost(host), host);
+    }
+}
+
 // ---- Time helpers ----
 
 @test:Config
