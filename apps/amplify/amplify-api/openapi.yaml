@@ -613,7 +613,7 @@ paths:
       tags: [S4 Recognition]
       operationId: getLeaderboardTop
       x-roles: [EMP, PO, MKT, SLT, ADM]
-      description: "The Celebrate top three and the caller's own position, company wide. The scope is the `leaderboard.top_scope` setting: `WEEK` (default) covers the current calendar week, Monday 00:00 UTC to the next Monday, summed from the points ledger; `ALL` is the all-time standings. Weekly totals are shared by every caller and kept in memory for 2 hours (`topBoardCacheSeconds`), so the first caller after they run out loads them and the rest reuse them; a failed reload serves the previous totals of the same week. `me` comes from the same totals, so it matches the top three (ADR-037)."
+      description: "The Celebrate top three and the caller's own position, company wide. The scope is the `leaderboard.top_scope` setting: `MONTH` (default) covers the current calendar month, the 1st 00:00 UTC to the next 1st, summed from the points ledger; `ALL` is the all-time standings. Only people with at least `leaderboard.top_min_points` (default 100) that month are ranked; `me` still carries the caller's own points when they are under it, with no rank. Monthly totals are shared by every caller and kept in memory for 2 hours (`topBoardCacheSeconds`), so the first caller after they run out loads them and the rest reuse them; a failed reload serves the previous totals of the same month. `me` comes from the same totals, so it matches the top three (ADR-037)."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
       responses:
@@ -1392,11 +1392,12 @@ components:
       type: object
       required: [period, topN, generatedAt, company, me]
       properties:
-        period: {type: string, enum: [WEEK, ALL]}
-        weekStart: {type: string, format: date-time, nullable: true, description: "Monday 00:00 UTC; null for ALL"}
-        weekEnd: {type: string, format: date-time, nullable: true, description: "The next Monday 00:00 UTC; null for ALL"}
+        period: {type: string, enum: [MONTH, ALL]}
+        minPoints: {type: integer, nullable: true, description: "Points needed in the month to qualify for the top three (`leaderboard.top_min_points`, default 100); null for ALL"}
+        monthStart: {type: string, format: date-time, nullable: true, description: "The 1st 00:00 UTC; null for ALL"}
+        monthEnd: {type: string, format: date-time, nullable: true, description: "The next 1st 00:00 UTC; null for ALL"}
         topN: {type: integer}
-        generatedAt: {type: string, format: date-time, description: "When the weekly totals were read (up to 2 hours ago)"}
+        generatedAt: {type: string, format: date-time, description: "When the monthly totals were read (up to 2 hours ago)"}
         company:
           type: array
           items:
@@ -1450,6 +1451,7 @@ components:
                   points: {type: integer}
                   teamRank: {type: integer}
                   companyRank: {type: integer}
+                  houseName: {type: string, nullable: true, description: "The member's house from the people directory"}
                   isMe: {type: boolean}
         teamStatus: {type: string, enum: [OK, NO_TEAM, UNAVAILABLE]}
     PersonalStanding:
@@ -1638,26 +1640,25 @@ components:
         headcount: {type: integer, nullable: true, description: "Employee count from /headcount; null when the people directory never loaded"}
         kpis:
           type: object
-          required: [campaignsLive, campaignsLivePriority, campaignsClosingWithin7Days, reposts7d, reposts7dWithCommentary, repostsPrev7d, peopleConnected, connectionsExpired, pointsThisWeek, pointsThisMonth, pointsThisYear, peopleWithPoints]
+          required: [campaignsLive, campaignsLivePriority, campaignsClosingWithin7Days, repostsThisMonth, repostsThisMonthWithCommentary, repostsPrevMonth, peopleConnected, connectionsExpired, pointsThisMonth, pointsThisYear, peopleWithPoints]
           properties:
             campaignsLive: {type: integer}
             campaignsLivePriority: {type: integer}
             campaignsClosingWithin7Days: {type: integer}
-            reposts7d: {type: integer}
-            reposts7dWithCommentary: {type: integer, description: "Of reposts7d, with the employee's own commentary"}
-            repostsPrev7d: {type: integer}
+            repostsThisMonth: {type: integer, description: "Since the 1st 00:00 UTC"}
+            repostsThisMonthWithCommentary: {type: integer, description: "Of repostsThisMonth, with the employee's own commentary"}
+            repostsPrevMonth: {type: integer, description: "Last calendar month"}
             peopleConnected: {type: integer}
             connectionsExpired: {type: integer}
-            pointsThisWeek: {type: integer, description: "Since Monday 00:00 UTC"}
             pointsThisMonth: {type: integer, description: "Since the 1st, UTC"}
             pointsThisYear: {type: integer, description: "Since 1 January, UTC"}
             peopleWithPoints: {type: integer}
         campaigns: {type: array, items: {$ref: "#/components/schemas/DashboardCampaignRow"}}
         shareHealth:
           type: object
-          required: [windowDays, published, queued, failed, failedByReason]
+          required: [windowStart, published, queued, failed, failedByReason]
           properties:
-            windowDays: {type: integer}
+            windowStart: {type: string, format: date-time, description: "The 1st of the current month, 00:00 UTC"}
             published: {type: integer}
             queued: {type: integer}
             failed: {type: integer}
@@ -1786,7 +1787,7 @@ components:
             expired: {type: integer, description: "Connections past their expiry"}
     DashboardGlance:
       type: object
-      required: [asOf, month, reposts, weekly, participants, campaignsLive, campaignsReachingTarget, shareSuccess]
+      required: [asOf, month, reposts, monthly, participants, campaignsLive, campaignsReachingTarget, shareSuccess]
       properties:
         asOf: {type: string, format: date-time}
         month: {type: string}
@@ -1796,14 +1797,14 @@ components:
           properties:
             thisMonth: {type: integer}
             previousMonth: {type: integer}
-        weekly:
+        monthly:
           type: array
-          description: "Eight weeks, oldest first, weeks start Monday UTC"
+          description: "Six calendar months, oldest first, the current month last (UTC)"
           items:
             type: object
-            required: [weekStart, reposts]
+            required: [monthStart, reposts]
             properties:
-              weekStart: {type: string}
+              monthStart: {type: string, description: "First day of the month, YYYY-MM-DD"}
               reposts: {type: integer}
         participants: {type: integer, description: "People with at least one engagement"}
         headcount: {type: integer, nullable: true}
@@ -1818,7 +1819,7 @@ components:
         shareSuccess:
           type: object
           required: [published, attempts]
-          description: "Last 7 days: published over published plus failed"
+          description: "This calendar month (UTC): published over published plus failed"
           properties:
             published: {type: integer}
             attempts: {type: integer}
@@ -1842,7 +1843,7 @@ components:
             type: object
             required: [key, label, unit, value, target, comparison, status]
             properties:
-              key: {type: string, enum: [connected, expired, shareSuccess, chatCards, priorityReach, active30Days, repostsPerWeek]}
+              key: {type: string, enum: [connected, expired, shareSuccess, chatCards, priorityReach, active30Days, repostsPerMonth]}
               label: {type: string}
               unit: {type: string, enum: [PERCENT, COUNT]}
               value: {type: number}
@@ -1878,9 +1879,9 @@ components:
             slaHours: {type: integer}
         reviewThroughput:
           type: object
-          required: [windowDays, approved, rejected, amplified]
+          required: [windowStart, approved, rejected, amplified]
           properties:
-            windowDays: {type: integer}
+            windowStart: {type: string, format: date-time, description: "The 1st of the current month, 00:00 UTC"}
             approved: {type: integer}
             rejected: {type: integer}
             amplified: {type: integer}
@@ -1937,9 +1938,9 @@ components:
               announcement: {type: string, nullable: true, enum: [QUEUED, SENT, FAILED]}
         shareHealth:
           type: object
-          required: [windowDays, queued, published, failed, failedByReason]
+          required: [windowStart, queued, published, failed, failedByReason]
           properties:
-            windowDays: {type: integer}
+            windowStart: {type: string, format: date-time, description: "The 1st of the current month, 00:00 UTC"}
             queued: {type: integer}
             published: {type: integer}
             failed: {type: integer}

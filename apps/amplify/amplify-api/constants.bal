@@ -94,6 +94,7 @@ const string INVALID_SETTING = "INVALID_SETTING";
 
 const string SETTING_TOP_N = "leaderboard.top_n";
 const string SETTING_TOP_SCOPE = "leaderboard.top_scope";
+const string SETTING_TOP_MIN_POINTS = "leaderboard.top_min_points";
 const string SETTING_TEAM_VISIBILITY = "team.visibility";
 const string SETTING_WINDOW_DAYS = "campaign.default_window_days";
 const string SETTING_SLA_HOURS = "po.review_sla_hours";

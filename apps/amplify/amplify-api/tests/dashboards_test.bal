@@ -77,11 +77,10 @@ function testOperationsBoardNumbers() returns error? {
     test:assertEquals(check body.headcount, 4);
     test:assertEquals(check body.kpis.campaignsLive, 2);
     test:assertEquals(check body.kpis.campaignsLivePriority, 1);
-    test:assertEquals(check body.kpis.reposts7d, 60);
-    test:assertEquals(check body.kpis.reposts7dWithCommentary, 15);
-    test:assertEquals(check body.kpis.pointsThisWeek, 120);
+    test:assertEquals(check body.kpis.repostsThisMonth, 90);
+    test:assertEquals(check body.kpis.repostsThisMonthWithCommentary, 15);
     test:assertEquals(check body.kpis.pointsThisYear, 4000);
-    test:assertEquals(check body.kpis.repostsPrev7d, 40);
+    test:assertEquals(check body.kpis.repostsPrevMonth, 50);
     test:assertEquals(check body.kpis.peopleConnected, 2);
     test:assertEquals(check body.kpis.connectionsExpired, 1);
     test:assertEquals(check body.kpis.pointsThisMonth, 500);
@@ -157,7 +156,7 @@ function testParticipationAndGlanceBoards() returns error? {
     json glance = check (check send("GET", "/dashboards/glance", (), token)).getJsonPayload();
     test:assertEquals(check glance.month, "2025-10");
     test:assertEquals(check glance.reposts, {thisMonth: 90, previousMonth: 50});
-    test:assertEquals((<json[]>check glance.weekly).length(), 8);
+    test:assertEquals((<json[]>check glance.monthly).length(), 6);
     test:assertEquals(check glance.participants, 30);
     test:assertEquals(check glance.campaignsReachingTarget, {reached: 2, live: 2, thresholdPercent: 25});
     test:assertEquals(check glance.shareSuccess, {published: 57, attempts: 60});
@@ -172,7 +171,7 @@ function testScorecardStatusesAgainstTargets() returns error? {
     json body = check (check send("GET", "/dashboards/scorecard", (), check boardToken(auth:ROLE_SLT))).getJsonPayload();
     json[] measures = <json[]>check body.measures;
     test:assertEquals(measures.map(m => checkpanic m.key), ["connected", "expired", "shareSuccess", "chatCards",
-        "priorityReach", "active30Days", "repostsPerWeek"]);
+        "priorityReach", "active30Days", "repostsPerMonth"]);
     json connected = check measureOf(body, "connected");
     test:assertEquals((check connected.value).toString(), "50");
     test:assertEquals(check connected.status, "ON_TRACK", "50% of 4 employees against 25%");
@@ -185,17 +184,17 @@ function testScorecardStatusesAgainstTargets() returns error? {
     test:assertEquals(check cards.note, "1 retrying, 0 failed after retries");
     test:assertEquals(check (check measureOf(body, "priorityReach")).status, "ON_TRACK");
     test:assertEquals(check (check measureOf(body, "active30Days")).status, "WATCH");
-    test:assertEquals((check (check measureOf(body, "repostsPerWeek")).target).toString(), "150.0");
+    test:assertEquals((check (check measureOf(body, "repostsPerMonth")).target).toString(), "600.0");
 
     // The targets are configuration: lower the lines and the same numbers pass.
     Targets lowered = {targetConnectedPct: 25, maxExpiredPct: 5, targetShareSuccessPct: 98, targetPriorityReachPct: 25,
-        targetActive30d: 20, targetRepostsPerWeek: 150};
+        targetActive30d: 20, targetRepostsPerMonth: 600};
     json low = scorecard(fixedSnapshot(), 4, lowered);
     json active = check measureOf(low, "active30Days");
     test:assertEquals((check active.target).toString(), "20.0");
     test:assertEquals(check active.status, "ON_TRACK");
     test:assertEquals(scorecardTargets(), {targetConnectedPct: 25, maxExpiredPct: 5, targetShareSuccessPct: 98,
-        targetPriorityReachPct: 25, targetActive30d: 100, targetRepostsPerWeek: 150}, "unset configuration = the defaults");
+        targetPriorityReachPct: 25, targetActive30d: 100, targetRepostsPerMonth: 600}, "unset configuration = the defaults");
     test:assertEquals(orDefault(0, 25), 25, "a zero or negative value falls back");
     test:assertEquals(orDefault(-3, 25), 25);
     test:assertEquals(orDefault(40, 25), 40);
@@ -209,7 +208,7 @@ function testScorecardStatusesAgainstTargets() returns error? {
     json empty = check (check send("GET", "/dashboards/scorecard", (), check boardToken(auth:ROLE_SLT))).getJsonPayload();
     json noShares = check measureOf(empty, "shareSuccess");
     test:assertEquals(check noShares.status, "ON_TRACK");
-    test:assertEquals(check noShares.note, "No shares in the last 7 days");
+    test:assertEquals(check noShares.note, "No shares this month");
     test:assertEquals(check (check measureOf(empty, "chatCards")).note, "No campaigns opened in the last 30 days");
     json noCount = check measureOf(empty, "connected");
     test:assertEquals(check noCount.status, "WATCH");
