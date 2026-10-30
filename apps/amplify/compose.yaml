@@ -253,6 +253,8 @@ services:
       BAL_CONFIG_VAR_CLIENTID: ${LINKEDIN_CLIENT_ID:?}
       BAL_CONFIG_VAR_CLIENTSECRET: ${LINKEDIN_CLIENT_SECRET:?}
       BAL_CONFIG_VAR_ENABLEMOCKADMIN: "true"
+      # The admin endpoints (/mock/posts, /mock/reset) also need the key; with none the mock keeps them off (404).
+      BAL_CONFIG_VAR_MOCKADMINKEY: ${MOCK_ADMIN_KEY:?set MOCK_ADMIN_KEY in local/.env (make env)}
       BAL_CONFIG_DATA: redirectUris = ["${LINKEDIN_REDIRECT_URI:?}"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9090/health >/dev/null"]
