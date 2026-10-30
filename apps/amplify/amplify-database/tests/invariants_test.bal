@@ -278,7 +278,7 @@ function testDefinerFunctionsArePinnedOwnedAndPrivate() returns error? {
         SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE p.prosecdef AND n.nspname IN ('identity', 'campaign', 'connection', 'sharing', 'external_sharing',
               'scoring', 'recognition', 'announcement', 'messaging', 'audit', 'config', 'public')`);
-    test:assertEquals(definers, 8, "the V009 upkeep functions are the only SECURITY DEFINER functions");
+    test:assertEquals(definers, 9, "the V009 upkeep functions and V018's erase_employee are the only SECURITY DEFINER functions");
     int unpinned = check db->queryRow(`
         SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE p.prosecdef AND NOT ('search_path=pg_catalog, pg_temp' = ANY (coalesce(p.proconfig, '{}')))`);
@@ -323,6 +323,8 @@ function testPartitionFunctionGuardsAndUtcBounds() returns error? {
         return;
     }
     postgresql:Client jobs = check roleClient("amplify_jobs", IT_JOBS_PASSWORD, 1);
+    // The token fixture is inserted as the admin: since V017 amplify_jobs no longer inserts tokens.
+    postgresql:Client admin = check adminClient(itDbName);
     test:assertTrue(selectFailure(jobs, `SELECT connection.create_token_partitions(-1)`).includes("0-60"));
     test:assertTrue(selectFailure(jobs, `SELECT connection.create_token_partitions(61)`).includes("0-60"));
     test:assertTrue(selectFailure(jobs, `SELECT audit.create_audit_partitions(25)`).includes("0-24"));
@@ -346,7 +348,7 @@ function testPartitionFunctionGuardsAndUtcBounds() returns error? {
     check sqlText(jobs, "RESET TIME ZONE");
 
     // A token issued today lands in today's partition.
-    string todayPart = check jobs->queryRow(`
+    string todayPart = check admin->queryRow(`
         WITH t AS (INSERT INTO connection.provider_token (owner_type, owner_id, provider, token_kind, ciphertext,
                        nonce, key_id, expires_at)
                    VALUES ('MEMBER', 'it-today', 'linkedin', 'ACCESS', '\x00'::bytea,
@@ -360,6 +362,7 @@ function testPartitionFunctionGuardsAndUtcBounds() returns error? {
     _ = check jobs->queryRow(`SELECT connection.drop_expired_token_partitions(0)`, int);
     test:assertTrue(check partitionExists(jobs, "connection", dayName(0)), "today is never dropped");
     _ = check jobs->execute(`DELETE FROM connection.provider_token WHERE owner_id = 'it-today'`);
+    check admin.close();
     check jobs.close();
 }
 
