@@ -44,11 +44,8 @@ isolated function adjustOnce(postgresql:Client db, string emp, int points) retur
 // R-01: two ledger appends at once both re-rank the whole period. Without a period lock they deadlock
 // (each holds its own standing row and waits for the other's in the re-rank UPDATE) or store ranks
 // computed from a snapshot without the other's row.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testConcurrentLedgerAppendsNeitherDeadlockNorMisrank() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: "amplify_api",
         password: apiDbPassword, sslMode: dbSslMode, maxOpenConnections: 12});
     string[] emps = [];
@@ -123,11 +120,8 @@ isolated function approveAs(postgresql:Client db, string claimId, string po) ret
 // R-12: two POs approve the same claim at the same moment. Exactly one wins; the other gets
 // VERSION_CONFLICT (or NOT_PENDING if it read after the commit), and only one decision event and audit
 // row exist. Also proves a row-lock wait between two transactions in one process completes.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testTwoWritersOneWinsTheOtherConflicts() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: "amplify_api",
         password: apiDbPassword, sslMode: dbSslMode, maxOpenConnections: 6});
     string emp = check newEmployee(db, "tw");
@@ -156,11 +150,8 @@ function testTwoWritersOneWinsTheOtherConflicts() returns error? {
 
 // R-03: the update audit row carries `before` as well as `after` (threat model sample audit row).
 // R-12: a stale write rolls back the whole unit of work: no outbox row, no audit row.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testAuditBeforeAfterAndVersionConflictRollsBack() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string emp = check newEmployee(db, "ba");
     string po = check newEmployee(db, "bapo");
@@ -217,11 +208,8 @@ function testAuditBeforeAfterAndVersionConflictRollsBack() returns error? {
 }
 
 // R-02: a PO can't mark their own (approved) claim amplified and pay themselves the top-up.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testPoCantAmplifyOwnClaim() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string poClaimant = check newEmployee(db, "selfpo");
     string otherPo = check newEmployee(db, "otherpo");
@@ -241,11 +229,8 @@ function testPoCantAmplifyOwnClaim() returns error? {
 }
 
 // R-06: the admin retry must not reset an outbox row a run is processing right now.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testAnnouncementRequeueSkipsARowInProgress() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string po = check newEmployee(db, "annpo");
     campaign:Campaign c = check registerCampaign(db, po);
@@ -268,11 +253,8 @@ function testAnnouncementRequeueSkipsARowInProgress() returns error? {
 
 // Token rotation, DB half (R-05): `updateSeal` swaps ciphertext/nonce/key id on the same row, guarded by
 // the old key id; the cipher half (`TokenCipher.reseal`) arrives with amplify_common 0.6 (HANDOFF).
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testTokenUpdateSealIsGuardedByTheOldKey() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check jobs();
     byte[] k1 = [];
     byte[] k2 = [];
@@ -306,11 +288,8 @@ function testTokenUpdateSealIsGuardedByTheOldKey() returns error? {
 
 // R-07: paging guards. Negative page / size never reach SQL (they were raw errors), and a page past the
 // end still reports the total.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testPagingGuardsAndTotalPastTheEnd() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string emp = check newEmployee(db, "page");
     string po = check newEmployee(db, "pagepo");
@@ -341,19 +320,17 @@ function testPagingGuardsAndTotalPastTheEnd() returns error? {
 }
 
 // Rebuild takes the same lock as the append and still matches the incremental totals.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testRebuildUnderTheLockMatchesIncrementalTotals() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check jobs();
-    int sumBefore = check count(db, `SELECT COALESCE(sum(total_points), 0)::int FROM recognition.standing
-                                     WHERE period_key = 'ALL'`);
+    // Every employee's total, not just their sum: a rebuild that moved points between people would still sum alike.
+    string before = check db->queryRow(`SELECT COALESCE(string_agg(employee_id || ':' || total_points::text, ',' ORDER BY employee_id), '')
+                                        FROM recognition.standing WHERE period_key = 'ALL'`);
     int version = check recognition:rebuild(db);
     test:assertTrue(version > 0);
-    int sumAfter = check count(db, `SELECT COALESCE(sum(total_points), 0)::int FROM recognition.standing
-                                    WHERE period_key = 'ALL'`);
-    test:assertEquals(sumAfter, sumBefore);
+    string after = check db->queryRow(`SELECT COALESCE(string_agg(employee_id || ':' || total_points::text, ',' ORDER BY employee_id), '')
+                                       FROM recognition.standing WHERE period_key = 'ALL'`);
+    test:assertEquals(after, before, "a rebuild reproduces every employee's incremental total");
     check db.close();
 }
 
@@ -372,11 +349,8 @@ isolated function probeTx(postgresql:Client db, string tag, int i) returns error
 // ballerinax/postgresql 1.19.1 some report success yet never commit (outbox = audit < 48), and some fail
 // with ConcurrentModificationException. Run it with
 // `AMPLIFY_IT=true bal test --groups runtime-probe`; it prints the counts and asserts nothing.
-@test:Config {groups: ["runtime-probe"]}
+@test:Config {groups: ["runtime-probe"], enable: itEnabled}
 function testRuntimeProbeConcurrentTransactions() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: "amplify_api",
         password: apiDbPassword, sslMode: dbSslMode, maxOpenConnections: 12});
     string tag = "probe-" + uniq();
@@ -404,11 +378,8 @@ function testRuntimeProbeConcurrentTransactions() returns error? {
 
 // Jobs-side announcement writes (were untested): queue once, send with CampaignAnnounced + audit, the
 // api's read port sees it; a failed card is listed by status.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testAnnouncementWriterQueueSendAndFail() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client apiDb = check api();
     postgresql:Client jobsDb = check jobs();
     announcements:PgAnnouncementWriter writer = new (jobsDb);
@@ -448,11 +419,8 @@ function testAnnouncementWriterQueueSendAndFail() returns error? {
 }
 
 // Identity: an upsert refreshes name and last seen, never moves first seen; an unknown id is `()`.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testEmployeeUpsertKeepsFirstSeen() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     identity:PgEmployeeRepository repo = new (db);
     string id = "emp-idn-" + uniq();
