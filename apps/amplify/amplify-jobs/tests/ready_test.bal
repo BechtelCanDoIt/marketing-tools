@@ -83,6 +83,7 @@ function runConfigRejectsNonsense() {
 @test:Config
 function longestCallIsTheSlowerDependency() {
     decimal chat = chatTimeoutSeconds + chatMinIntervalSeconds;
-    decimal expected = linkedinTimeoutSeconds > chat ? linkedinTimeoutSeconds : chat;
+    decimal registered = amplifyOnNovera ? 2d * noveraTimeoutSeconds + chat : chat;
+    decimal expected = linkedinTimeoutSeconds > registered ? linkedinTimeoutSeconds : registered;
     test:assertEquals(longestCallSeconds(), expected);
 }
