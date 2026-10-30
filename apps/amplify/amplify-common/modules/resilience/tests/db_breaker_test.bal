@@ -72,7 +72,7 @@ function dbBreakerHalfOpenTrialFailureReopens() {
     DbBreaker b = openBreaker();
     advance(5);
     test:assertEquals(b.admit(), "TRIAL");
-    test:assertTrue(b.onFailure(connectionLost));
+    b.onTrialFailure();
     test:assertEquals(b.state(), "OPEN");
     test:assertEquals(b.admit(), "REJECT");
     test:assertEquals(b.openCount(), 2);
@@ -158,6 +158,25 @@ function breakerStateGauge() {
 }
 
 @test:Config
+function dbBreakerLateFailureFromAnEarlierCallDoesNotSpoilTheTrial() {
+    // A is admitted while closed, the breaker opens, B becomes the half-open trial, then A's slow failure
+    // arrives before B reports. A must not re-open the breaker; B's success then closes it.
+    DbBreaker b = new ({failureThreshold: 2, windowSeconds: 10, resetTimeSeconds: 5}, fakeClock);
+    test:assertEquals(b.admit(), "PASS");
+    test:assertEquals(b.admit(), "PASS");
+    _ = b.onFailure(connectionLost);
+    _ = b.onFailure(connectionLost);
+    test:assertEquals(b.state(), "OPEN");
+    advance(5);
+    test:assertEquals(b.admit(), "TRIAL");
+    test:assertTrue(b.onFailure(connectionLost), "the late failure is still a transient failure");
+    test:assertEquals(b.state(), "HALF_OPEN", "a late failure does not settle the trial");
+    test:assertEquals(b.openCount(), 1);
+    b.onSuccess();
+    test:assertEquals(b.state(), "CLOSED");
+}
+
+@test:Config
 function dbBreakerTrialFailureOfAnyKindReopensAndLostTrialExpires() {
     DbBreaker b = openBreaker();
     advance(5);
@@ -207,8 +226,9 @@ function dbBreakerStateReadsHalfOpenAfterResetAndResetCloses() {
     test:assertEquals(b.state(), "HALF_OPEN", "an open breaker past its reset time reads half-open");
     test:assertEquals(b.admit(), "TRIAL");
     test:assertEquals(b.admit(), "REJECT", "only one trial at a time");
+    b.onTrialFailure();
+    test:assertEquals(b.state(), "OPEN", "a failed trial re-opens the breaker");
     test:assertTrue(b.onFailure(connectionLost), "a failure while open still counts");
-    test:assertEquals(b.state(), "OPEN");
     test:assertTrue(b.onFailure(connectionLost), "failures while open are counted but change nothing");
     b.reset();
     test:assertEquals(b.state(), "CLOSED");

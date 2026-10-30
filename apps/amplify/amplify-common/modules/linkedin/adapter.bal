@@ -38,9 +38,7 @@ type UserInfoResponse record {
     string email?;
 };
 
-# Longest LinkedIn error text written to a log line.
-const int MAX_REASON_LENGTH = 200;
-
+// LinkedIn's error body. Only the numeric code is read: the text can echo request values, so it is never logged.
 type ErrorBody record {
     int serviceErrorCode?;
     string message?;
@@ -115,7 +113,7 @@ public isolated class LinkedInAdapter {
         }
         http:Response|http:ClientError response = self.auth->post("/oauth/v2/accessToken", form,
                 mediaType = mime:APPLICATION_FORM_URLENCODED);
-        http:Response ok = check expectStatus(response, http:STATUS_OK, "token exchange");
+        http:Response ok = check expectStatus(response, "token exchange");
         AccessTokenResponse body = check readTokenBody(ok);
         string[] scopes = [];
         foreach string scope in re `[,\s]+`.split(body.scope ?: "") {
@@ -131,7 +129,7 @@ public isolated class LinkedInAdapter {
     public isolated function userInfo(string accessToken) returns MemberProfile|ProviderError {
         http:Response|http:ClientError response = self.api->get("/v2/userinfo",
                 {[HEADER_AUTHORIZATION]: bearer(accessToken)});
-        http:Response ok = check expectStatus(response, http:STATUS_OK, "userinfo");
+        http:Response ok = check expectStatus(response, "userinfo");
         UserInfoResponse body = check readUserInfoBody(ok);
         types:MemberUrn|types:DomainError memberUrn = types:memberUrnFromSub(body.sub);
         if memberUrn is types:DomainError {
@@ -151,7 +149,7 @@ public isolated class LinkedInAdapter {
         }
         http:Response|http:ClientError response = self.auth->post("/oauth/v2/revoke", form,
                 mediaType = mime:APPLICATION_FORM_URLENCODED);
-        _ = check expectStatus(response, http:STATUS_OK, "token revoke");
+        _ = check expectStatus(response, "token revoke");
     }
 
     # Breaker states of the REST API and OAuth clients.
@@ -171,7 +169,7 @@ public isolated class LinkedInAdapter {
             headers[name] = value;
         }
         http:Response|http:ClientError response = self.api->post("/rest/posts", payload, headers);
-        http:Response created = check expectStatus(response, http:STATUS_CREATED, "create post");
+        http:Response created = check expectStatus(response, "create post", command.correlationId);
         string|http:HeaderNotFoundError postId = created.getHeader(HEADER_RESTLI_ID);
         if postId is http:HeaderNotFoundError {
             return providerError(BAD_RESPONSE, "LinkedIn create post returned no x-restli-id", http:STATUS_CREATED, (), false);
@@ -237,30 +235,32 @@ isolated function buildQuery(map<string> params) returns string|url:Error {
     return string:'join("&", ...pairs);
 }
 
-isolated function expectStatus(http:Response|http:ClientError response, int expected, string operation)
-        returns http:Response|ProviderError {
+# Passes any 2xx response through; maps anything else to a `ProviderError`.
+#
+# + response - Response, or the client error when there was none
+# + operation - What was called, for the error text
+# + correlationId - Id sent as `X-Correlation-ID`, so the warning can be joined to the share and the jobs run
+# + return - The response, or the error
+isolated function expectStatus(http:Response|http:ClientError response, string operation,
+        string? correlationId = ()) returns http:Response|ProviderError {
     if response is http:ClientError {
         return providerError(UNAVAILABLE, string `LinkedIn ${operation} failed: no response`, (), (), true);
     }
     int status = response.statusCode;
-    if status == expected || (status >= 200 && status < 300) {
+    if status >= 200 && status < 300 {
         return response;
     }
     int? serviceErrorCode = ();
-    string reason = "";
     json|http:ClientError body = response.getJsonPayload();
     if body is json {
         ErrorBody|error parsed = body.cloneWithType();
         if parsed is ErrorBody {
             serviceErrorCode = parsed.serviceErrorCode;
-            string text = parsed.message ?: "";
-            reason = text.length() > MAX_REASON_LENGTH ? text.substring(0, MAX_REASON_LENGTH) : text;
         }
     }
     [ProviderErrorCode, boolean] [code, retryable] = classify(status);
-    // log-pii: ok LinkedIn's error text names the failing field, never the member's content; capped in length
     log:printWarn(string `LinkedIn ${operation} refused`, httpStatus = status, serviceErrorCode = serviceErrorCode,
-            retryable = retryable, linkedinMessage = reason);
+            retryable = retryable, correlationId = correlationId);
     return providerError(code, string `LinkedIn ${operation} failed with HTTP ${status}`, status, serviceErrorCode,
             retryable);
 }

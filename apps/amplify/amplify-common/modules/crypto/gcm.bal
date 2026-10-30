@@ -40,6 +40,20 @@ isolated function gcm(int mode, byte[] key, byte[] nonce, byte[] aad, byte[] inp
     return fromJava(check cipherDoFinal(cipher, toJava(input)));
 }
 
+# Random bytes straight from `java.security.SecureRandom` (the JDK's cryptographically strong generator).
+#
+# + length - Number of bytes
+# + return - The bytes, or an error crossing the Java boundary
+isolated function secureRandomBytes(int length) returns byte[]|error {
+    byte[] zeros = [];
+    foreach int i in 0 ..< length {
+        zeros.push(0);
+    }
+    handle buffer = toJava(zeros);
+    secureRandomNextBytes(newSecureRandom(), buffer);
+    return fromJava(buffer);
+}
+
 isolated function toJava(byte[] bytes) returns handle =>
     base64Decode(base64Decoder(), java:fromString(bytes.toBase64()));
 
@@ -78,6 +92,16 @@ isolated function newSecretKeySpec(handle key, handle algorithm) returns handle 
 isolated function newGcmParameterSpec(int tagBits, handle nonce) returns handle = @java:Constructor {
     'class: "javax.crypto.spec.GCMParameterSpec",
     paramTypes: ["int", {'class: "byte", dimensions: 1}]
+} external;
+
+isolated function newSecureRandom() returns handle = @java:Constructor {
+    'class: "java.security.SecureRandom"
+} external;
+
+isolated function secureRandomNextBytes(handle random, handle buffer) = @java:Method {
+    'class: "java.security.SecureRandom",
+    name: "nextBytes",
+    paramTypes: [{'class: "byte", dimensions: 1}]
 } external;
 
 isolated function base64Decoder() returns handle = @java:Method {
