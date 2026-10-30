@@ -67,6 +67,34 @@ CREATE INDEX points_ledger_campaign_idx ON scoring.points_ledger (campaign_id);
 -- PO "action required" list.
 CREATE INDEX points_ledger_action_required_idx ON scoring.points_ledger (created_at) WHERE status IS NULL;
 
+-- A reversal carries the action of the row it reverses. `recognition.action_delta` (V010) turns the action into the
+-- change in `actions_count` and `reposters`, and returns 0 for a NULL action, so a reversal whose action differs from its
+-- original would take the points off but leave the counts wrong. A CHECK can't compare two rows, and "action is not null"
+-- would be wrong: a PO adjustment has no action, and neither does its reversal.
+CREATE FUNCTION scoring.check_reversal_action()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, pg_temp
+AS $fn$
+DECLARE
+    v_action text;
+    v_found  boolean := false;
+BEGIN
+    SELECT true, l.action INTO v_found, v_action FROM scoring.points_ledger l WHERE l.reference = NEW.reverses_reference;
+    -- No original is `points_ledger_reversal_ck`'s business (a reversal names the row it reverses).
+    IF v_found AND NEW.action IS DISTINCT FROM v_action THEN
+        RAISE EXCEPTION 'a reversal must carry the action of the row it reverses (% reverses %)', NEW.reference, NEW.reverses_reference
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'points_ledger_reversal_action_ck';
+    END IF;
+    RETURN NEW;
+END
+$fn$;
+
+CREATE TRIGGER points_ledger_reversal_action
+    BEFORE INSERT ON scoring.points_ledger
+    FOR EACH ROW WHEN (NEW.source_type = 'REVERSAL')
+    EXECUTE FUNCTION scoring.check_reversal_action();
+
 GRANT SELECT, INSERT ON scoring.point_rule TO amplify_api;
 GRANT SELECT ON scoring.point_rule TO amplify_jobs, amplify_readonly;
 
