@@ -268,5 +268,7 @@ function testFieldsAreCheckedAgainstWhatTheDatabaseAccepts() {
     test:assertEquals(validSummary("  short  "), "short");
     test:assertEquals(validSummary("   "), ());
     test:assertTrue(normalizeTags(["Ärger"]) is types:DomainError, "lower-casing is ASCII only");
+    test:assertTrue(normalizeTags(["café"]) is types:DomainError, "accented letters never reach the CHECK");
+    test:assertTrue(normalizeTags(["ÄRGER"]) is types:DomainError, "an upper-case non-ASCII letter too");
     test:assertEquals(normalizeTags(["Ballerina", " it "]), ["ballerina", "it"]);
 }

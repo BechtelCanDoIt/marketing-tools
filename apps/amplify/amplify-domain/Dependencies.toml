@@ -66,9 +66,6 @@ dependencies = [
 	{org = "ballerina", name = "os"},
 	{org = "ballerina", name = "time"}
 ]
-modules = [
-	{org = "ballerina", packageName = "file", moduleName = "file"}
-]
 
 [[package]]
 org = "ballerina"
@@ -106,9 +103,6 @@ version = "1.8.3"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.value"}
-]
-modules = [
-	{org = "ballerina", packageName = "io", moduleName = "io"}
 ]
 
 [[package]]
@@ -227,6 +221,9 @@ version = "0.0.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
+modules = [
+	{org = "ballerina", packageName = "lang.value", moduleName = "lang.value"}
+]
 
 [[package]]
 org = "ballerina"
@@ -278,9 +275,6 @@ version = "1.10.3"
 dependencies = [
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "jballerina.java"}
-]
-modules = [
-	{org = "ballerina", packageName = "os", moduleName = "os"}
 ]
 
 [[package]]
@@ -462,11 +456,9 @@ org = "wso2"
 name = "amplify_domain"
 version = "0.4.1"
 dependencies = [
-	{org = "ballerina", name = "file"},
-	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "lang.runtime"},
-	{org = "ballerina", name = "os"},
+	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "sql"},
 	{org = "ballerina", name = "test"},
 	{org = "ballerina", name = "time"},
@@ -482,12 +474,7 @@ modules = [
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.announcements"},
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.campaign"},
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.connection"},
-	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.external_sharing"},
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.identity"},
-	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.recognition"},
-	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.reporting"},
-	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.scoring"},
-	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.sharing"},
 	{org = "wso2", packageName = "amplify_domain", moduleName = "amplify_domain.store"}
 ]
 
