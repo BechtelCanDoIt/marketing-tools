@@ -3,7 +3,7 @@
 Status: Draft (2026-10-16). Code side done in M6a (card builder, client, throttle, chat-stub, tests); the console steps below are still open in the [plan](../requirements/phase1-planned-todos.md) M6a.
 Owner: Amplify technical owner. Dev test space first, test, then the WSO2 Club space.
 
-`amplify-jobs` config keys referenced below live in `projects/marketing-tools/apps/amplify/amplify-jobs/config.bal` (Choreo: Configs & Secrets; local: `BAL_CONFIG_VAR_*` via `compose.yaml` / `local/.env`).
+`amplify-jobs` config keys referenced below live in `apps/amplify/amplify-jobs/config.bal` (Choreo: Configs & Secrets; local: `BAL_CONFIG_VAR_*` via `compose.yaml` / `local/.env`).
 
 **The webhook URL is a secret.** It looks like `https://chat.googleapis.com/v1/spaces/SPACE/messages?key=…&token=…` and anyone holding it can post into the space as "Amplify". Never log it, never paste it into chat, tickets, PRs, screenshots or `Config.toml` in git. The code never logs it and never puts it in errors or `announcement.last_error` (tests: `webhookErrorsNeverCarryTheUrl`, `webhook400FailsOnceWithoutRetryStorm`).
 

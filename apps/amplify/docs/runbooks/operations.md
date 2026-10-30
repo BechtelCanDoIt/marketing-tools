@@ -6,7 +6,7 @@ Owner: Developer. Escalation: PO team for product impact, WSO2 platform for Chor
 
 **Companion runbooks** (linked, not duplicated): [choreo-deploy.md](choreo-deploy.md) · [identity-setup.md](identity-setup.md) · [google-chat-webhook.md](google-chat-webhook.md) · [data-deletion-interim.md](data-deletion-interim.md) · [resilience-targets.md](resilience-targets.md) · checklist exception: data deletion.
 
-Paths: `apps/…` = `projects/marketing-tools/apps/amplify/…`. Local commands run from `projects/marketing-tools/apps/amplify/`. In Choreo the same work is a console action (no shell) — those steps are marked **[console]**.
+Paths: `apps/…` = `apps/amplify/…`. Local commands run from `apps/amplify/`. In Choreo the same work is a console action (no shell) — those steps are marked **[console]**.
 
 ## 0. Quick reference
 

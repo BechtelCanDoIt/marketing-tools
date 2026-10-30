@@ -106,7 +106,7 @@ Tests are Vitest with Testing Library under jsdom (`src/test/setup.ts`). Use `np
 
 amplify-api is a Ballerina service. In Choreo it sits behind the **Choreo API Proxy** at the edge of the Amplify cell, which checks the user's token and passes `x-jwt-assertion` to amplify-api.
 
-**Locally: the dev proxy.** Run the Compose stack from `projects/marketing-tools/apps/amplify` (`make up`, amplify-api on :9090), then `node local/one-wso2-proxy/proxy.mjs` (:9089) and set `ONE_WSO2_AMPLIFY_BACKEND_URL: "http://localhost:9089"`. The proxy handles CORS for :3000 and swaps your sign-in token for a local dev JWT carrying the same `sub`, email and groups, which amplify-api accepts only when `ENVIRONMENT=local` (ADR-023). Full walkthrough, including people-stub for photos and team rosters: [TestAmplify.md](TestAmplify.md).
+**Locally: the dev proxy.** Run the Compose stack from `apps/amplify` (`make up`, amplify-api on :9090), then `node local/one-wso2-proxy/proxy.mjs` (:9089) and set `ONE_WSO2_AMPLIFY_BACKEND_URL: "http://localhost:9089"`. The proxy handles CORS for :3000 and swaps your sign-in token for a local dev JWT carrying the same `sub`, email and groups, which amplify-api accepts only when `ENVIRONMENT=local` (ADR-023). Full walkthrough, including people-stub for photos and team rosters: [TestAmplify.md](TestAmplify.md).
 
 **Closest to production: local WSO2 API Manager** (`make up PROFILE=apim`), with the IdP as key manager, so amplify-api gets a real gateway JWT. Pending the non-prod Asgardeo org; steps in `compose.yaml`.
 

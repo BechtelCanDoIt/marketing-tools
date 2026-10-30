@@ -13,7 +13,7 @@ marketing-tools already exists in a WSO2-managed org (`wso2-open-operations/mark
 
 ## Decision
 
-The Amplify backend moves, unchanged inside, from `projects/wso2-amplify` to **`apps/amplify` in marketing-tools** (workspace path `projects/marketing-tools/apps/amplify`). The UI stays in One WSO2 (`webapp/src/features/amplify`). `projects/research/wso2-amplify` keeps only a README pointing at both.
+The Amplify backend moves, unchanged inside, from `projects/wso2-amplify` to **`apps/amplify` in marketing-tools** (workspace path `apps/amplify`). The UI stays in One WSO2 (`webapp/src/features/amplify`). `projects/research/wso2-amplify` keeps only a README pointing at both.
 
 ## Consequences
 

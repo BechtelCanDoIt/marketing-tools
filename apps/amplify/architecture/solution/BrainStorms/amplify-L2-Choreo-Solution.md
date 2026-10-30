@@ -12,7 +12,7 @@
 > Phase 1 scope and design: [phase1-domains.md](../Phase%201/phase1-domains.md) · plan: [phase1-planned-todos.md](../../../docs/requirements/phase1-planned-todos.md). The rest of this doc stays as the later-phase reference (engagement sync, Coin, HR Entity, agent).
 
 Builds on: [L0](../High%20Level/amplify-L0-solution.md) · [L1](../High%20Level/amplify-L1-solution.md)
-Inputs: requirements doc, weekly status report, and repo reviews of `projects/one-wso2`, `projects/wso2-digital-agents/po-agent`, `projects/wso2-coin`, `projects/people-ops-suite`, `projects/marketing-tools/apps/amplify/linkedin/resources/openapi`.
+Inputs: requirements doc, weekly status report, and repo reviews of `projects/one-wso2`, `projects/wso2-digital-agents/po-agent`, `projects/wso2-coin`, `projects/people-ops-suite`, `apps/amplify/linkedin/resources/openapi`.
 
 L2 adds communication patterns, component structure, data paths and error handling. Every arrow labelled `B#` is described in the boundary table below.
 
@@ -95,7 +95,7 @@ Later (alignment addition): LinkedIn ORGANIZATION_SOCIAL_ACTION_NOTIFICATIONS we
 | One WSO2 **Amplify app** | Existing web app (add) | React, TanStack Query, Oxygen UI | Amplify is its **own app with its own left-menu icon**: a new entry in `PERSPECTIVES` (`src/constants/perspectives.ts`) plus `src/constants/amplifyApps.ts` for its menu. It has leaderboards, my points/history, dashboards and admin screens, sits behind preview flag `amplify`, and checks access with `useAmplifyGate` → `GET /me`. | `one-wso2/webapp/src/features/til`, `useMarketingOpsGate.ts` |
 | Novera | Existing service (update) | TypeScript | Two new tools, `amplify_ask` and `amplify_submit_post`. `/internal/notifications` gets an optional `space` target. | `po-agent/src/tools/releases.ts` |
 
-**Repo layout for `projects/marketing-tools/apps/amplify`** (follows `wso2-coin`): `amplify-api/`, `apps/amplify-agent/`, `operations/amplify-jobs/{sync-engagement,score,announce,issue-coins,refresh-org}/` (one Choreo component per job) + `operations/amplify-jobs/shared/`. Each has its own `.choreo/component.yaml`, `openapi.yaml`, `.env.example`, `resources/*.sql` migrations, a README and the WSO2 Apache-2.0 header. The UI lives in the One WSO2 repo, not here.
+**Repo layout for `apps/amplify`** (follows `wso2-coin`): `amplify-api/`, `apps/amplify-agent/`, `operations/amplify-jobs/{sync-engagement,score,announce,issue-coins,refresh-org}/` (one Choreo component per job) + `operations/amplify-jobs/shared/`. Each has its own `.choreo/component.yaml`, `openapi.yaml`, `.env.example`, `resources/*.sql` migrations, a README and the WSO2 Apache-2.0 header. The UI lives in the One WSO2 repo, not here.
 
 ## Boundaries
 
