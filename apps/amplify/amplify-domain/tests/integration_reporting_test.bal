@@ -133,10 +133,10 @@ function testRepostsAndPostsFeedTheBoards() returns error? {
     test:assertTrue(cats[0].repostsWithCommentary >= 1 && cats[0].repostsWithCommentary <= cats[0].reposts,
             "reposts with comments are part of the category's reposts, not on top of them");
 
-    reporting:WeekCount[] weeks = check reporting:weeklyReposts(apiDb, 8);
-    test:assertEquals(weeks.length(), 8, "zero-filled, one row per week");
-    test:assertTrue(weeks[7].reposts >= 1, "this week includes the repost");
-    test:assertTrue(weeks[0].weekStart < weeks[7].weekStart, "oldest first");
+    reporting:MonthCount[] months = check reporting:monthlyReposts(apiDb, 6);
+    test:assertEquals(months.length(), 6, "zero-filled, one row per month");
+    test:assertTrue(months[5].reposts >= 1, "this month includes the repost");
+    test:assertTrue(months[0].monthStart < months[5].monthStart, "oldest first");
     check apiDb.close();
     check jobsDb.close();
 }
@@ -248,13 +248,12 @@ function testPointsAwardedMoveWithTheLedgerInEveryWindow() returns error? {
     reporting:PointsAwarded before = check reporting:pointsAwarded(db);
     types:LedgerEntry adj = check scoring:adjustPoints(ledger, emp, 40, "IT window", po, (), "it-rpt-win", time:utcNow());
     reporting:PointsAwarded after = check reporting:pointsAwarded(db);
-    test:assertEquals(after.week, before.week + 40);
     test:assertEquals(after.month, before.month + 40);
     test:assertEquals(after.year, before.year + 40);
     _ = check scoring:reverseEntry(ledger, adj.reference, "IT window reversal", po, "it-rpt-win-rev", time:utcNow());
     reporting:PointsAwarded reversed = check reporting:pointsAwarded(db);
-    test:assertEquals(reversed.week, before.week, "a reversal nets the adjustment out");
-    test:assertTrue(reversed.year >= reversed.month && reversed.month >= reversed.week, "year contains month contains week");
+    test:assertEquals(reversed.month, before.month, "a reversal nets the adjustment out");
+    test:assertTrue(reversed.year >= reversed.month, "year contains month");
     check db.close();
 }
 
@@ -284,9 +283,9 @@ function testSnapshotReadsEverythingInOneRepeatableReadTransaction() returns err
     test:assertEquals(s.connections, check reporting:connectionBreakdown(apiDb));
     test:assertEquals(s.participation, check reporting:participationCounts(apiDb));
     test:assertEquals(s.points, check reporting:pointsAwarded(apiDb));
-    test:assertEquals(s.weekly.length(), 8);
-    test:assertTrue(s.reposts7d >= 1 && s.reposts7dWithCommentary >= 1 && s.reposts7dWithCommentary <= s.reposts7d);
-    test:assertTrue(s.repostsThisMonth >= s.reposts7dWithCommentary);
+    test:assertEquals(s.monthly.length(), 6);
+    test:assertTrue(s.repostsThisMonth >= 1 && s.repostsThisMonthWithCommentary >= 1
+        && s.repostsThisMonthWithCommentary <= s.repostsThisMonth);
     reporting:CampaignRow[] mine = from reporting:CampaignRow r in s.campaigns
         where r.campaignId == c.id
         select r;

@@ -238,27 +238,36 @@ public isolated function campaignNumbers(postgresql:Client db, string[] campaign
     return result;
 }
 
-# Start of the calendar week (Monday 00:00 UTC) that holds `t`.
+# Start of the calendar month (the 1st, 00:00 UTC) that holds `t`.
 #
 # + t - Any instant
-# + return - Monday 00:00:00 UTC of that week
-public isolated function weekStartOf(time:Utc t) returns time:Utc {
-    // 1970-01-01 was a Thursday, so day 0 is 3 days past a Monday.
-    int days = <int>(t[0] / 86400);
-    int sinceMonday = (days + 3) % 7;
-    return [(days - sinceMonday) * 86400, 0];
+# + return - The 1st 00:00:00 UTC of that month
+public isolated function monthStartOf(time:Utc t) returns time:Utc {
+    time:Civil c = time:utcToCivil(t);
+    return checkpanic time:utcFromCivil({year: c.year, month: c.month, day: 1, hour: 0, minute: 0, second: 0,
+        utcOffset: {hours: 0, minutes: 0}});
 }
 
-# Points earned per employee in `[weekStart, weekStart + 7 days)`, straight from the ledger (adjustments
-# and reversals included, so it matches the all-time board's arithmetic). People whose week nets to zero
+# Start of the month after the one holding `t`.
+#
+# + t - Any instant
+# + return - The 1st 00:00:00 UTC of the next month
+public isolated function nextMonthStartOf(time:Utc t) returns time:Utc {
+    time:Civil c = time:utcToCivil(t);
+    return checkpanic time:utcFromCivil({year: c.month == 12 ? c.year + 1 : c.year, month: c.month == 12 ? 1 : c.month + 1,
+        day: 1, hour: 0, minute: 0, second: 0, utcOffset: {hours: 0, minutes: 0}});
+}
+
+# Points earned per employee in `[monthStart, next month's 1st)`, straight from the ledger (adjustments
+# and reversals included, so it matches the all-time board's arithmetic). People whose month nets to zero
 # or less are left out. Names and emails come from the identity context, as the full rebuild does.
 #
 # + db - Client
-# + weekStart - Monday 00:00 UTC
-# + return - One total per employee with points that week, or an error
-public isolated function weeklyTotals(postgresql:Client db, time:Utc weekStart) returns EmployeeTotal[]|error {
-    string startTs = time:utcToString(weekStart);
-    string endTs = time:utcToString(time:utcAddSeconds(weekStart, 7d * 86400d));
+# + monthStart - The 1st, 00:00 UTC
+# + return - One total per employee with points that month, or an error
+public isolated function monthlyTotals(postgresql:Client db, time:Utc monthStart) returns EmployeeTotal[]|error {
+    string startTs = time:utcToString(monthStart);
+    string endTs = time:utcToString(nextMonthStartOf(monthStart));
     stream<record {|
         string employee_id;
         string? display_name;
