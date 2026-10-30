@@ -26,7 +26,8 @@ Enforced twice: API proxy scopes per resource, then the Ballerina request interc
 | S1 | `DELETE /campaigns/{id}` | — | D (archive) | D (archive) | — | — | Soft archive only; shares and points stay |
 | S2 Connection | `POST /connections/linkedin/start` | C own | C own | C own | C own | C own | Issues `state`; one active connection per employee |
 | S2 | `POST /connections/linkedin/complete` | U own | U own | U own | U own | U own | `state` must match, be unused and unexpired; same employee who started |
-| S2 | `DELETE /connections/linkedin` | D own | D own | D own | D own | D own | Deletes the token row; points kept or reversed per plan D6 (open) |
+| S2 | `POST /connections/linkedin/decline` | U own | U own | U own | U own | U own | Records "I don't consent" with an optional LinkedIn profile URL; no token |
+| S2 | `DELETE /connections/linkedin` | D own | D own | D own | D own | D own | Revokes the token at LinkedIn first (kept and 503 if LinkedIn is down), then deletes the token row; points kept or reversed per plan D6 (open) |
 | C1 Sharing | `POST /campaigns/{id}/shares` | C own | C own | C own | C own | C own | Campaign `open`; connection active (not `NEEDS_RECONNECT`); one per campaign per employee. After `FAILED` the same row is retried (ADR-015). `sharing.enabled` kill switch |
 | C1 | `GET /me/shares` | R own | R own | R own | R own | R own | |
 | S3 External Sharing | `POST /external-shares` | C own | C own | C own | C own | C own | Normalized `(evidence_url, action)` unique across everyone → `EVIDENCE_ALREADY_CLAIMED` (ADR-017); URL host allow-list |
