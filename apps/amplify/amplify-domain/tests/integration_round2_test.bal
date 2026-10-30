@@ -341,3 +341,21 @@ function testLeaverCandidatesNeedBothAbsenceAndDormancyAndErasureRemovesThem() r
     check apiDb.close();
     check jobsDb.close();
 }
+
+// Token partition runway (review of V009): the migration creates two weeks ahead, and the days-ahead read is what
+// amplify-jobs exports and alerts on.
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testTokenPartitionRunwayIsTwoWeeksAndReadable() returns error? {
+    postgresql:Client db = check jobs();
+    int? ahead = check store:tokenPartitionDaysAhead(db);
+    int days = ahead ?: -99;
+    // 14 on the day the database was built; allow a day for a UTC rollover while the suite runs.
+    test:assertTrue(days >= 13, string `newest token partition is ${days} days ahead`);
+    // Creating more moves the runway out; creating fewer never shrinks it.
+    _ = check db->queryRow(`SELECT connection.create_token_partitions(20)`, int);
+    int? longer = check store:tokenPartitionDaysAhead(db);
+    test:assertTrue((longer ?: -99) >= 20, "asking for 20 days creates 20 days");
+    _ = check db->queryRow(`SELECT connection.create_token_partitions(2)`, int);
+    test:assertEquals(check store:tokenPartitionDaysAhead(db), longer, "a shorter request does not drop partitions");
+    check db.close();
+}
