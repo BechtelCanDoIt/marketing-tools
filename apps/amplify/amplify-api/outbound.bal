@@ -19,6 +19,7 @@
 // directory for team rosters (D13) and LinkedIn OAuth (S2). Each HTTP client has a timeout and a circuit breaker; the
 // jobs trigger and the roster are non-fatal, so their failures degrade the response instead of failing it.
 
+import amplify_api.scheduler;
 import amplify_common.crypto;
 import amplify_common.linkedin;
 import amplify_common.resilience;
@@ -33,6 +34,33 @@ import ballerina/time;
 configurable string jobsUrl = "";
 # Trigger timeout, seconds.
 configurable decimal jobsTimeoutSeconds = 3;
+# Shared secret amplify-jobs requires on every call but its probes (a Choreo secret; locally
+# `AMPLIFY_INTERNAL_API_KEY`). Sent on the triggers below and set as a header on the jobs registered with the
+# scheduler. Required whenever `jobsUrl` or `schedulerUrl` is set.
+configurable string internalApiKey = "";
+
+# Shortest internal key accepted (a 24-byte random value as hex is 48 characters).
+const int MIN_INTERNAL_KEY_LENGTH = 32;
+
+# Stops start-up when jobs or the scheduler are configured but the internal key is missing or too short, so a
+# deployment can't quietly send unauthenticated calls that amplify-jobs will refuse.
+#
+# + jobs - `jobsUrl`
+# + scheduler - `schedulerUrl`
+# + key - `internalApiKey`
+# + return - An error naming the problem, or `()`
+isolated function checkInternalKey(string jobs, string scheduler, string key) returns error? {
+    if (jobs.trim() != "" || scheduler.trim() != "") && key.trim().length() < MIN_INTERNAL_KEY_LENGTH {
+        return error(string `internalApiKey must be a secret of at least ${MIN_INTERNAL_KEY_LENGTH} characters `
+                + "when jobsUrl or schedulerUrl is set");
+    }
+}
+
+# The header the scheduler (and each trigger) sends to amplify-jobs.
+#
+# + return - One header, or none when no key is configured (only possible when jobs is not configured)
+isolated function internalKeyHeaders() returns scheduler:Header[] =>
+    internalApiKey.trim() == "" ? [] : [{name: INTERNAL_KEY_HEADER, value: internalApiKey.trim()}];
 
 final http:Client? jobsClient = check newBreakerClient(jobsUrl, jobsTimeoutSeconds);
 
@@ -258,6 +286,9 @@ isolated function triggerJobs(string path, string? correlationId) returns RunTri
 
 isolated function sendTrigger(http:Client c, string path, string? correlationId) {
     map<string> headers = correlationId is string ? {[CORRELATION_HEADER]: correlationId} : {};
+    if internalApiKey.trim() != "" {
+        headers[INTERNAL_KEY_HEADER] = internalApiKey.trim();
+    }
     http:Response|error res = c->post(path, {}, headers);
     if res is error {
         log:printWarn("amplify-jobs trigger failed; the scheduled Run will catch up", 'error = res, path = path,
