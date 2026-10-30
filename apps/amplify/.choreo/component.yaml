@@ -146,10 +146,10 @@ configurations:
           displayName: Scorecard: people active in the last 30 days (default 100) (leave empty for the default)
           type: string
           required: false
-    - name: BAL_CONFIG_VAR_SCORECARDTARGETREPOSTSPERWEEK
+    - name: BAL_CONFIG_VAR_SCORECARDTARGETREPOSTSPERMONTH
       valueFrom:
         configForm:
-          displayName: Scorecard: reposts in the last 7 days (default 150) (leave empty for the default)
+          displayName: Scorecard: reposts this calendar month (default 600) (leave empty for the default)
           type: string
           required: false
     - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYURL

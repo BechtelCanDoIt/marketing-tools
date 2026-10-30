@@ -32,23 +32,19 @@ public type Snapshot record {|
     time:Utc asOf;
     # Campaigns open now
     LiveCounts live;
-    # Reposts in the last 7 days
-    int reposts7d;
-    # Of those, with the employee's own commentary
-    int reposts7dWithCommentary;
-    # Reposts in the 7 days before that
-    int repostsPrev7d;
     # Reposts this calendar month (UTC)
     int repostsThisMonth;
+    # Of those, with the employee's own commentary
+    int repostsThisMonthWithCommentary;
     # Reposts last calendar month
     int repostsPrevMonth;
-    # Last eight weeks, oldest first
-    WeekCount[] weekly;
+    # Last six months, oldest first
+    MonthCount[] monthly;
     # Connections by state
     ConnectionBreakdown connections;
     # The funnel
     ParticipationCounts participation;
-    # Points awarded this week, month and year (UTC calendar)
+    # Points awarded this month and year (UTC calendar)
     PointsAwarded points;
     # People with points
     int peopleWithPoints;
@@ -56,7 +52,7 @@ public type Snapshot record {|
     CampaignRow[] campaigns;
     # Announcement delivery by campaign id
     map<Delivery> delivery;
-    # Shares in the last 7 days
+    # Shares this calendar month (UTC)
     sharing:ShareHealth shares;
     # Cards for campaigns opened in the last 30 days
     CardCounts cards;
@@ -78,8 +74,6 @@ isolated function snapshotTx(postgresql:Client db, time:Utc now) returns Snapsho
     time:Utc monthStart = check time:utcFromString(month + "-01T00:00:00Z");
     time:Utc prevMonthStart = check time:utcFromString(previousMonth(month) + "-01T00:00:00Z");
     time:Utc soon = time:utcAddSeconds(now, 60);
-    time:Utc weekAgo = time:utcAddSeconds(now, -7d * 86400d);
-    time:Utc twoWeeksAgo = time:utcAddSeconds(now, -14d * 86400d);
     transaction {
         // First statement of the transaction: every query below sees one committed state.
         _ = check db->execute(`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`);
@@ -89,19 +83,17 @@ isolated function snapshotTx(postgresql:Client db, time:Utc now) returns Snapsho
         result = {
             asOf: now,
             live: check liveCounts(db),
-            reposts7d: check repostsBetween(db, weekAgo, soon),
-            reposts7dWithCommentary: check commentaryRepostsBetween(db, weekAgo, soon),
-            repostsPrev7d: check repostsBetween(db, twoWeeksAgo, weekAgo),
             repostsThisMonth: check repostsBetween(db, monthStart, soon),
+            repostsThisMonthWithCommentary: check commentaryRepostsBetween(db, monthStart, soon),
             repostsPrevMonth: check repostsBetween(db, prevMonthStart, monthStart),
-            weekly: check weeklyReposts(db, 8),
+            monthly: check monthlyReposts(db, 6),
             connections: check connectionBreakdown(db),
             participation: check participationCounts(db),
             points: check pointsAwarded(db),
             peopleWithPoints: (check recognition:recognitionTotals(db, month + "-01", now)).employeesWithPoints,
             campaigns,
             delivery: check deliveryOf(db, ids),
-            shares: check sharing:shareHealth(db, weekAgo),
+            shares: check sharing:shareHealth(db, monthStart),
             cards: check cardCounts(db, time:utcAddSeconds(now, -30d * 86400d))
         };
         check commit;

@@ -286,9 +286,9 @@ isolated function topStandings(string period, int topN) returns recognition:Stan
     }
 }
 
-isolated function weeklyTotalsRead(time:Utc weekStart) returns recognition:EmployeeTotal[]|error {
+isolated function monthlyTotalsRead(time:Utc monthStart) returns recognition:EmployeeTotal[]|error {
     retry<resilience:TransientDbRetry> (dbReadRetries) {
-        return check recognition:weeklyTotals(check db(), weekStart);
+        return check recognition:monthlyTotals(check db(), monthStart);
     }
 }
 
