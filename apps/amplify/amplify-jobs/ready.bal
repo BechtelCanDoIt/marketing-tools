@@ -30,6 +30,9 @@ type ReadyReport record {|
     boolean runInProgress;
     # Breaker state per dependency (reported, not fatal: LinkedIn and Chat outages only defer rows)
     map<string> breakers;
+    # What the outbox holds; absent when the database is down or the backlog could not be read. Reported, not
+    # fatal: `alerting` is the signal to page on (a row waiting longer than `outboxAlertSeconds`, or one that failed)
+    OutboxReport outbox?;
 |};
 
 # Readiness from its inputs. Only the database gates it: without LinkedIn, Chat or the token keys the run
@@ -38,14 +41,22 @@ type ReadyReport record {|
 # + databaseUp - Database breaker not open and the probe answered
 # + breakers - Breaker state per dependency
 # + running - Whether a run is in progress on this replica
+# + outbox - The outbox backlog, when it was read
 # + return - The report
-isolated function readiness(boolean databaseUp, map<string> breakers, boolean running) returns ReadyReport => {
-    component: COMPONENT,
-    status: databaseUp ? types:UP : types:DOWN,
-    database: databaseUp ? types:UP : types:DOWN,
-    runInProgress: running,
-    breakers: breakers.clone()
-};
+isolated function readiness(boolean databaseUp, map<string> breakers, boolean running, OutboxReport? outbox = ())
+        returns ReadyReport {
+    ReadyReport report = {
+        component: COMPONENT,
+        status: databaseUp ? types:UP : types:DOWN,
+        database: databaseUp ? types:UP : types:DOWN,
+        runInProgress: running,
+        breakers: breakers.clone()
+    };
+    if outbox is OutboxReport {
+        report.outbox = outbox;
+    }
+    return report;
+}
 
 # Whether a run is in progress on this replica.
 #
