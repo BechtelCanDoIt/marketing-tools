@@ -32,6 +32,7 @@ local/.env:
 	@for k in POSTGRES_PASSWORD AMPLIFY_API_DB_PASSWORD AMPLIFY_JOBS_DB_PASSWORD AMPLIFY_READONLY_DB_PASSWORD \
 	          SCHEDULER_DB_PASSWORD LINKEDIN_CLIENT_SECRET; do \
 	  v=$$(openssl rand -hex 16); sed -i.bak "s|^$$k=$$|$$k=$$v|" local/.env; done
+	@v=$$(openssl rand -hex 24); sed -i.bak "s|^AMPLIFY_INTERNAL_API_KEY=$$|AMPLIFY_INTERNAL_API_KEY=$$v|" local/.env
 	@v=$$(openssl rand -base64 32); sed -i.bak "s|^TOKEN_ENCRYPTION_KEY=$$|TOKEN_ENCRYPTION_KEY=$$v|" local/.env
 	@rm -f local/.env.bak && chmod 600 local/.env
 	@echo "Wrote local/.env with random local-only secrets."
@@ -45,7 +46,15 @@ local/people-stub/directory.json:
 	@cp local/people-stub/directory.json.example local/people-stub/directory.json
 	@echo "Wrote local/people-stub/directory.json from the example."
 
-env: local/.env local/dev-jwt/jwks.json local/people-stub/directory.json
+# An existing local/.env predates the internal key: add one rather than failing `make up`.
+.PHONY: env-internal-key
+env-internal-key: local/.env
+	@grep -q '^AMPLIFY_INTERNAL_API_KEY=.' local/.env || { \
+	  sed -i.bak '/^AMPLIFY_INTERNAL_API_KEY=/d' local/.env; rm -f local/.env.bak; \
+	  echo "AMPLIFY_INTERNAL_API_KEY=$$(openssl rand -hex 24)" >> local/.env; \
+	  echo "Added AMPLIFY_INTERNAL_API_KEY to local/.env."; }
+
+env: local/.env env-internal-key local/dev-jwt/jwks.json local/people-stub/directory.json
 
 up: env
 	$(COMPOSE) up -d --build --wait
