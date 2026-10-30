@@ -15,7 +15,7 @@
 2. **Leaver sweep in amplify-jobs**, part of the daily maintenance run, off by default (`leaverSweepMode`: `OFF`, `DRY_RUN`, `ERASE`).
    A person is a leaver when they are **missing from the people directory and have not used Amplify for `leaverGraceDays` (30)**.
    Two limits stop a broken directory from erasing active people: a directory that lists fewer than `leaverMinDirectorySize` (100)
-   people skips the sweep, and more than `leaverMaxPerRun` (10) leavers erases nobody and logs an error. Roll out `DRY_RUN` first.
+   people skips the sweep, and more than `leaverMaxPerRun` (10) leavers, or leavers over `leaverMaxPercent` (10%) of the employees Amplify knows, erases nobody and logs an error (the percentage scales with the pilot; the absolute cap alone would let a partial directory erase a few active people while Amplify is small). Identity is matched by the sign-in email against the directory work email, so anyone who signs in with a different address looks like a leaver: that is why `DRY_RUN` comes first. Roll out `DRY_RUN` first.
 3. **Token grants (V017):** `amplify_api` loses `UPDATE` and `amplify_jobs` loses `INSERT` on `connection.provider_token`. Both keep
    `SELECT` (the API revokes at LinkedIn when a person removes their connection). Moving that revoke into the worker would remove the API's
    read access too; that is a separate change because it alters the 503-on-revoke-failure behaviour.

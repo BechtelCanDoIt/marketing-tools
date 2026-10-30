@@ -59,6 +59,8 @@ What it does:
   (`erased-<hash>@amplify.invalid`; the column is `NOT NULL UNIQUE`, so it cannot be set to NULL) and on
   `recognition.standing` with `Former participant` and no email.
 
+It does **not** remove the LinkedIn member URN from the append-only audit log or from outbox rows (payload and idempotency key) until retention purges them, and the tokens are deleted but not revoked at LinkedIn. If the person is reachable, ask them to use Remove Connection first (it revokes) and to remove the app in LinkedIn settings (step 8). Legal / Privacy should confirm the retained URN is acceptable. The audit row records the database user that called the function next to the actor you name.
+
 The earlier hand-written template tried `email = NULL`, which the schema refuses, and left the member URN behind.
 
 ## Gotchas

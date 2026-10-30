@@ -72,6 +72,14 @@ function testProbesStayOpenButNothingElseDoes() returns error? {
 }
 
 @test:Config
+function testAKeyWithAStrayNewlineStillMatches() {
+    test:assertTrue(keyMatches("abc", "abc\n"));
+    test:assertTrue(keyMatches(" abc ", "abc"));
+    test:assertFalse(keyMatches("abc", "abd\n"));
+    test:assertFalse(keyMatches("", "abc"));
+}
+
+@test:Config
 function testBlankOrShortKeysAreRefusedAtStartUp() {
     test:assertTrue(checkInternalKey("") is error);
     test:assertTrue(checkInternalKey("   ") is error);
