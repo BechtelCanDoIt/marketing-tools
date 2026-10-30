@@ -31,6 +31,8 @@ public enum CampaignStatus {
 public const int TITLE_MAX_LENGTH = 200;
 # Longest tag.
 public const int TAG_MAX_LENGTH = 50;
+# Longest summary (`campaign.campaign.summary` CHECK).
+public const int SUMMARY_MAX_LENGTH = 2000;
 # Default active window in days when `closesAt` isn't given (C7, `campaign.default_window_days`).
 public const int DEFAULT_WINDOW_DAYS = 30;
 

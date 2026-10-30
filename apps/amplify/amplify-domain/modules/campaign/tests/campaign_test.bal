@@ -74,7 +74,7 @@ function draft() returns CampaignDraft => {
     resourceUrn: "urn:li:share:7123",
     ownerUrn: WSO2_ORG,
     title: "  WSO2 named a Leader  ",
-    categoryCode: "product",
+    categoryCode: "PRODUCT",
     tags: ["AI", "ai", " Integration ", ""],
     imageUrl: "https://media.wso2.com/a.png"
 };
@@ -228,4 +228,16 @@ function testPostLinkOriginsAreConfigurable() returns error? {
     CampaignPolicy withMock = {wso2OrganizationUrn: WSO2_ORG,
         postLinkOrigins: [...DEFAULT_POST_LINK_ORIGINS, "http://localhost:19091"]};
     test:assertEquals((check newCampaign(d, withMock, "id", "m", T0)).resourceUrl, d.resourceUrl);
+}
+
+@test:Config
+function testFieldsAreCheckedAgainstWhatTheDatabaseAccepts() {
+    // Each of these would otherwise reach INSERT and fail a CHECK there as a raw 23514 (a 500).
+    test:assertTrue(validCategory("product") is types:DomainError, "category codes are upper case");
+    test:assertTrue(validCategory("PRODUCT") is string);
+    test:assertTrue(validSummary(string:'join("", ...from int i in 0 ..< 2001 select "a")) is types:DomainError);
+    test:assertEquals(validSummary("  short  "), "short");
+    test:assertEquals(validSummary("   "), ());
+    test:assertTrue(normalizeTags(["Ärger"]) is types:DomainError, "lower-casing is ASCII only");
+    test:assertEquals(normalizeTags(["Ballerina", " it "]), ["ballerina", "it"]);
 }
