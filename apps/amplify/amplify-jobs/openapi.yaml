@@ -71,6 +71,18 @@ paths:
               schema: {$ref: "#/components/schemas/MaintenanceReport"}
         "503": {description: Database unavailable}
         "500": {description: Maintenance failed}
+  /maintenance/leavers:
+    post:
+      operationId: sweepLeavers
+      description: >-
+        Runs only the leaver sweep (the daily maintenance run includes it): employees missing from the people directory
+        who have not used Amplify for `leaverGraceDays`. `OFF` does nothing; `DRY_RUN` reports who would be erased
+        (pseudonymous ids only); `ERASE` erases them with `identity.erase_employee`. A directory that lists too few
+        people, or more leavers than `leaverMaxPerRun`, erases nobody. ADR-040.
+      responses:
+        "200": {description: What the sweep did}
+        "401": {description: Missing or wrong internal key}
+        "503": {description: Database unavailable}
   /maintenance/rebuild-recognition:
     post:
       operationId: rebuildRecognition

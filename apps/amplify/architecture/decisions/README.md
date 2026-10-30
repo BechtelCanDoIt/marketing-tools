@@ -44,6 +44,8 @@ One file per decision, dated, short format (Status, Date, Context, Decision, Con
 | [ADR-036](ADR-036-dashboards-for-amplify-roles.md) | Dashboards for the amplify_* roles, read from a reporting context | Accepted |
 | [ADR-037](ADR-037-celebrate-top-three-this-week.md) | Celebrate top three and My position are for this month, cached 2 hours | Accepted |
 | [ADR-038](ADR-038-group-based-access-by-capability.md) | Group-based access by capability; Asgardeo groups per capability from configuration, `GET /me` returns grants | Accepted |
+| [ADR-039](ADR-039-internal-key-for-back-office-components.md) | A shared internal key protects amplify-jobs | Accepted |
+| [ADR-040](ADR-040-erasure-leaver-sweep-and-token-grants.md) | One audited erase function, a leaver sweep, narrower token grants, outbox alerting | Accepted |
 
 ## D-number to ADR map (resolves audit B1)
 

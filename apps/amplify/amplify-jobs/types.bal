@@ -28,6 +28,8 @@ type MaintenanceReport record {|
     int idempotency_keys_purged;
     # Token key rotation pass (`provider_token` rows moved to the active key)
     TokenRotation token_rotation;
+    # Leaver sweep: employees gone from the directory (`OFF` unless `leaverSweepMode` is set)
+    LeaverSweepReport leaver_sweep;
 |};
 
 # What the key-rotation step of `POST /maintenance/partitions` did.
