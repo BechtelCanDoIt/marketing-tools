@@ -279,8 +279,8 @@ type Roster record {|
     string teamName;
     # Member emails, lowercase
     string[] emails;
-    # The viewer's house, `()` when the directory has none for them
-    string? houseName = ();
+    # House of each member that has one, by lowercase email
+    map<string> houses = {};
 |};
 
 # The fields of a directory row Amplify reads. Open: the row carries more (names, photo, manager), which
@@ -388,8 +388,15 @@ isolated function rosterFrom(DirectoryIndex index, string email) returns Roster?
     if key is () {
         return ();
     }
-    return {teamName: index.teamNames[key] ?: key, emails: [...(index.members[key] ?: [])],
-        houseName: index.houseOf[email.trim().toLowerAscii()]};
+    string[] emails = [...(index.members[key] ?: [])];
+    map<string> houses = {};
+    foreach string member in emails {
+        string? house = index.houseOf[member];
+        if house is string {
+            houses[member] = house;
+        }
+    }
+    return {teamName: index.teamNames[key] ?: key, emails, houses};
 }
 
 # The viewer's team roster. The whole directory is fetched once and reused for `rosterCacheSeconds`.
