@@ -34,6 +34,15 @@ const string TEST_ISSUER = "https://gateway.test/amplify";
 const string TEST_AUDIENCE = "amplify-test-client";
 const string TEST_KID = "test-key-1";
 
+// The Asgardeo groups the tests sign into tokens. tests/Config.toml maps them to grants, as an
+// environment's configuration would; the code itself names no group.
+const string PO_GROUP = "amplify_po";
+const string MARKETING_GROUP = "amplify_marketing";
+const string SLT_GROUP = "amplify_slt";
+const string ADMIN_GROUP = "amplify_admin";
+# Only in `canCampaignGroups`: proves a second group can share a capability without any other grant.
+const string CAMPAIGN_ONLY_GROUP = "amplify_campaign_extra";
+
 # Gateway signing key (published in the test JWKS).
 crypto:PrivateKey? gatewayKey = ();
 # A second key, never published: signs the bad-signature tokens.
