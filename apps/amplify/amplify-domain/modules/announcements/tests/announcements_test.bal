@@ -55,6 +55,23 @@ function sentFailedAndRetry() returns error? {
 }
 
 @test:Config
+function announcedKeyIsUniqueWhenTheOutboxIdIsMissing() {
+    // `outbox_id` is nullable: keying on a `?: 0` default would put every such announcement on
+    // `CampaignAnnounced:0` and the unique index would silently drop all but the first.
+    Announcement one = {campaignId: "c1", outboxId: (), space: "club", threadKey: "campaign-c1",
+        chatMessageName: "spaces/club/messages/m1", queuedAt: T0, sentAt: T0, failedAt: (), lastError: ()};
+    Announcement two = {campaignId: "c2", outboxId: (), space: "club", threadKey: "campaign-c2",
+        chatMessageName: "spaces/club/messages/m2", queuedAt: T0, sentAt: T0, failedAt: (), lastError: ()};
+    test:assertEquals(campaignAnnouncedEvent(one).idempotencyKey, "CampaignAnnounced:c1");
+    test:assertEquals(campaignAnnouncedEvent(two).idempotencyKey, "CampaignAnnounced:c2");
+    test:assertNotEquals(campaignAnnouncedEvent(one).idempotencyKey, campaignAnnouncedEvent(two).idempotencyKey);
+    // A row that has its outbox id keeps the catalogue key.
+    Announcement keyed = {campaignId: "c3", outboxId: 7, space: "club", threadKey: "campaign-c3",
+        chatMessageName: "spaces/club/messages/m3", queuedAt: T0, sentAt: T0, failedAt: (), lastError: ()};
+    test:assertEquals(campaignAnnouncedEvent(keyed).idempotencyKey, "CampaignAnnounced:7");
+}
+
+@test:Config
 function cardLinksToOneWso2SharePage() returns error? {
     json card = check buildCard({campaignId: "c1", title: "T", summary: (), imageUrl: (), isPriority: false},
             "https://one.wso2.com/amplify/celebrate/", "https://media.wso2.com/amplify-avatar.png");

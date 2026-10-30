@@ -70,7 +70,8 @@ public isolated function canShare(LinkedInConnection? connection, time:Utc now,
 # + existing - The employee's current connection, if any
 # + command - Completed OAuth result
 # + now - Current time
-# + return - The change with `ConnectionReady`, or `MISSING_SCOPE` / a value-object error
+# + return - The change with `ConnectionReady`, `MISSING_SCOPE`, `CONNECTION_NEEDS_RECONNECT` (an
+# already expired token) or a value-object error
 public isolated function connect(LinkedInConnection? existing, ConnectCommand command, time:Utc now)
         returns ConnectionChange|types:DomainError {
     types:EmployeeId employeeId = check types:parseEmployeeId(command.employeeId);
@@ -79,7 +80,8 @@ public isolated function connect(LinkedInConnection? existing, ConnectCommand co
         return types:domainError(types:ERR_MISSING_SCOPE, "LinkedIn didn't grant permission to share for you");
     }
     if command.expiresInSeconds <= 0 {
-        return types:domainError(types:ERR_MISSING_SCOPE, "LinkedIn returned an already expired token");
+        // Not a scope problem: the token is unusable, so the caller has to connect again.
+        return types:domainError(types:ERR_CONNECTION_NEEDS_RECONNECT, "LinkedIn returned an already expired token");
     }
     LinkedInConnection connection = {
         employeeId,
