@@ -512,7 +512,7 @@ service http:InterceptableService / on apiListener {
         okJson(groupBoard(cid(ctx), period, 'by, bu, sort, dir));
 
     # The Celebrate top three and the caller's own position. Company wide, for the scope in
-    # `leaderboard.top_scope` (this calendar week by default). The weekly totals are shared by every caller
+    # `leaderboard.top_scope` (this calendar month by default). The monthly totals are shared by every caller
     # and kept for 2 hours.
     #
     # + ctx - Request context

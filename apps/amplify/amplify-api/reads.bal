@@ -422,10 +422,11 @@ isolated function dashboardTx(postgresql:Client pg, string month, int slaHours, 
     int mo = check int:fromString(month.substring(5, 7));
     string next = mo == 12 ? string `${y + 1}-01` : string `${y}-${mo + 1 < 10 ? "0" : ""}${mo + 1}`;
     time:Utc monthEnd = check time:utcFromString(next + "-01T00:00:00Z");
-    time:Utc weekAgo = time:utcAddSeconds(now, -7d * 86400d);
+    // Review throughput and share health are about now: this calendar month, whatever month the page shows.
+    time:Utc windowStart = recognition:monthStartOf(now);
     transaction {
         external_sharing:ReviewQueue queue = check external_sharing:reviewQueue(pg, slaHours, now);
-        external_sharing:ReviewThroughput throughput = check external_sharing:reviewThroughput(pg, weekAgo);
+        external_sharing:ReviewThroughput throughput = check external_sharing:reviewThroughput(pg, windowStart);
         int actionRequired = check scoring:actionRequiredCount(pg);
         scoring:ActionPoints[] byAction = check scoring:pointsByAction(pg, monthStart, monthEnd);
         recognition:RecognitionTotals totals = check recognition:recognitionTotals(pg, month + "-01", now);
@@ -434,7 +435,7 @@ isolated function dashboardTx(postgresql:Client pg, string month, int slaHours, 
         string[] ids = from campaign:Campaign c in recent select c.id;
         map<recognition:CampaignNumbers> numbers = check recognition:campaignNumbers(pg, ids);
         map<announcements:AnnouncementStatus> cards = check announcements:statusesOf(pg, ids);
-        sharing:ShareHealth health = check sharing:shareHealth(pg, weekAgo);
+        sharing:ShareHealth health = check sharing:shareHealth(pg, windowStart);
         types:LedgerEntry[] corrections = check scoring:recentCorrections(pg, 10);
         check commit;
         body = {
@@ -442,7 +443,7 @@ isolated function dashboardTx(postgresql:Client pg, string month, int slaHours, 
             month,
             reviewQueue: {pending: queue.pending, oldestPendingAt: tsOpt(queue.oldestPendingAt), overSla: queue.overSla,
                 slaHours},
-            reviewThroughput: {windowDays: 7, approved: throughput.approved, rejected: throughput.rejected,
+            reviewThroughput: {windowStart: ts(windowStart), approved: throughput.approved, rejected: throughput.rejected,
                 amplified: throughput.amplified, medianHoursToDecision: throughput.medianHoursToDecision},
             actionRequired: {count: actionRequired},
             points: {monthTotal: totals.monthTotal, allTimeTotal: totals.allTimeTotal, byAction: byAction.toJson()},
@@ -465,7 +466,7 @@ isolated function dashboardTx(postgresql:Client pg, string month, int slaHours, 
                     points: n is () ? 0 : n.points,
                     announcement: cards[c.id]
                 },
-            shareHealth: {windowDays: 7, queued: health.queued, published: health.published, failed: health.failed,
+            shareHealth: {windowStart: ts(windowStart), queued: health.queued, published: health.published, failed: health.failed,
                 failedByReason: health.failedByReason.toJson()},
             recentCorrections: from types:LedgerEntry e in corrections
                 select {

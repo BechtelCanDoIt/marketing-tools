@@ -59,12 +59,14 @@ function myTeamRanksWithinTheTeam() {
 }
 
 @test:Config
-function weekStartsOnMondayUtc() {
-    // 2026-10-22 is a Thursday; its week began Monday 2026-10-19.
-    time:Utc monday = checkpanic time:utcFromString("2026-10-19T00:00:00Z");
-    test:assertEquals(weekStartOf(checkpanic time:utcFromString("2026-10-22T16:22:57Z")), monday);
-    test:assertEquals(weekStartOf(monday), monday, "Monday 00:00 starts its own week");
-    test:assertEquals(weekStartOf(checkpanic time:utcFromString("2026-10-25T23:59:59Z")), monday, "Sunday night is still that week");
-    test:assertEquals(weekStartOf(checkpanic time:utcFromString("2026-10-26T00:00:00Z")),
-        checkpanic time:utcFromString("2026-10-26T00:00:00Z"), "the next Monday starts a new week");
+function monthStartsOnTheFirstUtc() {
+    time:Utc first = checkpanic time:utcFromString("2026-10-01T00:00:00Z");
+    test:assertEquals(monthStartOf(checkpanic time:utcFromString("2026-10-22T16:22:57Z")), first);
+    test:assertEquals(monthStartOf(first), first, "the 1st 00:00 starts its own month");
+    test:assertEquals(monthStartOf(checkpanic time:utcFromString("2026-10-31T23:59:59Z")), first, "the last second is still that month");
+    time:Utc nov = checkpanic time:utcFromString("2026-11-01T00:00:00Z");
+    test:assertEquals(monthStartOf(nov), nov, "the next 1st starts a new month");
+    test:assertEquals(nextMonthStartOf(first), nov);
+    test:assertEquals(nextMonthStartOf(checkpanic time:utcFromString("2026-12-15T00:00:00Z")),
+        checkpanic time:utcFromString("2027-01-01T00:00:00Z"), "December rolls into January");
 }

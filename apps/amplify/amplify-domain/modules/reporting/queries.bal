@@ -79,10 +79,10 @@ public type Delivery record {|
     time:Utc? sentAt;
 |};
 
-# Reposts in one calendar week.
-public type WeekCount record {|
-    # Monday, `YYYY-MM-DD` (UTC)
-    string weekStart;
+# Reposts in one calendar month.
+public type MonthCount record {|
+    # First day of the month, `YYYY-MM-DD` (UTC)
+    string monthStart;
     # Active engagements
     int reposts;
 |};
@@ -312,22 +312,22 @@ public isolated function participationCounts(postgresql:Client db) returns Parti
                 WHERE status = 'ACTIVE' AND occurred_at >= now() - interval '30 days')::int AS "active30Days"`);
 }
 
-# Reposts per calendar week (Monday, UTC) for the last `weeks` weeks, zero-filled, oldest first.
+# Reposts per calendar month (UTC) for the last `months` months, zero-filled, oldest first.
 #
 # + db - Client
-# + weeks - Number of weeks
-# + return - One row per week, or an error
-public isolated function weeklyReposts(postgresql:Client db, int weeks) returns WeekCount[]|error {
-    stream<record {|string week_start; int n;|}, error?> rows = db->query(`
-        SELECT to_char(w.week_start, 'YYYY-MM-DD') AS week_start, count(e.id)::int AS n
-        FROM generate_series(date_trunc('week', now() AT TIME ZONE 'UTC') - make_interval(weeks => CAST(${weeks - 1} AS int)),
-                             date_trunc('week', now() AT TIME ZONE 'UTC'), interval '1 week') AS w(week_start)
+# + months - Number of months
+# + return - One row per month, or an error
+public isolated function monthlyReposts(postgresql:Client db, int months) returns MonthCount[]|error {
+    stream<record {|string month_start; int n;|}, error?> rows = db->query(`
+        SELECT to_char(m.month_start, 'YYYY-MM-DD') AS month_start, count(e.id)::int AS n
+        FROM generate_series(date_trunc('month', now() AT TIME ZONE 'UTC') - make_interval(months => CAST(${months - 1} AS int)),
+                             date_trunc('month', now() AT TIME ZONE 'UTC'), interval '1 month') AS m(month_start)
         LEFT JOIN sharing.engagement_v e
                ON e.status = 'ACTIVE'
-              AND date_trunc('week', e.occurred_at AT TIME ZONE 'UTC') = w.week_start
-        GROUP BY w.week_start ORDER BY w.week_start`);
+              AND date_trunc('month', e.occurred_at AT TIME ZONE 'UTC') = m.month_start
+        GROUP BY m.month_start ORDER BY m.month_start`);
     return from var r in rows
-        select {weekStart: r.week_start, reposts: r.n};
+        select {monthStart: r.month_start, reposts: r.n};
 }
 
 # People with at least one active engagement.
@@ -349,25 +349,22 @@ public isolated function pointsInMonth(postgresql:Client db, string month) retur
         WHERE month = CAST(${month} AS date)`);
 }
 
-# Points awarded this calendar week (Monday, UTC), month and year, summed from the ledger (reversals and
+# Points awarded this calendar month and year (UTC), summed from the ledger (reversals and
 # adjustments included, so it matches the standings).
 public type PointsAwarded record {|
-    # Since Monday 00:00 UTC
-    int week;
     # Since the 1st, UTC
     int month;
     # Since 1 January, UTC
     int year;
 |};
 
-# Points awarded this week, month and year.
+# Points awarded this month and year.
 #
 # + db - Client
 # + return - Sums, or an error
 public isolated function pointsAwarded(postgresql:Client db) returns PointsAwarded|error {
     return db->queryRow(`
-        SELECT COALESCE(sum(points) FILTER (WHERE created_at >= date_trunc('week', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0)::int AS week,
-               COALESCE(sum(points) FILTER (WHERE created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0)::int AS month,
+        SELECT COALESCE(sum(points) FILTER (WHERE created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0)::int AS month,
                COALESCE(sum(points) FILTER (WHERE created_at >= date_trunc('year', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0)::int AS year
         FROM scoring.points_ledger
         WHERE created_at >= date_trunc('year', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`);

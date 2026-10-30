@@ -20,6 +20,7 @@
 // count (outbound.bal) and the targets (settings.bal), so every number can be checked without a database.
 // Only facts Amplify recorded; nothing from LinkedIn analytics.
 
+import amplify_domain.recognition;
 import amplify_domain.reporting;
 
 import ballerina/http;
@@ -33,14 +34,14 @@ import ballerina/time;
 configurable int scorecardTargetConnectedPct = 25;
 # Expired connections, % of connected: a ceiling (default 5).
 configurable int scorecardMaxExpiredPct = 5;
-# Shares published / (published + failed) over 7 days, % (default 98).
+# Shares published / (published + failed) over the calendar month, % (default 98).
 configurable int scorecardTargetShareSuccessPct = 98;
 # A campaign counts as reaching people at this % of connected (default 25).
 configurable int scorecardTargetPriorityReachPct = 25;
 # People with an engagement in the last 30 days (default 100).
 configurable int scorecardTargetActive30d = 100;
-# Reposts in the last 7 days (default 150).
-configurable int scorecardTargetRepostsPerWeek = 150;
+# Reposts this calendar month (default 600).
+configurable int scorecardTargetRepostsPerMonth = 600;
 
 # The scorecard lines in force.
 type Targets record {|
@@ -54,8 +55,8 @@ type Targets record {|
     int targetPriorityReachPct;
     # Active people, 30 days
     int targetActive30d;
-    # Reposts, 7 days
-    int targetRepostsPerWeek;
+    # Reposts, this month
+    int targetRepostsPerMonth;
 |};
 
 # A configured value, or its default when it is zero or negative.
@@ -74,7 +75,7 @@ isolated function scorecardTargets() returns Targets => {
     targetShareSuccessPct: orDefault(scorecardTargetShareSuccessPct, 98),
     targetPriorityReachPct: orDefault(scorecardTargetPriorityReachPct, 25),
     targetActive30d: orDefault(scorecardTargetActive30d, 100),
-    targetRepostsPerWeek: orDefault(scorecardTargetRepostsPerWeek, 150)
+    targetRepostsPerMonth: orDefault(scorecardTargetRepostsPerMonth, 600)
 };
 
 # Employee count for the boards, `()` when the people directory has never loaded (a board still renders).
@@ -139,12 +140,11 @@ isolated function operationsBoard(Snapshot s, int? headcount) returns json {
             campaignsLive: s.live.live,
             campaignsLivePriority: s.live.livePriority,
             campaignsClosingWithin7Days: s.live.closingWithin7Days,
-            reposts7d: s.reposts7d,
-            reposts7dWithCommentary: s.reposts7dWithCommentary,
-            repostsPrev7d: s.repostsPrev7d,
+            repostsThisMonth: s.repostsThisMonth,
+            repostsThisMonthWithCommentary: s.repostsThisMonthWithCommentary,
+            repostsPrevMonth: s.repostsPrevMonth,
             peopleConnected: connected,
             connectionsExpired: c.expired,
-            pointsThisWeek: s.points.week,
             pointsThisMonth: s.points.month,
             pointsThisYear: s.points.year,
             peopleWithPoints: s.peopleWithPoints
@@ -152,7 +152,7 @@ isolated function operationsBoard(Snapshot s, int? headcount) returns json {
         campaigns: from reporting:CampaignRow p in campaigns
             select dashboardCampaignJson(p, s.delivery),
         shareHealth: {
-            windowDays: 7,
+            windowStart: ts(recognition:monthStartOf(s.asOf)),
             published: s.shares.published,
             queued: s.shares.queued,
             failed: s.shares.failed,
@@ -297,8 +297,8 @@ isolated function glanceBoard(Snapshot s, int? headcount, Targets targets) retur
         asOf: ts(s.asOf),
         month,
         reposts: {thisMonth: s.repostsThisMonth, previousMonth: s.repostsPrevMonth},
-        weekly: from reporting:WeekCount w in s.weekly
-            select {weekStart: w.weekStart, reposts: w.reposts},
+        monthly: from reporting:MonthCount m in s.monthly
+            select {monthStart: m.monthStart, reposts: m.reposts},
         participants: s.participation.reposted,
         headcount,
         campaignsLive: s.live.live,
@@ -347,7 +347,7 @@ isolated function scorecard(Snapshot s, int? headcount, Targets t) returns json 
                     <decimal>t.maxExpiredPct, "AT_MOST", connected == 0 ? "No connections yet" : ()),
             measure("shareSuccess", "Share success rate", "PERCENT", attempts == 0 ? 0d : pct(s.shares.published, attempts),
                     s.shares.published, attempts, <decimal>t.targetShareSuccessPct, "AT_LEAST",
-                    attempts == 0 ? "No shares in the last 7 days" : (), attempts == 0 ? true : ()),
+                    attempts == 0 ? "No shares this month" : (), attempts == 0 ? true : ()),
             measure("chatCards", "Chat cards delivered", "PERCENT", cards.total == 0 ? 0d : pct(cards.sent, cards.total),
                     cards.sent, cards.total, 100d, "AT_LEAST", cardNote, cards.total == 0 ? true : ()),
             measure("priorityReach", "Priority campaigns reaching " + t.targetPriorityReachPct.toString() + "% of connected",
@@ -355,8 +355,8 @@ isolated function scorecard(Snapshot s, int? headcount, Targets t) returns json 
                     100d, "AT_LEAST", livePriority == 0 ? "No priority campaigns live" : (), livePriority == 0 ? true : ()),
             measure("active30Days", "Active employees, last 30 days", "COUNT", <decimal>s.participation.active30Days, (), (),
                     <decimal>t.targetActive30d, "AT_LEAST"),
-            measure("repostsPerWeek", "Reposts, last 7 days", "COUNT", <decimal>s.reposts7d, (), (),
-                    <decimal>t.targetRepostsPerWeek, "AT_LEAST")
+            measure("repostsPerMonth", "Reposts, this month", "COUNT", <decimal>s.repostsThisMonth, (), (),
+                    <decimal>t.targetRepostsPerMonth, "AT_LEAST")
         ]
     };
 }

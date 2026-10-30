@@ -15,12 +15,12 @@ Who: `amplify_po` only. Where: PO Review › Dashboard tab in One WSO2.
 | # | Tile | Shows | Data source (schema.table) | Notes |
 | --- | --- | --- | --- | --- |
 | 1 | **Review queue** | Pending external shares: count, oldest age, count older than the review SLA | `external_sharing.external_share` `WHERE decision IS NULL` (index `(created_at) WHERE decision IS NULL`) | Click → PO Review queue. SLA from `po.review_sla_hours` (default 48) |
-| 2 | **Review throughput** | Approved, rejected, amplified in the last 7 days; median hours to decision | `external_sharing.external_share` (`decided_at >= now() - 7d`) | Feeds the "reviewed within SLA" success metric (M12) |
+| 2 | **Review throughput** | Approved, rejected, amplified this calendar month (UTC); median hours to decision | `external_sharing.external_share` (`decided_at >=` the 1st of the month) | Feeds the "reviewed within SLA" success metric (M12) |
 | 3 | **Action required** | Ledger rows with `status IS NULL` | `scoring.points_ledger` (index `(created_at) WHERE status IS NULL`) | Click → list to clear. Usually 0 in phase 1 (verification is a future phase, ADR-018) |
 | 4 | **Points this period** | Points awarded in the current month and all time, split by action (`REPOST`, `REPOST_COMMENTARY`, `SHARE*`, `OWN_POST`, `REACTION`, `COMMENT`, `CHALLENGE_ENTRY`, `CHALLENGE_WINNER`, `OWN_POST_AMPLIFIED`, `ADJUSTMENT`, `REVERSAL`) | Totals: `recognition.employee_points_monthly`. Split: `scoring.points_ledger` grouped by `action`, `source_type` for the month | Points only, no Coin value (A11) |
 | 5 | **Participation** | Connected employees (ACTIVE / EXPIRING / NEEDS_RECONNECT), employees with any points, employees active in the last 30 days | `connection.member_connection_v`; `recognition.standing` (`period_key = 'ALL'`, `last_activity_at`) | Counts only. The UI may show a rate against One WSO2 headcount (C8); Amplify doesn't store headcount |
 | 6 | **Campaigns** | Open and recently closed campaigns (last 30 days): title, priority, window, reposters, approved external shares, points, announcement status | `campaign.campaign_v` + `recognition.campaign_participation` + `announcement.announcement` | Sorted priority first, then newest. Click → campaign detail |
-| 7 | **Share health** | Shares queued, published, failed in the last 7 days; failures by `failure_reason` | `sharing.share_request_v` | A spike in `NEEDS_RECONNECT` means a reminder is due |
+| 7 | **Share health** | Shares queued, published, failed this calendar month (UTC); failures by `failure_reason` | `sharing.share_request_v` | A spike in `NEEDS_RECONNECT` means a reminder is due |
 | 8 | **Recent corrections** | Last 10 adjustments and reversals: who, whom, points, reason, when | `scoring.points_ledger` `WHERE source_type IN ('ADJUSTMENT','REVERSAL')` | Every row also sits in `audit.audit_log` |
 
 Not on the dashboard (and why): reach and impressions (need analytics access, A13, future); breakdowns by team or location (SLT reports, phase 2); Coin value (phase 2); per-person leaderboards (on the Team page).
@@ -33,11 +33,11 @@ Built as `GET /dashboards/{operations,campaigns,participation,glance,scorecard}`
 | --- | --- | --- |
 | Employees connected, % of headcount | `connection.member_connection_v` (not `REMOVED`) over `GET /headcount` | `scorecardTargetConnectedPct` (25) |
 | Connections expired, % of connected | `member_connection_v` `NEEDS_RECONNECT` where `access_expires_at < now()` | `scorecardMaxExpiredPct` (5, a ceiling) |
-| Share success rate | `sharing.share_request_v` published over published + failed, 7 days | `scorecardTargetShareSuccessPct` (98) |
+| Share success rate | `sharing.share_request_v` published over published + failed, this calendar month (UTC) | `scorecardTargetShareSuccessPct` (98) |
 | Chat cards delivered | `announcement.announcement_v` `SENT` over campaigns opened in the window; `FAILED` listed by name, retries shown from `messaging.outbox.attempts` | none (every post) |
 | Priority posts reaching X% of connected | `recognition.campaign_participation.reposters` over connected, where `campaign_v.is_priority` | `scorecardTargetPriorityReachPct` (25) |
 | Active employees, last 30 days | `recognition.standing.last_activity_at` | `scorecardTargetActive30d` (100) |
-| Reposts per week | `sharing.engagement` `occurred_at`, `REPOST` / `REPOST_COMMENTARY` | `scorecardTargetRepostsPerWeek` (150) |
+| Reposts this month | `sharing.engagement` `occurred_at`, `REPOST` / `REPOST_COMMENTARY`, since the 1st (UTC) | `scorecardTargetRepostsPerMonth` (600) |
 
 Status is On track when the measure meets its target, Watch when it doesn't. The seeded values are starting lines, not agreed targets. Chat delivery has no reminder or manual retry here: failed cards retry through the outbox with backoff (ADR-025), and only a card that used all 8 attempts needs the admin retry (ADR-024).
 

@@ -14,7 +14,7 @@ Data: [phase1-data-model › recognition](phase1-data-model.md#recognition--s4-r
 | **Personal** | The viewer only | Own rank, points, `points_to_next_rank`, `points_to_top_n`, movement, last activity. Merges into the podium when the viewer is in the top N | Leaderboard page, "your card" |
 | **My Team** | Every member of that team | Everyone in the viewer's team, ranked within the team: team rank, name, points. Headcount and "active" count on top | Leaderboard page, below your card; Team page for employees |
 
-The Celebrate top three and My position use `GET /leaderboard/top` (this calendar week by default, `leaderboard.top_scope`, weekly totals cached 2 hours: [ADR-037](../../decisions/ADR-037-celebrate-top-three-this-week.md)); `GET /leaderboard` below stays `ALL` and feeds My Team.
+The Celebrate top three and My position use `GET /leaderboard/top` (this calendar month by default, `leaderboard.top_scope`, monthly totals cached 2 hours: [ADR-037](../../decisions/ADR-037-celebrate-top-three-this-week.md); only people with `leaderboard.top_min_points` (100) that month are ranked); `GET /leaderboard` below stays `ALL` and feeds My Team.
 
 Period: `ALL` in phase 1. `period` is a parameter on every call so monthly or quarterly boards (plan D6, open) need no API change.
 

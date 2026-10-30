@@ -145,14 +145,14 @@ SLT_JWT="$($MINT token e2e-slt slt.e2e@wso2.com amplify_slt)"
 ops=$(call "$SLT_JWT" GET /dashboards/operations)
 echo "$ops" | jq -e --arg c "$CAMPAIGN_ID" '[.campaigns[] | select(.campaignId == $c and .reposts >= 1)] | length == 1' >/dev/null \
   || fail "operations board does not show the e2e campaign with its repost"
-echo "$ops" | jq -e '.kpis.reposts7d >= 1 and .kpis.peopleConnected >= 1 and .kpis.pointsThisWeek >= 0' >/dev/null \
+echo "$ops" | jq -e '.kpis.repostsThisMonth >= 1 and .kpis.peopleConnected >= 1 and .kpis.pointsThisMonth >= 0' >/dev/null \
   || fail "operations kpis are wrong: $(echo "$ops" | jq -c .kpis)"
 call "$SLT_JWT" GET "/dashboards/campaigns?campaignId=$CAMPAIGN_ID" \
   | jq -e --arg c "$CAMPAIGN_ID" '.selected.campaignId == $c and .selected.reposts >= 1 and (.selected.byDay | length) == 7' >/dev/null \
   || fail "campaign board does not detail the e2e campaign"
 call "$SLT_JWT" GET /dashboards/participation | jq -e '.funnel.connected >= 1 and .funnel.reposted >= 1' >/dev/null \
   || fail "participation funnel does not count the sharer"
-call "$SLT_JWT" GET /dashboards/glance | jq -e '.reposts.thisMonth >= 1 and (.weekly | length) == 8' >/dev/null \
+call "$SLT_JWT" GET /dashboards/glance | jq -e '.reposts.thisMonth >= 1 and (.monthly | length) == 6' >/dev/null \
   || fail "glance numbers are wrong"
 call "$SLT_JWT" GET /dashboards/scorecard | jq -e '(.measures | length) == 7 and all(.measures[]; .status == "ON_TRACK" or .status == "WATCH")' >/dev/null \
   || fail "scorecard is not seven measures with a status"
