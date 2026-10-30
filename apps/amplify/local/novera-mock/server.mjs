@@ -12,6 +12,7 @@
 // "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
+// under the License.
 
 // Local stand-in for Novera's gateway: POST /token (client credentials) and POST /internal/notifications.
 // Logs every notification's JSON and answers 202. Nothing reaches Google Chat.
@@ -20,10 +21,12 @@
 // Run: node server.mjs   (PORT defaults to 3003)
 import http from "node:http";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // Cards land in OUT_DIR/last-card.json (full Chat message) and last-card-builder.json (inner card only). Paste the latter into Google's Card Builder
 // (https://addons.gsuite.google.com/uikit/builder) to see the real Chat rendering.
-const OUT_DIR = process.env.OUT_DIR || new URL("./out/", import.meta.url).pathname;
+// `fileURLToPath` decodes a checkout path with a space (`my%20dir`); a trailing slash is added so `OUT_DIR=/tmp/x` works.
+const OUT_DIR = ((dir) => (dir.endsWith("/") ? dir : dir + "/"))(process.env.OUT_DIR || fileURLToPath(new URL("./out/", import.meta.url)));
 let lastCard = null;
 
 // Port of buildCard() in wso2-digital-agents/po-agent/src/chat/notify.ts (as of main 3a1138d).
