@@ -116,6 +116,60 @@ configurations:
           displayName: Employee count cache TTL in seconds (default 604800 = 7 days) (leave empty for the default)
           type: string
           required: false
+    - name: BAL_CONFIG_VAR_CANCAMPAIGNGROUPS
+      valueFrom:
+        configForm:
+          displayName: Asgardeo groups for campaigns (comma separated; default amplify_po,amplify_marketing; leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_CANDASHBOARDGROUPS
+      valueFrom:
+        configForm:
+          displayName: Asgardeo groups for dashboards (comma separated; default amplify_po,amplify_marketing,amplify_slt,amplify_admin; leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_CANEXPORTGROUPS
+      valueFrom:
+        configForm:
+          displayName: Asgardeo groups for dashboard CSV export (comma separated; default amplify_po,amplify_marketing,amplify_slt,amplify_admin; leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_CANREVIEWSHARESGROUPS
+      valueFrom:
+        configForm:
+          displayName: Asgardeo groups for external-share review (comma separated; default amplify_po; leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_CANPOINTRULESGROUPS
+      valueFrom:
+        configForm:
+          displayName: Asgardeo groups for point rules (comma separated; default amplify_po; leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_CANADJUSTPOINTSGROUPS
+      valueFrom:
+        configForm:
+          displayName: Asgardeo groups for adjust/reverse points (comma separated; default amplify_po; leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_CANPODASHBOARDGROUPS
+      valueFrom:
+        configForm:
+          displayName: Asgardeo groups for PO dashboard (comma separated; default amplify_po; leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_CANREPORTSGROUPS
+      valueFrom:
+        configForm:
+          displayName: Asgardeo groups for SLT reports (comma separated; default amplify_slt,amplify_po; leave empty for the default)
+          type: string
+          required: false
+    - name: BAL_CONFIG_VAR_CANADMINGROUPS
+      valueFrom:
+        configForm:
+          displayName: Asgardeo groups for admin (comma separated; default amplify_admin; leave empty for the default)
+          type: string
+          required: false
     - name: BAL_CONFIG_VAR_SCORECARDTARGETCONNECTEDPCT
       valueFrom:
         configForm:
