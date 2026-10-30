@@ -1,0 +1,4 @@
+# Written by `make env` (or by a local run): never commit. local/.env holds generated secrets, and
+# local/people-stub/directory.json holds real names and emails. The .example copies are the committed ones.
+local/.env
+local/people-stub/directory.json
