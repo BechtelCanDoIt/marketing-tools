@@ -276,3 +276,32 @@ isolated function adjustWith(postgresql:Client db, string emp, int points, strin
     scoring:PgLedgerRepository ledger = new (db, {actorId: "it-po-gate", roles: ["amplify_po"]}, 3);
     _ = check scoring:adjustPoints(ledger, emp, points, reason, "it-po-gate", (), (), time:utcNow());
 }
+
+// Outbox backlog (security review): pending, in-progress and failed rows are counted and the oldest pending row's age
+// is measured from `created_at`, so a deferred row that keeps being retried still reads as old.
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testOutboxBacklogCountsWhatIsWaiting() returns error? {
+    postgresql:Client db = check jobs();
+    store:OutboxBacklog before = check store:outboxBacklog(db);
+    string tag = "backlog-" + uniq();
+    foreach [string, string, string] [suffix, status, age] in [["a", "PENDING", "3 hours"], ["b", "PENDING", "1 minute"],
+            ["c", "IN_PROGRESS", "1 minute"], ["d", "FAILED", "1 minute"]] {
+        _ = check db->execute(`INSERT INTO messaging.outbox (aggregate_type, aggregate_id, event_type, payload,
+                idempotency_key, status, created_at, next_attempt_at)
+            VALUES ('t', ${tag}, 'T', '{}'::jsonb, ${"it:" + tag + suffix}, ${status}, now() - CAST(${age} AS interval),
+                now() + interval '1 day')`);
+    }
+    _ = check db->execute(`INSERT INTO messaging.outbox (aggregate_type, aggregate_id, event_type, payload,
+            idempotency_key, status, processed_at) VALUES ('t', ${tag}, 'T', '{}'::jsonb, ${"it:" + tag + "e"},
+            'DONE', now())`);
+    store:OutboxBacklog after = check store:outboxBacklog(db);
+    test:assertEquals(after.pending - before.pending, 2, "two pending, the deferred one included");
+    test:assertEquals(after.inProgress - before.inProgress, 1);
+    test:assertEquals(after.failed - before.failed, 1);
+    int oldest = after.oldestPendingSeconds ?: -1;
+    test:assertTrue(oldest >= 3 * 3600 - 5, string `oldest pending is ${oldest}s, at least the 3 hour row`);
+    // DONE rows are not part of the backlog.
+    test:assertEquals(after.pending + after.inProgress + after.failed,
+            before.pending + before.inProgress + before.failed + 4);
+    check db.close();
+}

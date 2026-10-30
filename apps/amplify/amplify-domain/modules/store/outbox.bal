@@ -185,3 +185,30 @@ public isolated function purgeExpiredIdempotencyKeys(postgresql:Client db) retur
 
 isolated function truncate(string? text) returns string? =>
     text is () ? () : text.length() > 1000 ? text.substring(0, 1000) : text;
+
+# What is waiting in the outbox.
+public type OutboxBacklog record {|
+    # Rows waiting, including those deferred because a dependency is down or unconfigured
+    int pending;
+    # Rows a run is handling right now
+    int inProgress;
+    # Rows that used every attempt and need an operator
+    int failed;
+    # Age in seconds of the oldest pending row, `()` when none is pending
+    int? oldestPendingSeconds;
+|};
+
+# Counts what is waiting in the outbox. Deferred rows are pending with a later `next_attempt_at`, so the age is
+# measured from `created_at`: a row that has been waiting for hours is stuck, however often it is retried.
+#
+# + db - Client
+# + return - The backlog, or an error
+public isolated function outboxBacklog(postgresql:Client db) returns OutboxBacklog|error {
+    record {|int pending; int in_progress; int failed; int? oldest;|} row = check db->queryRow(`
+        SELECT count(*) FILTER (WHERE status = 'PENDING')::int AS pending,
+               count(*) FILTER (WHERE status = 'IN_PROGRESS')::int AS in_progress,
+               count(*) FILTER (WHERE status = 'FAILED')::int AS failed,
+               (EXTRACT(EPOCH FROM (now() - min(created_at) FILTER (WHERE status = 'PENDING'))))::bigint::int AS oldest
+        FROM messaging.outbox WHERE status <> 'DONE'`);
+    return {pending: row.pending, inProgress: row.in_progress, failed: row.failed, oldestPendingSeconds: row.oldest};
+}
