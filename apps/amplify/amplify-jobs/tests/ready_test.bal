@@ -47,6 +47,14 @@ function readinessIsGatedOnlyByTheDatabase() {
     test:assertEquals(down.database, types:DOWN);
 }
 
+// Choreo stops routing on any non-2xx readiness response: a database blip must not turn every scheduler call
+// into a network failure, and `POST /runs` already answers the scheduler's retryable 503.
+@test:Config
+function readinessKeepsRoutingUnlessTheDatabaseIsUnconfigured() {
+    test:assertTrue(readyKeepsRouting(true), "a database blip keeps the worker in rotation");
+    test:assertFalse(readyKeepsRouting(false), "no dbHost: the worker can never do its work");
+}
+
 @test:Config
 function runConfigDefaultsAreValid() {
     test:assertEquals(validateRunConfig(runConfig(), longestCallSeconds()), ());

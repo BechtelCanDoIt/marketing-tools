@@ -37,6 +37,9 @@ import ballerinax/postgresql;
 # Advisory lock key for "one run at a time" across replicas ("ampl").
 const int RUN_LOCK_KEY = 1634561132;
 
+# Advisory lock key for "one partition maintenance pass at a time" across replicas ("main").
+const int MAINTENANCE_LOCK_KEY = 1835755886;
+
 # Run settings from config.
 type RunConfig record {|
     int batchSize;
@@ -236,27 +239,30 @@ isolated class PgStore {
 
 # Session advisory lock on a dedicated single-connection client: lock and unlock run on the same
 # PostgreSQL session. If that session dies the lock goes with it; `FOR UPDATE SKIP LOCKED` still keeps
-# two runs off the same rows.
+# two runs off the same rows. The client must never retire its connection (`maxConnectionLifeTime = 0`),
+# or a connection retired mid-run would silently drop the lock.
 isolated class PgRunLock {
     *RunLock;
 
     private final postgresql:Client db;
+    private final int lockKey;
 
-    isolated function init(postgresql:Client db) {
+    isolated function init(postgresql:Client db, int lockKey = RUN_LOCK_KEY) {
         self.db = db;
+        self.lockKey = lockKey;
     }
 
     isolated function tryAcquire() returns boolean|error {
-        boolean acquired = check self.db->queryRow(`SELECT pg_try_advisory_lock(CAST(${RUN_LOCK_KEY} AS bigint))`);
+        boolean acquired = check self.db->queryRow(`SELECT pg_try_advisory_lock(CAST(${self.lockKey} AS bigint))`);
         return acquired;
     }
 
     isolated function release() returns error? {
-        boolean released = check self.db->queryRow(`SELECT pg_advisory_unlock(CAST(${RUN_LOCK_KEY} AS bigint))`);
+        boolean released = check self.db->queryRow(`SELECT pg_advisory_unlock(CAST(${self.lockKey} AS bigint))`);
         if !released {
-            // The lock is a session lock on a pooled connection. `false` means this connection no longer
-            // holds it (it was retired mid-run), so another replica may have started a run meanwhile.
-            log:printWarn("Run lock was no longer held when the run finished");
+            // The lock is a session lock on a dedicated connection. `false` means this connection no longer
+            // holds it (it was retired mid-run), so another replica may have started the same work meanwhile.
+            log:printWarn("Advisory lock was no longer held when the work finished");
         }
     }
 }
