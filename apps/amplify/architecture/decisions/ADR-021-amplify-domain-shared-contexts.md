@@ -15,7 +15,7 @@ M2 built each bounded context (types, rules, use cases, events, repository port)
 
 ## Decision
 
-Option 3. `projects/marketing-tools/apps/amplify/amplify-domain` is published to the local repository like `amplify_common` (ADR-020), after it. Its modules: `identity`, `campaign`, `connection`, `sharing`, `external_sharing`, `scoring`, `recognition`, `announcements`, `store`. `amplify-api` keeps only the HTTP layer; `amplify-jobs` gets the same use cases and repositories.
+Option 3. `apps/amplify/amplify-domain` is published to the local repository like `amplify_common` (ADR-020), after it. Its modules: `identity`, `campaign`, `connection`, `sharing`, `external_sharing`, `scoring`, `recognition`, `announcements`, `store`. `amplify-api` keeps only the HTTP layer; `amplify-jobs` gets the same use cases and repositories.
 
 - Repository port methods are `public`, so the services can call them from another package.
 - A repository is built with the shared client and a `store:Actor` (api: the caller per request; jobs: `store:SYSTEM`). Every write commits aggregate row + outbox row + audit row in one transaction.

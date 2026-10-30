@@ -16,7 +16,7 @@ PostgreSQL, one schema per bounded context. LinkedIn tokens live in a **daily ti
 
 - Context boundaries show up in the data.
 - Expired tokens go in bulk, no row-by-row deletes.
-- Depends on `citext` and `pg_trgm` on the Choreo (Aiven) database. Run `projects/marketing-tools/apps/amplify/amplify-database/checks/d2_extensions.sql` and record the result before M3; if either is missing, revisit the design (B18).
+- Depends on `citext` and `pg_trgm` on the Choreo (Aiven) database. Run `apps/amplify/amplify-database/checks/d2_extensions.sql` and record the result before M3; if either is missing, revisit the design (B18).
 - Grace period, key rotation and evidence URL retention are still open (plan D7).
 
 ## Links
