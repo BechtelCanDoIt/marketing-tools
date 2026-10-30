@@ -25,29 +25,21 @@
 # LinkedIn's resource, not Amplify's. The rule is about Amplify's own nouns. Add a provider to
 # `external` only when the name really counts or carries that provider's resource.
 #
-# Usage: scripts/lint-openapi-names.sh [openapi.yaml ...]   (default: every amplify-*/openapi.yaml)
+# Usage: scripts/lint-openapi-names.sh [openapi.yaml ...]   scripts/lint-openapi-names.sh --self-test
+#        (default: every amplify-*/openapi.yaml)
 set -euo pipefail
-caller="$PWD"
-cd "$(dirname "$0")/.."
-files=()
-for a in "$@"; do
-  # Arguments are relative to where the caller ran this, not to the folder the script moves into.
-  case "$a" in /*) files+=("$a") ;; *) files+=("$caller/$a") ;; esac
-done
-if [ ${#files[@]} -eq 0 ]; then
-  files=(amplify-*/openapi.yaml)
-fi
-for f in "${files[@]}"; do
-  [ -r "$f" ] || { echo "lint-openapi-names: cannot read $f" >&2; exit 2; }
-done
 # A banned word as a whole name segment: at the start (any case) or a camel/snake segment (`Post`,
 # `_post`). `reposters` and `OWN_POST`-style enum values don't match.
 seg='(post|submission)'
 word="(^|[^A-Za-z])(${seg}|Post|Submission|POST|SUBMISSION)|[a-z0-9](Post|Submission)"
 external='^(linkedin)[A-Z]'
 
-status=0
-for f in "${files[@]}"; do
+lint_files() {
+  local status=0 f
+  for f in "$@"; do
+    [ -r "$f" ] || { echo "lint-openapi-names: cannot read $f" >&2; return 2; }
+  done
+  for f in "$@"; do
   # 1. Paths: top-level keys under `paths:` (two-space indent, start with /). Same whole-segment rule as the
   # names below, so `/campaigns/{id}/reposts` passes and `/posts` does not.
   hits=$(grep -nE '^  /' "$f" | grep -E "$word" || true)
@@ -66,6 +58,68 @@ for f in "${files[@]}"; do
     echo "$hits"
     status=1
   fi
+  done
+  [ $status -eq 0 ] && echo "lint-openapi-names: OK ($*)"
+  return $status
+}
+
+if [ "${1:-}" = "--self-test" ]; then
+  TMPDIR_SELF=$(mktemp -d)
+  trap 'rm -rf "$TMPDIR_SELF"' EXIT
+  cat > "$TMPDIR_SELF/good.yaml" <<'YAML'
+paths:
+  /campaigns/{id}/reposts:
+    get:
+      operationId: listReposts
+  /campaigns/{id}/shares:
+    post:
+      operationId: createShare
+components:
+  schemas:
+    RunReport:
+      properties:
+        linkedinPosts: {type: integer}
+YAML
+  cat > "$TMPDIR_SELF/bad-path.yaml" <<'YAML'
+paths:
+  /posts:
+    get:
+      operationId: listPosts
+YAML
+  cat > "$TMPDIR_SELF/bad-name.yaml" <<'YAML'
+components:
+  schemas:
+    PostSummary:
+      properties:
+        title: {type: string}
+YAML
+  cat > "$TMPDIR_SELF/bad-op.yaml" <<'YAML'
+paths:
+  /campaigns:
+    post:
+      operationId: createPost
+YAML
+  lint_files "$TMPDIR_SELF/good.yaml" >/dev/null || { echo "self-test: a segment match (reposts) or a provider name (linkedinPosts) was rejected"; exit 1; }
+  lint_files "$TMPDIR_SELF/bad-path.yaml" >/dev/null && { echo "self-test: /posts passed"; exit 1; }
+  lint_files "$TMPDIR_SELF/bad-name.yaml" >/dev/null && { echo "self-test: PostSummary passed"; exit 1; }
+  lint_files "$TMPDIR_SELF/bad-op.yaml" >/dev/null && { echo "self-test: operationId createPost passed"; exit 1; }
+  # A path that cannot be read must fail, not print OK: that was the silent no-op.
+  lint_files "$TMPDIR_SELF/missing.yaml" 2>/dev/null && { echo "self-test: an unreadable file reported OK"; exit 1; }
+  echo "lint-openapi-names self-test passed."
+  exit 0
+fi
+
+caller="$PWD"
+cd "$(dirname "$0")/.."
+files=()
+for a in "$@"; do
+  # Arguments are relative to where the caller ran this, not to the folder the script moves into.
+  case "$a" in /*) files+=("$a") ;; *) files+=("$caller/$a") ;; esac
 done
-[ $status -eq 0 ] && echo "lint-openapi-names: OK (${files[*]})"
-exit $status
+if [ ${#files[@]} -eq 0 ]; then
+  shopt -s nullglob
+  files=(amplify-*/openapi.yaml)
+  shopt -u nullglob
+fi
+[ ${#files[@]} -gt 0 ] || { echo "lint-openapi-names: no OpenAPI files to lint" >&2; exit 2; }
+lint_files "${files[@]}"

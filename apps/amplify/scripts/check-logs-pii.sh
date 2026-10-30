@@ -20,17 +20,17 @@
 # passes a sensitive value as a key-value field (`email = ...`) or interpolates one into the message
 # (`${p.email}`). A reviewed exception carries `// log-pii: ok <why>` on the call's first line.
 #
-# Usage: scripts/check-logs-pii.sh [root]   (default: the folder above this script)
+# Usage: scripts/check-logs-pii.sh [root]   scripts/check-logs-pii.sh --self-test
+#        (default root: the folder above this script)
 set -euo pipefail
-
-root="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 
 # Field names and identifiers that hold PII, credentials or member content.
 sensitive='email|e_mail|displayName|display_name|fullName|name|givenName|familyName|phone|sub|memberUrn|member_urn|token|accessToken|access_token|refreshToken|bearer|idToken|jwt|assertion|authorization|password|passwd|secret|clientSecret|client_secret|apiKey|webhookUrl|webhook_url|commentary|comment|body|payload|code|state|nonce|cookie'
 
-files=$(find "$root" -name '*.bal' -not -path '*/target/*' -not -path '*/tests/*' -not -path '*/node_modules/*' | sort)
-[ -n "$files" ] || { echo "check-logs-pii: no .bal files under $root" >&2; exit 2; }
-
+scan() {
+  local root="$1" files
+  files=$(find "$root" -name '*.bal' -not -path '*/target/*' -not -path '*/tests/*' -not -path '*/node_modules/*' | sort)
+  [ -n "$files" ] || { echo "check-logs-pii: no .bal files under $root" >&2; return 2; }
 # shellcheck disable=SC2086
 perl -e '
     my $sensitive = shift @ARGV;
@@ -72,3 +72,47 @@ perl -e '
     printf "check-logs-pii: %d log call(s) scanned, %d flagged\n", $calls, $bad;
     exit($bad ? 1 : 0);
 ' "$sensitive" $files
+}
+
+# The scanner's whole job is to say "clean" only when it really looked, so each bypass a reviewer found
+# by reading it is a case here.
+if [ "${1:-}" = "--self-test" ]; then
+  TMPDIR_SELF=$(mktemp -d)
+  trap 'rm -rf "$TMPDIR_SELF"' EXIT
+  fx="$TMPDIR_SELF/fx"; mkdir -p "$fx"
+
+  write() { printf '%s\n' "$2" > "$fx/$1.bal"; }
+
+  write ok 'public function f() { log:printInfo("amplify run finished"); }'
+  write ok2 'public function g(string email) { log:printInfo("user email sent"); }'
+  write exc 'public function h(string e) { log:printInfo(e); } // log-pii: ok e is a run id'
+  if ! scan "$fx" >/dev/null; then echo "self-test: a clean call, or a reviewed exception, was flagged"; exit 1; fi
+
+  write field 'public function f() { log:printInfo("x", email = e); }'
+  if scan "$fx" >/dev/null; then echo "self-test: a sensitive key-value field passed"; exit 1; fi
+  rm "$fx/field.bal"
+
+  write msg 'public function f(string email) { log:printInfo(email); }'
+  if scan "$fx" >/dev/null; then echo "self-test: a sensitive message expression passed"; exit 1; fi
+  rm "$fx/msg.bal"
+
+  write interp 'public function f(P p) { log:printWarn(`seen ${p.email}`); }'
+  if scan "$fx" >/dev/null; then echo "self-test: a sensitive interpolation passed"; exit 1; fi
+  rm "$fx/interp.bal"
+
+  # A `)` inside the message must not close the call early and hide the field on the next line.
+  cat > "$fx/bracket.bal" <<'BAL'
+public function f(P user) {
+    log:printInfo("user )",
+        email = user.email);
+}
+BAL
+  if scan "$fx" >/dev/null; then echo "self-test: a parenthesis inside a string hid a later field"; exit 1; fi
+  rm "$fx/bracket.bal"
+
+  echo "check-logs-pii self-test passed."
+  exit 0
+fi
+
+root="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+scan "$root"
