@@ -60,6 +60,11 @@ isolated function newSchedulerClient() returns scheduler:Api?|error {
     if runDeadlineSeconds < 1 || maintenanceDeadlineSeconds < 1 {
         return error("runDeadlineSeconds and maintenanceDeadlineSeconds must be positive");
     }
+    if schedulerJobsUrl.trim() == "" && jobsUrl.trim() == "" {
+        // Every job's target would be just "/runs": refuse to start rather than log an error per job on every
+        // reconcile and answer 503 on /admin/scheduler/sync for what is a configuration mistake.
+        return error("schedulerUrl is set but neither schedulerJobsUrl nor jobsUrl is: the scheduler has nowhere to call");
+    }
     return check new scheduler:Client(schedulerUrl, schedulerTimeoutSeconds, schedulerResilience);
 }
 
@@ -149,7 +154,8 @@ isolated function syncScheduler(Settings? s, string? correlationId) returns Sche
         // the commit this sync follows, and pushing those would report SYNCED with the old schedule.
         Settings|error settings = given is Settings ? given : freshSettings();
         if settings is error {
-            log:printError("Scheduler sync: settings unreadable", settings, correlationId = correlationId);
+            log:printError("Scheduler sync: settings unreadable", resilience:loggable(settings),
+                    correlationId = correlationId);
             return {status: "PENDING", jobs: []};
         }
         return pushJobs(api, settings.cloneReadOnly(), correlationId).cloneReadOnly();
@@ -209,7 +215,8 @@ isolated function auditSync(store:Actor actor, SchedulerSyncResult result) {
     error? written = recordAudit(store:auditOf(actor, "SchedulerSynced", "scheduler.job", schedulerCollection,
             result.toJson()));
     if written is error {
-        log:printError("Scheduler sync audit not written", written, correlationId = actor.correlationId);
+        log:printError("Scheduler sync audit not written", resilience:loggable(written),
+                correlationId = actor.correlationId);
     }
 }
 

@@ -307,10 +307,8 @@ paths:
       description: Revokes the caller's access token at LinkedIn, then removes the connection and deletes the token row (`ConnectionRemoved`). A token LinkedIn already treats as invalid, or one past its own expiry, goes straight to the delete. If LinkedIn can't confirm the revoke, the connection is kept and the call returns 503 `DEPENDENCY_UNAVAILABLE`; try again.
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
-        "204": {description: Removed}
+        "204": {description: "Removed, or there was no connection to remove"}
         "401": {$ref: "#/components/responses/Problem"}
-        "404": {$ref: "#/components/responses/Problem"}
-        "409": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
 
   /campaigns/{id}/shares:
@@ -1125,11 +1123,11 @@ components:
       properties:
         employee:
           type: object
-          required: [employee_id, email, display_name]
+          required: [employeeId, email, displayName]
           properties:
-            employee_id: {type: string}
+            employeeId: {type: string}
             email: {type: string}
-            display_name: {type: string}
+            displayName: {type: string}
         roles:
           description: The caller's Asgardeo groups that the access configuration names
           type: array
@@ -1144,7 +1142,7 @@ components:
           required: [status]
           properties:
             status: {$ref: "#/components/schemas/ConnectionStatus"}
-            expires_at: {type: string, format: date-time, nullable: true}
+            expiresAt: {type: string, format: date-time, nullable: true}
     ConnectionStatus: {type: string, enum: [ACTIVE, EXPIRING, NEEDS_RECONNECT, REMOVED, NOT_CONNECTED]}
 
     CampaignStatus: {type: string, enum: [SCHEDULED, OPEN, CLOSED, ARCHIVED]}
@@ -1289,7 +1287,7 @@ components:
         campaignId: {type: string, format: uuid}
         kind: {$ref: "#/components/schemas/ShareKind"}
         status: {type: string, enum: [QUEUED, PUBLISHED, FAILED]}
-        failureReason: {type: string, nullable: true, enum: [NEEDS_RECONNECT, PROVIDER_REJECTED, RETRIES_EXHAUSTED]}
+        failureReason: {type: string, nullable: true, enum: [NEEDS_RECONNECT, PROVIDER_REJECTED, RETRIES_EXHAUSTED, null]}
         attempts: {type: integer}
         requestedAt: {type: string, format: date-time}
         publishedAt: {type: string, format: date-time, nullable: true}
@@ -1395,7 +1393,7 @@ components:
         reversesReference: {type: string, nullable: true}
         actorId: {type: string, description: "The PO's employee id. Omitted for callers who are not a PO"}
         createdAt: {type: string, format: date-time}
-        status: {type: string, nullable: true, enum: [HELD, PAID]}
+        status: {type: string, nullable: true, enum: [HELD, PAID, null]}
 
     LeaderboardTop:
       type: object
@@ -1944,7 +1942,7 @@ components:
               reposters: {type: integer}
               externalSharesApproved: {type: integer}
               points: {type: integer}
-              announcement: {type: string, nullable: true, enum: [QUEUED, SENT, FAILED]}
+              announcement: {type: string, nullable: true, enum: [QUEUED, SENT, FAILED, null]}
         shareHealth:
           type: object
           required: [windowStart, queued, published, failed, failedByReason]

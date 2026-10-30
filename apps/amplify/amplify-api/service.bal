@@ -31,7 +31,9 @@ import ballerina/time;
 # Port the published API listens on (fronted by the API proxy at the cell edge).
 configurable int port = 9090;
 
-listener http:Listener apiListener = new (port);
+// Request bodies here are small JSON documents; without a limit the listener buffers whatever it is sent, and the
+// idempotency hash serialises it again, before validation can refuse it.
+listener http:Listener apiListener = new (port, requestLimits = {maxEntityBodySize: 65536});
 
 function init() {
     log:printInfo(string `${COMPONENT} starting on port ${port}`);
@@ -49,11 +51,11 @@ function init() {
 # `GET /me` employee block.
 type MeEmployee record {|
     # Asgardeo `sub`
-    string employee_id;
+    string employeeId;
     # Lowercased email
     string email;
     # Display name
-    string display_name;
+    string displayName;
 |};
 
 # `GET /me` LinkedIn block.
@@ -61,7 +63,7 @@ type MeLinkedIn record {|
     # `ACTIVE`, `EXPIRING`, `NEEDS_RECONNECT`, `REMOVED` or `NOT_CONNECTED`
     string status;
     # Access token expiry, RFC 3339; `()` when not connected or removed
-    string? expires_at;
+    string? expiresAt;
 |};
 
 # `GET /me` response.
@@ -145,9 +147,9 @@ service http:InterceptableService / on apiListener {
         }
         MeResponse me = {
             employee: {
-                employee_id: employee.employeeId,
+                employeeId: employee.employeeId,
                 email: employee.email,
-                display_name: employee.displayName
+                displayName: employee.displayName
             },
             roles: principal.roles,
             grants: principal.grants,
@@ -245,7 +247,8 @@ service http:InterceptableService / on apiListener {
         final auth:Principal & readonly p = (check principalOf(ctx)).cloneReadOnly();
         final string? id = cid(ctx);
         json|error raw = req.getJsonPayload();
-        ConnectStartBody|error body = raw is error ? {} : raw.cloneWithType();
+        // No body is fine (`{}`); a body that is not valid JSON is a 400 like on every other route.
+        ConnectStartBody|error body = raw is http:NoContentError ? {} : raw is error ? raw : raw.cloneWithType();
         if body is error {
             return toResponse(badRequest("The request has invalid fields", id));
         }
@@ -714,12 +717,12 @@ isolated function findConnection(store:Actor actor, types:EmployeeId employeeId)
 # + return - Status and expiry
 isolated function linkedInOf(connection:LinkedInConnection? linked, time:Utc now) returns MeLinkedIn {
     if linked is () {
-        return {status: NOT_CONNECTED, expires_at: ()};
+        return {status: NOT_CONNECTED, expiresAt: ()};
     }
     connection:ConnectionStatus status = connection:connectionStatus(linked, now);
     return {
         status,
-        expires_at: status == connection:REMOVED ? () : time:utcToString(linked.accessExpiresAt)
+        expiresAt: status == connection:REMOVED ? () : time:utcToString(linked.accessExpiresAt)
     };
 }
 

@@ -223,8 +223,11 @@ function testHistoryScope() returns error? {
     http:Response po = check send("GET", "/team/lb-1/history", (), check rvToken("po-hist", groups = [PO_GROUP]));
     test:assertEquals(po.statusCode, 200, "PO reads any row");
 
+    // Widening the Team page to the company does not open anyone's ledger history (ADR-035 section 3).
     setSetting("team.visibility", "COMPANY");
-    test:assertEquals((check send("GET", "/team/lb-1/history", (), me)).statusCode, 200);
+    http:Response widened = check send("GET", "/team/lb-1/history", (), me);
+    test:assertEquals(widened.statusCode, 403);
+    test:assertEquals(check codeIn(widened), "TEAM_SCOPE");
     clearSettings();
 
     http:Response badId = check send("GET", "/team/bad!id/history", (), me);
