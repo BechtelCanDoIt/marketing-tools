@@ -29,6 +29,7 @@ configurable int port = 9091;
 listener http:Listener jobsListener = new (port);
 
 function init() returns error? {
+    check checkInternalKey(internalApiKey);
     check validateRunConfig(runConfig(), longestCallSeconds());
     log:printInfo(string `${COMPONENT} starting on port ${port}`);
     string? tls = store:tlsWarning(dbConfig());
@@ -42,7 +43,9 @@ function init() returns error? {
     label: "Amplify Jobs",
     id: "amplify/amplify-jobs"
 }
-service / on jobsListener {
+service http:InterceptableService / on jobsListener {
+
+    public function createInterceptors() returns InternalKeyInterceptor => new;
 
     # Liveness probe.
     #

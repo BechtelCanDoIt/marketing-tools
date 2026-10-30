@@ -1,5 +1,8 @@
 # CLAUDE.md — amplify-jobs
 
+## Authentication
+Every endpoint except `GET /health` and `GET /ready` needs the header `X-Amplify-Internal-Key` (config `internalApiKey`, a secret of at least 32 characters; the worker refuses to start without it). Callers: the scheduler (amplify-api puts the header on the jobs it registers) and amplify-api (Save & Share Now). ADR-039.
+
 ## Overview
 Worker for the Run (sharing, announcements, scoring) and maintenance. No internal timer (ADR-003). Project visibility only.
 

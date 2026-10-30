@@ -5,10 +5,13 @@ info:
   description: >-
     Internal worker; Project visibility only, never published. The scheduler (akornatskyy/scheduler, ADR-026) and amplify-api
     ("Save & Share Now") call these endpoints. ADR-003, ADR-025.
+security:
+  - InternalKey: []
 paths:
   /health:
     get:
       operationId: getHealth
+      security: []
       responses:
         "200":
           description: OK
@@ -18,6 +21,7 @@ paths:
   /ready:
     get:
       operationId: getReadiness
+      security: []
       description: >-
         Readiness. Only the database gates it (breaker not open and `SELECT 1` answers); LinkedIn, Chat and the
         token keys are reported in `breakers` but not fatal, because a run defers those rows (ADR-025).
@@ -83,6 +87,14 @@ paths:
         "500": {description: Rebuild failed}
 
 components:
+  securitySchemes:
+    InternalKey:
+      type: apiKey
+      in: header
+      name: X-Amplify-Internal-Key
+      description: >-
+        Shared secret (at least 32 characters) held by the scheduler's jobs, amplify-api and amplify-jobs. Every call
+        except the two probes needs it; a missing or wrong key is 401. ADR-039.
   schemas:
     HealthStatus:
       type: object

@@ -65,6 +65,11 @@ configurations:
         configForm:
           displayName: LinkedIn OAuth base URL
           type: string
+    - name: BAL_CONFIG_VAR_INTERNALAPIKEY
+      valueFrom:
+        configForm:
+          displayName: Internal API key shared with amplify-jobs (secret, at least 32 characters; the same value on both components)
+          type: secret
     - name: BAL_CONFIG_VAR_TOKENKEYS
       valueFrom:
         configForm:

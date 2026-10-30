@@ -20,6 +20,10 @@ import ballerina/test;
 
 final http:Client testClient = check new ("http://localhost:9091");
 
+// Same value as `internalApiKey` in tests/Config.toml.
+const string TEST_INTERNAL_KEY = "test-internal-key-0123456789abcdef0123456789";
+final map<string> KEYED = {[INTERNAL_KEY_HEADER]: TEST_INTERNAL_KEY};
+
 @test:Config
 function testHealthReturnsUp() returns error? {
     types:HealthStatus body = check testClient->get("/health");
@@ -28,18 +32,49 @@ function testHealthReturnsUp() returns error? {
 
 @test:Config
 function testRunsWithoutDatabaseIs503() returns error? {
-    http:Response res = check testClient->post("/runs", ());
+    http:Response res = check testClient->post("/runs", (), KEYED);
     test:assertEquals(res.statusCode, http:STATUS_SERVICE_UNAVAILABLE);
 }
 
 @test:Config
 function testPartitionMaintenanceWithoutDatabaseIs503() returns error? {
-    http:Response res = check testClient->post("/maintenance/partitions", ());
+    http:Response res = check testClient->post("/maintenance/partitions", (), KEYED);
     test:assertEquals(res.statusCode, http:STATUS_SERVICE_UNAVAILABLE);
 }
 
 @test:Config
 function testRebuildRecognitionWithoutDatabaseIs503() returns error? {
-    http:Response res = check testClient->post("/maintenance/rebuild-recognition", ());
+    http:Response res = check testClient->post("/maintenance/rebuild-recognition", (), KEYED);
     test:assertEquals(res.statusCode, http:STATUS_SERVICE_UNAVAILABLE);
+}
+
+@test:Config
+function testEveryMutationRefusesACallWithoutTheKey() returns error? {
+    foreach string path in ["/runs", "/maintenance/partitions", "/maintenance/rebuild-recognition"] {
+        http:Response none = check testClient->post(path, ());
+        test:assertEquals(none.statusCode, http:STATUS_UNAUTHORIZED, path + " without a key");
+        http:Response wrong = check testClient->post(path, (), {[INTERNAL_KEY_HEADER]: "not-the-key"});
+        test:assertEquals(wrong.statusCode, http:STATUS_UNAUTHORIZED, path + " with the wrong key");
+        http:Response prefix = check testClient->post(path, (), {[INTERNAL_KEY_HEADER]: TEST_INTERNAL_KEY.substring(0, 20)});
+        test:assertEquals(prefix.statusCode, http:STATUS_UNAUTHORIZED, path + " with part of the key");
+    }
+}
+
+@test:Config
+function testProbesStayOpenButNothingElseDoes() returns error? {
+    http:Response ready = check testClient->get("/ready");
+    test:assertNotEquals(ready.statusCode, http:STATUS_UNAUTHORIZED, "readiness is a probe");
+    // Only GET on the two probe paths is exempt: the same path with another method, and any other path, is not.
+    http:Response postReady = check testClient->post("/ready", ());
+    test:assertEquals(postReady.statusCode, http:STATUS_UNAUTHORIZED);
+    http:Response other = check testClient->get("/nothing-here");
+    test:assertEquals(other.statusCode, http:STATUS_UNAUTHORIZED);
+}
+
+@test:Config
+function testBlankOrShortKeysAreRefusedAtStartUp() {
+    test:assertTrue(checkInternalKey("") is error);
+    test:assertTrue(checkInternalKey("   ") is error);
+    test:assertTrue(checkInternalKey("too-short") is error);
+    test:assertEquals(checkInternalKey(TEST_INTERNAL_KEY), ());
 }
