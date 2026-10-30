@@ -13,7 +13,7 @@
 
 Options for (2):
 
-- **a. Unique ancestor contexts.** api builds from `apps/amplify`, jobs from `apps/amplify/apps` (flattened 2026-10-20: jobs now shares the `apps/amplify` context; descriptor kept at `amplify-jobs/.choreo/component.yaml`); both contain the shared packages. No tooling, works today.
+- **a. Unique ancestor contexts.** Each component builds from a context that is a *different* ancestor folder, and both folders contain the shared packages, so Choreo reads a different `<context>/.choreo/component.yaml` for each. No tooling, works today. (On 2026-10-20 the contexts were flattened to one, `apps/amplify`, for both api and jobs; that removes the unique ancestor the option depends on — see the amendment below.)
 - **b. Ballerina Central** (an org on Central, `repository` dropped). Each component builds from its own folder. Needs a Central org, publish credentials in CI and a release per shared change.
 - **c. Vendored copies or a CI-assembled build branch.** Duplicated sources or a second branch to keep in step.
 
@@ -23,13 +23,13 @@ Ballerina 2201.13 has no path/workspace dependency that would let a component fo
 
 Option a, with every component on its own context:
 
-| Component | Docker context | Dockerfile | Choreo descriptor |
-|---|---|---|---|
-| amplify-api | `apps/amplify` | `amplify-api/Dockerfile` | `apps/amplify/.choreo/component.yaml` |
-| amplify-jobs | `apps/amplify` | `amplify-jobs/Dockerfile` | `apps/amplify/.choreo/component.yaml` |
-| amplify-database | `amplify-database` | its folder | its folder `.choreo/` |
-| amplify-scheduler | `amplify-scheduler` | its folder | its folder `.choreo/` |
-| mock-linkedin (dev) | `apps/amplify/linkedin/apps/mock_linkedin` | its folder | its folder `.choreo/` |
+| Component | Docker context | Dockerfile | Descriptor of record | Choreo reads |
+|---|---|---|---|---|
+| amplify-api | `apps/amplify` | `amplify-api/Dockerfile` | `apps/amplify/.choreo/component.yaml` | `apps/amplify/.choreo/component.yaml` |
+| amplify-jobs | `apps/amplify` | `amplify-jobs/Dockerfile` | `amplify-jobs/.choreo/component.yaml` | `apps/amplify/.choreo/component.yaml` — the api's, which is the defect the amendment below records |
+| amplify-database | `amplify-database` | its folder | its folder `.choreo/` | its folder `.choreo/` |
+| amplify-scheduler | `amplify-scheduler` | its folder | its folder `.choreo/` | its folder `.choreo/` |
+| mock-linkedin (dev) | `apps/amplify/linkedin/apps/mock_linkedin` | its folder | its folder `.choreo/` | its folder `.choreo/` |
 
 - `schemaFilePath` is relative to the context (`amplify-api/openapi.yaml`, `amplify-jobs/openapi.yaml`).
 - `compose.yaml` uses the same contexts, so a local build is the Choreo build.
@@ -39,6 +39,15 @@ Option a, with every component on its own context:
 ## Consequences
 
 - Clean checkout to image with no local setup, verified for all six images; `make up` + `scripts/e2e-local.sh` run on images built with `--no-cache`.
-- The api component's Choreo build is triggered by any change under `apps/amplify`; jobs by any change under `apps/`. Acceptable for two services.
+- The api component's Choreo build is triggered by any change under `apps/amplify`; jobs by any change under `apps/amplify` too, since the flattening below. Acceptable for two services.
 - There is no third unique ancestor: **a third consumer of the shared packages (or a repo move, D12) is the trigger to switch to option b.** The switch changes only `Ballerina.toml` (`repository` dropped), the Dockerfiles (no pack/push) and the contexts back to component folders.
-- Reviewers: a `.choreo/` folder at `apps/amplify` and at `apps/` is deliberate, not stray.
+- Reviewers: the `.choreo/` folder at `apps/amplify` and the one in each component folder are deliberate, not stray.
+
+## Amendment (2026-10-30)
+
+The 2026-10-20 flattening took away the condition this ADR relies on, and the decision table above did not say so.
+
+- **What the flattening changed.** api and jobs now both build from the `apps/amplify` context. Neither has a unique ancestor any more, so there is only one `apps/amplify/.choreo/component.yaml` for Choreo to read, and it is the **api's** (endpoint `amplify-api`, port 9090, the api's `schemaFilePath` and env). `amplify-jobs/.choreo/component.yaml` (port 9091, the jobs env, never published) is still what `amplify-jobs/workload.yaml` and `scripts/check-descriptors.sh` pair with, but **Choreo does not read it while the contexts are shared**. That is exactly the failure option (a) exists to prevent, and the "Docker context: apps/amplify … so every component has its own context" comment in both descriptors is false until it is fixed.
+- **Consequence.** Amplify Jobs cannot be created as a Choreo Dockerfile component from this layout; it would take the api's endpoint. The api component is unaffected.
+- **The options are the ones above.** Restore a second unique ancestor context for jobs (a), move the shared packages to Ballerina Central (b), or assemble a vendor/CI build branch (c). None is a doc change, so this ADR records the gap rather than picking one: the arrangement and the Jobs deployment route (OpenChoreo's `amplify-jobs/workload.yaml` is correct as it stands) are tracked in the Amplify Jobs review thread on the jobs slice, and the choice gets its own ADR when it is made.
+- **Descriptor hygiene meanwhile.** Keep `amplify-jobs/.choreo/component.yaml` in step with its `workload.yaml` — `check-descriptors.sh` is still the gate that catches drift in the env names and ports, and it is what tells us the two descriptors are not interchangeable.
