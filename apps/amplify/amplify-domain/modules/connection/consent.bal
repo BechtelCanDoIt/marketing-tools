@@ -33,8 +33,10 @@ public enum ConsentDecision {
 }
 
 # Pattern for a LinkedIn member profile URL: `https://[www.]linkedin.com/in/<slug>[/]`. The slug may hold
-# letters, digits, `-`, `_`, `%` (encoded characters) and `.`; no query or fragment.
-final readonly & string:RegExp PROFILE_URL_PATTERN = re `https://(www\.)?linkedin\.com/in/[\p{L}\p{N}_%.\-]{3,100}/?`;
+# letters, digits, `-`, `_`, `.` and percent-encoded characters (`%` followed by two hex digits, each escape
+# counting once toward the 3-100 limit); no query or fragment.
+final readonly & string:RegExp PROFILE_URL_PATTERN =
+    re `https://(www\.)?linkedin\.com/in/(?:[\p{L}\p{N}_.\-]|%[0-9A-Fa-f]{2}){3,100}/?`;
 
 # Checks a LinkedIn profile URL.
 #
