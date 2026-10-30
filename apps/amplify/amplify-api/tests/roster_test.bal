@@ -39,13 +39,24 @@ final DirectoryRecord[] & readonly DIRECTORY = [
 @test:Config
 function testRosterGroupsBySubTeam() {
     Roster? roster = rosterFrom(indexDirectory(DIRECTORY), "grace@wso2.com");
-    test:assertEquals(roster, {teamName: "Forward Deployed Engineering", emails: ["ada@wso2.com", "grace@wso2.com"]});
+    test:assertEquals(roster, {teamName: "Forward Deployed Engineering", emails: ["ada@wso2.com", "grace@wso2.com"], houses: {}});
 }
 
 @test:Config
 function testRosterFallsBackToTeam() {
     Roster? roster = rosterFrom(indexDirectory(DIRECTORY), "ken@wso2.com");
-    test:assertEquals(roster, {teamName: "Marketing", emails: ["ken@wso2.com", "dennis@wso2.com"]});
+    test:assertEquals(roster, {teamName: "Marketing", emails: ["ken@wso2.com", "dennis@wso2.com"], houses: {}});
+}
+
+@test:Config
+function testRosterCarriesEachMembersHouse() {
+    DirectoryRecord[] rows = [
+        {workEmail: "a@wso2.com", team: "Marketing", house: " Oak "},
+        {workEmail: "b@wso2.com", team: "Marketing"},
+        {workEmail: "c@wso2.com", team: "Marketing", house: "Elm"}
+    ];
+    Roster roster = <Roster>rosterFrom(indexDirectory(rows), "A@wso2.com");
+    test:assertEquals(roster.houses, {"a@wso2.com": "Oak", "c@wso2.com": "Elm"}, "a member with no house is left out");
 }
 
 @test:Config
