@@ -110,14 +110,22 @@ public isolated class PgAnnouncementRepository {
                 UPDATE messaging.outbox
                 SET status = 'PENDING', attempts = 0, next_attempt_at = now(), locked_by = NULL, locked_until = NULL,
                     last_error = NULL, processed_at = NULL
-                WHERE idempotency_key = ${key} AND status <> 'IN_PROGRESS'`);
+                WHERE idempotency_key = ${key} AND status = 'FAILED'`);
             if result.affectedRowCount != 1 {
-                // A run holds the row right now: resetting its lock would let a second run send the card
-                // again while the first is still sending it.
-                boolean running = check self.db->queryRow(`
-                    SELECT EXISTS (SELECT 1 FROM messaging.outbox WHERE idempotency_key = ${key})`);
-                fail running ? types:domainError(types:ERR_ANNOUNCEMENT_NOT_FAILED, "The card is being sent right now")
-                    : types:domainError(types:ERR_NOT_FOUND, "The announcement's queue entry is gone");
+                // Only a FAILED row is re-queued. An IN_PROGRESS row is held by a run right now (resetting its
+                // lock would let a second run send the card again), and a DONE or PENDING row must stay as it
+                // is: a second admin's Retry would otherwise send a card that already went out.
+                string|sql:Error state = self.db->queryRow(`
+                    SELECT status FROM messaging.outbox WHERE idempotency_key = ${key}`);
+                if state is sql:NoRowsError {
+                    fail types:domainError(types:ERR_NOT_FOUND, "The announcement's queue entry is gone");
+                }
+                if state is sql:Error {
+                    fail state;
+                }
+                fail types:domainError(types:ERR_ANNOUNCEMENT_NOT_FAILED, state == "IN_PROGRESS"
+                    ? "The card is being sent right now"
+                    : state == "DONE" ? "The card was already sent" : "The card is already queued");
             }
             check store:writeAudit(self.db, store:auditOf(self.actor, "AnnouncementRetried", ANNOUNCEMENT_TABLE,
                     campaignId));
