@@ -24,6 +24,7 @@ import amplify_common.crypto;
 import amplify_common.types;
 import amplify_domain.campaign;
 import amplify_domain.connection;
+import amplify_domain.identity;
 import amplify_domain.scoring;
 import amplify_domain.sharing;
 import amplify_domain.store;
@@ -304,4 +305,39 @@ function testOutboxBacklogCountsWhatIsWaiting() returns error? {
     test:assertEquals(after.pending + after.inProgress + after.failed,
             before.pending + before.inProgress + before.failed + 4);
     check db.close();
+}
+
+// Leavers (security review): not in the directory AND away from Amplify for the grace period; erasing one is audited
+// and takes the person off the candidate list.
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testLeaverCandidatesNeedBothAbsenceAndDormancyAndErasureRemovesThem() returns error? {
+    postgresql:Client apiDb = check api();
+    postgresql:Client jobsDb = check jobs();
+    string tag = "lv" + uniq();
+    string[] ids = [tag + "-listed", tag + "-gone", tag + "-gone-recent"];
+    foreach [string, string] [id, age] in [[ids[0], "90 days"], [ids[1], "90 days"], [ids[2], "2 days"]] {
+        _ = check apiDb->execute(`INSERT INTO identity.employee (employee_id, email, display_name, first_seen_at, last_seen_at)
+            VALUES (${id}, ${id + "@example.com"}, ${"Name " + id}, now() - interval '100 days',
+                    now() - CAST(${age} AS interval))`);
+    }
+    string[] directory = [ids[0] + "@example.com"];
+    string[] found = check identity:leaverCandidates(jobsDb, directory, 30, 1000);
+    test:assertTrue(found.indexOf(ids[1]) !is (), "gone and dormant is a candidate");
+    test:assertTrue(found.indexOf(ids[0]) is (), "listed in the directory is never a candidate, however dormant");
+    test:assertTrue(found.indexOf(ids[2]) is (), "gone but active two days ago waits out the grace period");
+    // The directory is compared case-insensitively.
+    string[] upper = [(ids[0] + "@example.com").toUpperAscii(), ids[1] + "@example.com"];
+    string[] foundUpper = check identity:leaverCandidates(jobsDb, upper, 30, 1000);
+    test:assertTrue(foundUpper.indexOf(ids[0]) is () && foundUpper.indexOf(ids[1]) is ());
+
+    json erased = check identity:eraseEmployee(jobsDb, ids[1], "system", "LEAVER_SWEEP");
+    test:assertTrue(erased.toJsonString().includes("\"employee\":1") || erased.toJsonString().includes("\"employee\": 1"),
+            erased.toJsonString());
+    string[] after = check identity:leaverCandidates(jobsDb, directory, 30, 1000);
+    test:assertTrue(after.indexOf(ids[1]) is (), "an erased person is not found again");
+    int audited = check count(jobsDb, `SELECT count(*)::int FROM audit.audit_log
+        WHERE entity_id = ${ids[1]} AND action = 'EMPLOYEE_DATA_ERASED' AND reason = 'LEAVER_SWEEP'`);
+    test:assertEquals(audited, 1);
+    check apiDb.close();
+    check jobsDb.close();
 }

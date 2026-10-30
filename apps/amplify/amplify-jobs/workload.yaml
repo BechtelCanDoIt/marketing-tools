@@ -41,6 +41,19 @@ configurations:
         secretRef:
           name: amplify-jobs-secrets
           key: BAL_CONFIG_VAR_INTERNALAPIKEY
+    - name: BAL_CONFIG_VAR_LEAVERSWEEPMODE
+      value: "OFF"
+    - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYURL
+      value: ""
+    - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYTOKENURL
+      value: ""
+    - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYCLIENTID
+      value: ""
+    - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYCLIENTSECRET
+      valueFrom:
+        secretRef:
+          name: amplify-jobs-secrets
+          key: BAL_CONFIG_VAR_PEOPLEDIRECTORYCLIENTSECRET
     - name: BAL_CONFIG_VAR_TOKENKEYS
       valueFrom:
         secretRef:

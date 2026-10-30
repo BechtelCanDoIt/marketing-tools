@@ -30,6 +30,7 @@ listener http:Listener jobsListener = new (port);
 
 function init() returns error? {
     check checkInternalKey(internalApiKey);
+    check validateSweepConfig(sweepConfig(), peopleDirectoryUrl.trim() != "");
     check validateRunConfig(runConfig(), longestCallSeconds());
     log:printInfo(string `${COMPONENT} starting on port ${port}`);
     string? tls = store:tlsWarning(dbConfig());
@@ -121,9 +122,25 @@ service http:InterceptableService / on jobsListener {
             return <http:InternalServerError>{body: {message: "Idempotency key purge failed"}};
         }
         TokenRotation rotation = rotateTokenKeys(tokenCipher, new connection:PgTokenRepository(dbc));
-        MaintenanceReport report = {...result, idempotency_keys_purged: purged, token_rotation: rotation};
+        // Never fatal and off by default: the sweep reports what it did (or why it did nothing).
+        LeaverSweepReport leavers = runConfiguredSweep(dbc);
+        MaintenanceReport report = {...result, idempotency_keys_purged: purged, token_rotation: rotation,
+            leaver_sweep: leavers};
         log:printInfo(string `Partition maintenance done: ${report.toString()}`);
         return report;
+    }
+
+    # Runs only the leaver sweep (the daily maintenance run includes it). With `leaverSweepMode = DRY_RUN` it
+    # reports who would be erased; with `OFF` it does nothing.
+    #
+    # + return - What the sweep did, 503 when the database isn't reachable
+    resource function post maintenance/leavers() returns LeaverSweepReport|http:ServiceUnavailable {
+        postgresql:Client|error dbc = db();
+        if dbc is error {
+            log:printError("Leaver sweep: database unavailable", resilience:loggable(dbc));
+            return <http:ServiceUnavailable>{body: {message: "Database unavailable"}};
+        }
+        return runConfiguredSweep(dbc);
     }
 
     # Rebuilds every recognition read model from the ledger (recognition is never a source of truth).
