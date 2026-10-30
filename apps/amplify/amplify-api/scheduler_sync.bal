@@ -119,7 +119,8 @@ isolated function desiredJobs(Settings s) returns scheduler:JobSpec[] {
             // One retry for a 5xx or a dropped connection; 202 SKIPPED (run in progress) is a success.
             retryCount: 1,
             retryIntervalSeconds: 30,
-            deadlineSeconds: runDeadlineSeconds
+            deadlineSeconds: runDeadlineSeconds,
+            headers: internalKeyHeaders()
         },
         {
             id: JOB_MAINTENANCE,
@@ -128,7 +129,8 @@ isolated function desiredJobs(Settings s) returns scheduler:JobSpec[] {
             uri: base + "/maintenance/partitions",
             retryCount: 2,
             retryIntervalSeconds: 60,
-            deadlineSeconds: maintenanceDeadlineSeconds
+            deadlineSeconds: maintenanceDeadlineSeconds,
+            headers: internalKeyHeaders()
         }
     ];
 }
