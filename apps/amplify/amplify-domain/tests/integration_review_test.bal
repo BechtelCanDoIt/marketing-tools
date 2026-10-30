@@ -269,7 +269,10 @@ function testTokenUpdateSealIsGuardedByTheOldKey() returns error? {
     connection:StoredToken stored = check connection:sealToken(oldCipher, "bearer-rotate", emp,
             time:utcAddSeconds(now, 3600), now);
     connection:PgTokenRepository tokens = new (db);
-    check tokens.insert(stored);
+    // Only a sign-in creates a token row, so the fixture goes in through the API role: amplify_jobs has no INSERT.
+    postgresql:Client seedDb = check api();
+    check (new connection:PgTokenRepository(seedDb)).insert(stored);
+    check seedDb.close();
     test:assertTrue(ring.needsRotation(stored.keyId));
     crypto:SealedToken fresh = check ring.seal(check connection:openToken(ring, stored),
             {tokenId: stored.tokenId, ownerId: stored.ownerId, provider: stored.provider});
