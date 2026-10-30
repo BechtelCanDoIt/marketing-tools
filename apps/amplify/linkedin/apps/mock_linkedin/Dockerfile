@@ -16,7 +16,7 @@
 
 
 # Mock LinkedIn (dev and local only, never prod). Docker context: this folder.
-#   docker build -t mock-linkedin projects/linkedin/apps/mock_linkedin
+#   docker build -t mock-linkedin apps/amplify/linkedin/apps/mock_linkedin
 # Two listeners (api 9090 = api.linkedin.com, www 9091 = www.linkedin.com). Config only through env:
 # BAL_CONFIG_VAR_LISTENERHOST=0.0.0.0, BAL_CONFIG_VAR_CLIENTID / CLIENTSECRET, and BAL_CONFIG_DATA for
 # the redirectUris array. No Config.toml is baked in.

@@ -68,11 +68,11 @@ trap 'rm -rf "$work"' EXIT
 
 echo "== mint dev JWTs (1 PO + $EMPLOYEES employees)"
 mint() { local/dev-jwt/mint-dev-jwt.sh token "$@"; }
-mint lt-po lt-po@wso2.com amplify_po > "$work/po.csv"
+mint lt-po lt-po@example.com amplify_po > "$work/po.csv"
 : > "$work/employees.csv"
 for n in $(seq 1 "$EMPLOYEES"); do
   id=$(printf 'lt-%04d' "$n")
-  echo "$(mint "$id" "$id@wso2.com"),$id" >> "$work/employees.csv"
+  echo "$(mint "$id" "$id@example.com"),$id" >> "$work/employees.csv"
 done
 
 # Thread-count overrides: a module that is not in MODULES gets 0 threads. jobs has two groups.
