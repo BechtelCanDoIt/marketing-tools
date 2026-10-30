@@ -150,6 +150,26 @@ function connectNeedsShareScope() {
 }
 
 @test:Config
+function expiredTokenIsNotReportedAsMissingPermission() {
+    ConnectCommand expired = command();
+    expired.expiresInSeconds = 0;
+    test:assertEquals(code(connect((), expired, T0)), types:ERR_CONNECTION_NEEDS_RECONNECT,
+            "an unusable token asks for a reconnect, not a scope the user can't grant");
+    expired.expiresInSeconds = -1;
+    test:assertEquals(code(connect((), expired, T0)), types:ERR_CONNECTION_NEEDS_RECONNECT);
+}
+
+@test:Config
+function oauthStateNonceAndTtl() returns error? {
+    OAuthState state = check newOAuthState("emp-1", "/amplify/posts", (), T0);
+    test:assertEquals(time:utcDiffSeconds(state.expiresAt, state.createdAt), <decimal>oauthStateTtlSeconds,
+            "state lifetime comes from the configurable");
+    test:assertTrue(nonceMatches(state, state.nonce), "the ID token's nonce is the one we sent");
+    test:assertFalse(nonceMatches(state, "0123456789abcdef"), "another request's nonce is refused");
+    test:assertFalse(nonceMatches(state, ()), "a token with no nonce is refused");
+}
+
+@test:Config
 function oneEmployeePerMemberAndOneConnectionPerEmployee() returns error? {
     InMemoryConnections repo = new;
     _ = check completeConnection(repo, command(), T0);

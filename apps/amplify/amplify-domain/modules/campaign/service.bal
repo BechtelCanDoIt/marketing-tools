@@ -79,7 +79,7 @@ public isolated function newCampaign(CampaignDraft draft, CampaignPolicy policy,
         ownerUrn,
         resourceUrl,
         title,
-        summary: types:trimToNil(draft.summary),
+        summary: check validSummary(draft.summary),
         imageUrl,
         categoryCode,
         isPriority: draft.isPriority,
@@ -110,7 +110,7 @@ public isolated function applyPatch(Campaign campaign, CampaignPatch patch, time
         changed.title = check validTitle(title);
     }
     if patch.summary !is () {
-        changed.summary = types:trimToNil(patch.summary);
+        changed.summary = check validSummary(patch.summary);
     }
     if patch.imageUrl !is () {
         changed.imageUrl = check optionalHttps(patch.imageUrl, "Image URL");
@@ -219,12 +219,31 @@ isolated function validTitle(string raw) returns string|types:DomainError {
     return title;
 }
 
+# Category codes are what `campaign.category.code` allows; anything else could never match a row.
+final readonly & string:RegExp CATEGORY_CODE_PATTERN = re `[A-Z][A-Z0-9_]{0,49}`;
+
 isolated function validCategory(string raw) returns string|types:DomainError {
     string code = raw.trim();
     if code.length() == 0 {
         return types:domainError(types:ERR_INVALID_CAMPAIGN, "Category is required");
     }
+    if !CATEGORY_CODE_PATTERN.isFullMatch(code) {
+        return types:domainError(types:ERR_INVALID_CAMPAIGN,
+                "Category is an upper-case code of letters, digits and _, up to 50 characters");
+    }
     return code;
+}
+
+# A summary is optional; when given it must fit what the database stores.
+#
+# + raw - Summary as entered
+# + return - The trimmed summary, `()` when blank, or `INVALID_CAMPAIGN` over the length limit
+isolated function validSummary(string? raw) returns string?|types:DomainError {
+    string? summary = types:trimToNil(raw);
+    if summary is string && summary.length() > SUMMARY_MAX_LENGTH {
+        return types:domainError(types:ERR_INVALID_CAMPAIGN, string `Summary must be at most ${SUMMARY_MAX_LENGTH} characters`);
+    }
+    return summary;
 }
 
 # A post link, if given, must use one of the allowed origins. Every employee's card links to it, so a
@@ -288,7 +307,7 @@ isolated function validWindow(time:Utc opensAt, time:Utc closesAt) returns types
 # Trims, lowercases and de-duplicates tags, keeping first-seen order.
 #
 # + raw - Tags as entered
-# + return - Normalized tags, or `INVALID_CAMPAIGN` for a tag over the length limit
+# + return - Normalized tags, or `INVALID_CAMPAIGN` for a tag over the length limit or with a non-ASCII letter
 public isolated function normalizeTags(string[] raw) returns string[]|types:DomainError {
     string[] tags = [];
     foreach string item in raw {
@@ -298,6 +317,11 @@ public isolated function normalizeTags(string[] raw) returns string[]|types:Doma
         }
         if tag.length() > TAG_MAX_LENGTH {
             return types:domainError(types:ERR_INVALID_CAMPAIGN, string `Tags must be at most ${TAG_MAX_LENGTH} characters`);
+        }
+        // Lower-casing here is ASCII only while the database CHECK (`tag = lower(tag)`) is locale aware, so a
+        // letter like `Ä` would pass here and fail at INSERT.
+        if tag.toCodePointInts().some(cp => cp > 127) {
+            return types:domainError(types:ERR_INVALID_CAMPAIGN, "Tags use ASCII letters, digits and punctuation only");
         }
         tags.push(tag);
     }
