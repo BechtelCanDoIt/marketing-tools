@@ -221,7 +221,7 @@ function testPoCantAmplifyOwnClaim() returns error? {
             rules, claim.id, otherPo, (), time:utcNow());
     external_sharing:ExternalShare|error ownMark = external_sharing:amplifyWithPoints(
             new external_sharing:PgExternalShareRepository(db, poActor(poClaimant)), rules, claim.id, poClaimant, (),
-            time:utcNow());
+            time:utcNow(), new scoring:PgLedgerRepository(db, poActor(poClaimant)));
     assertCode(ownMark, types:ERR_SELF_REVIEW);
     test:assertEquals(check count(db, `SELECT count(*)::int FROM scoring.points_ledger
                                        WHERE employee_id = ${poClaimant} AND action = 'OWN_POST_AMPLIFIED'`), 0);

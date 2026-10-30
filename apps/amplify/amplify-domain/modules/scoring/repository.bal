@@ -74,8 +74,13 @@ public isolated class PgLedgerRepository {
 
     public isolated function append(LedgerAppend append) returns boolean|error {
         final readonly & LedgerAppend a = append.cloneReadOnly();
-        return (check store:inTransactionValue(isolated function () returns boolean|error => self.appendTx(a)))
-            .ensureType();
+        anydata|error result = store:inTransactionValue(isolated function () returns boolean|error => self.appendTx(a));
+        if result is error {
+            // The other expected conflict: a second reversal of the same row (`points_ledger_reverses_uk`).
+            // The re-run is a no-op, not a failure; the transaction has already rolled back here.
+            return store:isUniqueViolation(result, "points_ledger_reverses_uk") ? false : result;
+        }
+        return result.ensureType();
     }
 
     private isolated function appendTx(LedgerAppend append) returns boolean|error {
@@ -215,12 +220,14 @@ isolated function toEntry(LedgerRow|error row) returns types:LedgerEntry|error? 
 # + actor - Who (audit)
 # + append - Row and event
 # + topN - `leaderboard.top_n`
-# + return - True if inserted, false if the reference already existed, or an error
+# + return - True if inserted; false when the reference already exists (an idempotent repeat, not a
+#            failure), or an error
 public isolated transactional function appendInTransaction(postgresql:Client db, store:Actor actor, LedgerAppend append,
         int topN = 3) returns boolean|error {
     types:LedgerEntry e = append.entry;
-    // No conflict target: a repeated reference (re-run) and a second reversal of the same row
-    // (`points_ledger_reverses_uk`) both insert nothing.
+    // Only the documented conflict target: a repeated reference (re-run) inserts nothing. Any other unique
+    // violation - a new constraint, a bad reference - is a real error and surfaces as one. The other
+    // expected conflict, a second reversal of the same row, is caught in `append`, outside the transaction.
     var result = check db->execute(`
         INSERT INTO scoring.points_ledger (reference, employee_id, campaign_id, source_type, source_id, action,
             points, rule_id, reverses_reference, reason, actor_id, correlation_id, created_at, status,
@@ -229,7 +236,7 @@ public isolated transactional function appendInTransaction(postgresql:Client db,
             CAST(${e.sourceId} AS uuid), ${e.action}, ${e.points}, CAST(${e.ruleId} AS uuid),
             ${e.reversesReference}, ${e.reason}, ${e.actorId}, ${e.correlationId}, CAST(${store:ts(e.createdAt)} AS timestamptz), ${e.status},
             CAST(${store:ts(e.statusChangedAt)} AS timestamptz), CAST(${store:ts(e.paidAt)} AS timestamptz), ${e.coinReference})
-        ON CONFLICT DO NOTHING`);
+        ON CONFLICT (reference) DO NOTHING`);
     boolean inserted = result.affectedRowCount == 1;
     if inserted {
         _ = check store:writeOutbox(db, [append.event], e.correlationId ?: actor.correlationId);

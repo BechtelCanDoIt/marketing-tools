@@ -56,15 +56,53 @@ function testRecognitionLocksAreTakenInOrder() returns error? {
     test:assertTrue(callSites >= 2, "found the ledger append and rebuild call sites");
 }
 
-# Blanks whole-line `//` and `#` comments, so a comment that mentions `lockRecognition(` or the word
-# "function " can't satisfy (or confuse) the scan.
+# Blanks `//` comments (whole-line and trailing), whole-line `#` doc comments and double-quoted string
+# literals, so a comment or a string that mentions `lockRecognition(` (or the `//` in a URL) can't satisfy
+# or confuse the scan. Template literals are kept: the SQL calls the scan looks for live inside them. It is
+# a text scan: a `//` or a call inside a template's `${...}` interpolation isn't seen, which can only make
+# it miss a call, never invent one.
 #
 # + src - Ballerina source
-# + return - The source with comment lines emptied (line breaks kept)
+# + return - The source with comment and string bytes blanked to spaces (line breaks kept)
 function stripComments(string src) returns string {
-    string[] kept = from string line in re `\n`.split(src)
-        select line.trim().startsWith("//") || line.trim().startsWith("#") ? "" : line;
-    return string:'join("\n", ...kept);
+    string[] docFree = from string line in re `\n`.split(src)
+        select line.trim().startsWith("#") ? "" : line;
+    int[] cps = string:'join("\n", ...docFree).toCodePointInts();
+    int[] out = [];
+    boolean inDouble = false;
+    boolean inTemplate = false;
+    boolean inComment = false;
+    int i = 0;
+    while i < cps.length() {
+        int c = cps[i];
+        if inComment {
+            inComment = c != 10;
+            out.push(inComment ? 32 : c);
+        } else if inDouble || inTemplate {
+            boolean quoted = inDouble;
+            if c == 92 && i + 1 < cps.length() {
+                out.push(quoted ? 32 : c);
+                out.push(quoted ? 32 : cps[i + 1]);
+                i += 2;
+                continue;
+            }
+            inDouble = inDouble && c != 34;
+            inTemplate = inTemplate && c != 96;
+            out.push(quoted ? 32 : c);
+        } else if c == 47 && i + 1 < cps.length() && cps[i + 1] == 47 {
+            inComment = true;
+            out.push(32);
+            out.push(32);
+            i += 2;
+            continue;
+        } else {
+            inDouble = c == 34;
+            inTemplate = c == 96;
+            out.push(c);
+        }
+        i += 1;
+    }
+    return checkpanic string:fromCodePointInts(out);
 }
 
 @test:Config
@@ -75,6 +113,39 @@ function testLockOrderScanIgnoresComments() {
     int fnStart = src.lastIndexOf("function ", at) ?: 0;
     int? lockAt = src.lastIndexOf(LOCK_CALL, at);
     test:assertFalse(lockAt is int && lockAt > fnStart, "a comment naming the lock call doesn't count as taking it");
+}
+
+@test:Config
+function testLockOrderScanIgnoresTrailingComments() {
+    string src = stripComments("isolated function bad() {\n"
+        + "  _ = db->queryRow(`SELECT recognition.rebuild(3)`); // lockRecognition( is called elsewhere\n}\n");
+    int at = <int>src.indexOf("recognition.rebuild(");
+    int fnStart = src.lastIndexOf("function ", at) ?: 0;
+    int? lockAt = src.lastIndexOf(LOCK_CALL, at);
+    test:assertFalse(lockAt is int && lockAt > fnStart, "a trailing `//` comment naming the lock call doesn't count");
+}
+
+@test:Config
+function testLockOrderScanIgnoresStringLiterals() {
+    string src = stripComments("isolated function bad() {\n"
+        + "  string url = \"https://example.com/lockRecognition(\";\n"
+        + "  _ = db->queryRow(`SELECT recognition.rebuild(3)`);\n}\n");
+    int at = <int>src.indexOf("recognition.rebuild(");
+    int fnStart = src.lastIndexOf("function ", at) ?: 0;
+    int? lockAt = src.lastIndexOf(LOCK_CALL, at);
+    test:assertFalse(lockAt is int && lockAt > fnStart,
+        "a string literal naming the lock call (and the `//` in a URL) doesn't count");
+}
+
+@test:Config
+function testLockOrderScanFindsTheCallInsideATemplate() {
+    string src = stripComments("isolated function ok() {\n  check store:lockRecognition(db);\n"
+        + "  _ = db->queryRow(`SELECT recognition.rebuild(3)`);\n}\n");
+    int at = <int>src.indexOf("recognition.rebuild(");
+    int fnStart = src.lastIndexOf("function ", at) ?: 0;
+    int? lockAt = src.lastIndexOf(LOCK_CALL, at);
+    test:assertTrue(at > 0, "the SQL template is still scanned");
+    test:assertTrue(lockAt is int && lockAt > fnStart, "a real call inside a template is found and ordered");
 }
 
 @test:Config

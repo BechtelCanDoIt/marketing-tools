@@ -85,6 +85,60 @@ isolated class InMemoryExternalShares {
     }
 }
 
+// The ledger as `amplifyWithPoints` reads it: seeded with the rows the award path wrote.
+isolated class InMemoryLedger {
+    *scoring:LedgerRepository;
+    private map<types:LedgerEntry> rows = {};
+
+    isolated function seed(types:LedgerEntry entry) {
+        lock {
+            self.rows[entry.reference] = entry.clone();
+        }
+    }
+
+    public isolated function append(scoring:LedgerAppend append) returns boolean|error {
+        lock {
+            if self.rows.hasKey(append.entry.reference) {
+                return false;
+            }
+            self.rows[append.entry.reference] = append.entry.clone();
+            return true;
+        }
+    }
+
+    public isolated function findByReference(types:LedgerReference reference) returns types:LedgerEntry|error? {
+        lock {
+            return self.rows.hasKey(reference) ? self.rows[reference].clone() : ();
+        }
+    }
+
+    public isolated function findReversalOf(types:LedgerReference reference) returns types:LedgerEntry|error? {
+        lock {
+            foreach types:LedgerEntry row in self.rows {
+                if row.reversesReference == reference {
+                    return row.clone();
+                }
+            }
+            return ();
+        }
+    }
+
+    public isolated function updateSettlement(types:LedgerReference reference, types:LedgerStatus? status,
+            time:Utc changedAt) returns error? {
+        lock {
+            if self.rows.hasKey(reference) {
+                types:LedgerEntry? stored = self.rows[reference];
+                if stored is types:LedgerEntry {
+                    types:LedgerEntry row = stored.clone();
+                    row.status = status;
+                    row.statusChangedAt = changedAt;
+                    self.rows[reference] = row;
+                }
+            }
+        }
+    }
+}
+
 isolated function code(any|error result) returns string {
     if result is types:DomainError {
         return result.detail().code;
@@ -176,18 +230,37 @@ final scoring:PointRule[] & readonly TEST_RULES = [
 @test:Config
 function testApproveAndAmplifyWritePointsWithTheDecision() returns error? {
     InMemoryExternalShares repo = new;
+    InMemoryLedger ledger = new;
     ExternalShare claim = check submitExternalShare(repo,
             {employeeId: "emp-points", evidenceUrl: "https://medium.com/@emp/points-post", certified: true}, T0);
     ExternalShare approved = check approveWithPoints(repo, TEST_RULES, claim.id, "po-1", "cid-1", T0);
     test:assertEquals(externalShareStatus(approved), APPROVED);
-    ExternalShare amplified = check amplifyWithPoints(repo, TEST_RULES, claim.id, "po-1", "cid-2", T0);
+    ledger.seed(repo.awardRows()[0]);
+    ExternalShare amplified = check amplifyWithPoints(repo, TEST_RULES, claim.id, "po-1", "cid-2", T0, ledger);
     test:assertEquals(externalShareStatus(amplified), AMPLIFIED);
     types:LedgerEntry[] rows = repo.awardRows();
     test:assertEquals(rows.length(), 2);
     test:assertEquals(rows[0].points, 25);
     test:assertEquals(rows[0].action, types:OWN_POST);
-    test:assertEquals(rows[1].points, 15, "top-up = amplified − own post");
+    test:assertEquals(rows[1].points, 15, "top-up = amplified − the 25 on the ledger");
     test:assertEquals(rows[1].action, types:OWN_POST_AMPLIFIED);
+}
+
+// Round 2: the top-up reads the ledger, so a reversed own-post award is topped up to the whole tier.
+@test:Config
+function testAmplifiedTopUpAfterTheOwnPostIsReversed() returns error? {
+    InMemoryExternalShares repo = new;
+    InMemoryLedger ledger = new;
+    ExternalShare claim = check submitExternalShare(repo,
+            {employeeId: "emp-rev", evidenceUrl: "https://medium.com/@emp/reversed-post", certified: true}, T0);
+    _ = check approveWithPoints(repo, TEST_RULES, claim.id, "po-1", "cid-1", T0);
+    types:LedgerEntry own = repo.awardRows()[0];
+    ledger.seed(own);
+    _ = check scoring:reverseEntry(ledger, own.reference, "Reassessing", "po-2", (), T0);
+    _ = check amplifyWithPoints(repo, TEST_RULES, claim.id, "po-1", "cid-2", T0, ledger);
+    types:LedgerEntry[] rows = repo.awardRows();
+    test:assertEquals(rows.length(), 2);
+    test:assertEquals(rows[1].points, 40, "the whole amplified tier: the own post nets to 0");
 }
 
 // R-02: marking amplified pays a top-up, so the claimant can't mark their own claim.

@@ -225,15 +225,28 @@ function testShareRequestRetryAndPublishByJobs() returns error? {
     sharing:ShareRequest|error dup = sharing:requestShare(apiRepo, snap, conn, {employeeId: emp, kind: types:REPOST},
             time:utcNow());
     assertCode(dup, types:ERR_SHARE_ALREADY_QUEUED);
+    // The insert path (the race `requestShare` reads first) reports the stored state too: a QUEUED row now,
+    // a PUBLISHED one after the publish below, never a blanket "already queued".
+    sharing:ShareRequest raced = check sharing:newShareRequest(snap, conn, {employeeId: emp, kind: types:REPOST},
+            types:newUuidV7(), time:utcNow());
+    assertCode(apiRepo.insert(raced, []), types:ERR_SHARE_ALREADY_QUEUED);
 
     // Jobs: fail, then the employee retries on the same row (ADR-015).
     sharing:PgShareRepository jobsRepo = new (jobsDb);
     sharing:ShareRequest failed = check sharing:markFailed(req, types:NEEDS_RECONNECT, (), time:utcNow());
     check jobsRepo.update(failed, req.version, [sharing:repostFailedEvent(failed)]);
+    // Backdate the first request as if it were 40 days old: the row can only be in this week's tile 7
+    // window because the retry below queued it again now, not because of `requested_at`.
+    _ = check apiDb->execute(`UPDATE sharing.share_request SET requested_at = now() - interval '40 days'
+                              WHERE id = CAST(${req.id} AS uuid)`);
+    time:Utc weekAgo = time:utcAddSeconds(time:utcNow(), -7d * 86400d);
+    sharing:ShareHealth beforeRetry = check sharing:shareHealth(apiDb, weekAgo);
     sharing:ShareRequest retried = check sharing:requestShare(apiRepo, snap, conn,
             {employeeId: emp, kind: types:REPOST}, time:utcNow());
     test:assertEquals(retried.id, req.id);
     test:assertEquals(retried.attempts, 2);
+    test:assertEquals((check sharing:shareHealth(apiDb, weekAgo)).queued, beforeRetry.queued + 1,
+            "tile 7 counts the retry when it happened, not the 40-day-old first request");
 
     // Jobs publishes: engagement + request + EngagementRecorded together; commentary cleared.
     sharing:PublishResult published = check sharing:markPublished(retried, "urn:li:share:" + uniq(), conn.memberUrn,
@@ -241,6 +254,9 @@ function testShareRequestRetryAndPublishByJobs() returns error? {
     check jobsRepo.recordPublish(published, retried.version);
     string status = check jobsDb->queryRow(`SELECT status FROM sharing.share_request_v WHERE id = CAST(${req.id} AS uuid)`);
     test:assertEquals(status, "PUBLISHED");
+    sharing:ShareRequest racedAfterPublish = check sharing:newShareRequest(snap, conn, {employeeId: emp, kind: types:REPOST},
+            types:newUuidV7(), time:utcNow());
+    assertCode(apiRepo.insert(racedAfterPublish, []), types:ERR_SHARE_ALREADY_PUBLISHED);
     test:assertEquals(check count(jobsDb, `SELECT count(*)::int FROM sharing.share_request
                                            WHERE id = CAST(${req.id} AS uuid) AND commentary IS NULL`), 1);
     string key = "EngagementRecorded:" + published.engagement.id;
@@ -336,6 +352,13 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
     types:LedgerEntry|error again = scoring:reverseEntry(apiLedger, award.entry.reference, "Again", po, "req-2",
             time:utcNow());
     assertCode(again, types:ERR_ALREADY_REVERSED);
+    // `append` tells an idempotent repeat from a real failure: a second reversal of the same row is stopped
+    // by `points_ledger_reverses_uk` and comes back false, not as an error.
+    types:LedgerEntry duplicateReversal = rev.clone();
+    duplicateReversal.reference = check types:reversalReference(types:newUuidV7());
+    test:assertFalse(check apiLedger.append({entry: duplicateReversal,
+            event: scoring:pointsChangedEvent(duplicateReversal)}),
+            "a second reversal of the same row is a no-op, not an error");
     recognition:Standing? afterRev = check recognition:standingOf(apiDb, a);
     test:assertEquals(afterRev is () ? -1 : afterRev.totalPoints, 0);
     test:assertTrue(check recognition:standingVersion(apiDb) > versionBefore, "standing_version bumped");
