@@ -122,7 +122,12 @@ redirect=$(curl -sS -o /dev/null -w '%{redirect_url}' "$AUTH_URL")
 CODE=$(sed -n 's/.*[?&]code=\([^&]*\).*/\1/p' <<<"$redirect")
 STATE=$(sed -n 's/.*[?&]state=\([^&]*\).*/\1/p' <<<"$redirect")
 [[ -n "$CODE" && -n "$STATE" ]] || fail "mock OAuth did not redirect with code+state: $redirect"
-call "$EMP_JWT" POST /connections/linkedin/complete "{\"code\":\"$CODE\",\"state\":\"$STATE\"}" >/dev/null
+# `complete` also takes the callback page the browser landed on, and refuses anything but the configured
+# redirect URI (open-redirect guard). Read it from local/.env rather than repeating it here.
+REDIRECT_URI=$(sed -n 's/^LINKEDIN_REDIRECT_URI=//p' local/.env | tail -1)
+[[ -n "$REDIRECT_URI" ]] || fail "LINKEDIN_REDIRECT_URI is not set in local/.env"
+call "$EMP_JWT" POST /connections/linkedin/complete \
+  "{\"code\":\"$CODE\",\"state\":\"$STATE\",\"redirectUri\":\"$REDIRECT_URI\"}" >/dev/null
 call "$EMP_JWT" GET /me | jq -e '.linkedin.status == "ACTIVE"' >/dev/null || fail "connection not ACTIVE"
 echo "ok: LinkedIn ACTIVE"
 
