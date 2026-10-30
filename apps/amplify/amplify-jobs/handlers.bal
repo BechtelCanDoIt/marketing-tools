@@ -249,6 +249,11 @@ isolated function handleRepostRequested(HandlerContext ctx, events:RepostRequest
         // Already published (a rerun) or already failed: never post twice.
         return done(string `share already ${sharing:shareStatus(share)}`);
     }
+    if share.lastErrorCode == PUBLISH_IN_FLIGHT {
+        // A previous attempt wrote the in-flight marker and never cleared it: LinkedIn may already have the
+        // post. Posting again could duplicate it, so fail the row for an operator to reconcile by hand.
+        return failed("a previous publish attempt may already have posted; manual review required");
+    }
 
     connection:LinkedInConnection? conn = check ctx.store.connection(event.employeeId);
     if conn is () || !connection:canShare(conn, ctx.now, ctx.settings.reminderDays) {
@@ -273,6 +278,10 @@ isolated function handleRepostRequested(HandlerContext ctx, events:RepostRequest
     if !ctx.budget.take() {
         return deferFor(ctx.config.deferSeconds, "LinkedIn post ceiling reached");
     }
+    // Durable marker before the external call. If this attempt dies after the post (a crash, or a failed
+    // record write), the next run sees it and fails the row for manual review instead of posting again.
+    sharing:ShareRequest inFlight = withInFlight(share);
+    check ctx.store.updateShare(inFlight, share.version, []);
     types:PostUrn|linkedin:ProviderError posted = linkedIn.publishShare(bearer, {
         authorUrn: conn.memberUrn,
         kind: share.kind,
@@ -285,20 +294,29 @@ isolated function handleRepostRequested(HandlerContext ctx, events:RepostRequest
         correlationId: ctx.correlationId
     });
     if posted is linkedin:ProviderError {
-        return handleLinkedInFailure(ctx, share, conn, posted);
+        return handleLinkedInFailure(ctx, inFlight, conn, posted);
     }
-    sharing:PublishResult result = check sharing:markPublished(share, posted, conn.memberUrn, types:newUuidV7(), ctx.now);
-    error? saved = ctx.store.recordPublish(result, share.version);
-    if saved is error && store:isUniqueViolation(saved) {
-        // The post went out, but this employee's engagement for the target was already recorded (an earlier
-        // round). Settle the request on that engagement instead of leaving it QUEUED for good (H-5).
-        if check ctx.store.recordDuplicatePublish(result, share.version) {
-            return done("published; engagement already recorded");
+    // The post is out: the published result clears the marker.
+    sharing:ShareRequest publishedSource = withoutInFlight(inFlight);
+    sharing:PublishResult result = check sharing:markPublished(publishedSource, posted, conn.memberUrn,
+            types:newUuidV7(), ctx.now);
+    error? saved = ctx.store.recordPublish(result, inFlight.version);
+    if saved is error {
+        if store:isUniqueViolation(saved) {
+            // The post went out, but this employee's engagement for the target was already recorded (an earlier
+            // round). Settle the request on that engagement instead of leaving it QUEUED for good (H-5).
+            if check ctx.store.recordDuplicatePublish(result, inFlight.version) {
+                return done("published; engagement already recorded");
+            }
+            return failShare(ctx, publishedSource, types:PROVIDER_REJECTED, "DUPLICATE_ENGAGEMENT",
+                    "engagement unique key without a matching engagement");
         }
-        return failShare(ctx, share, types:PROVIDER_REJECTED, "DUPLICATE_ENGAGEMENT",
-                "engagement unique key without a matching engagement");
+        // LinkedIn accepted the post but the record could not be written. Retrying would post again: the
+        // in-flight marker stays, so the next run fails the row for manual review.
+        log:printError("Published to LinkedIn but the share record could not be written; not retrying",
+                resilience:loggable(saved), correlationId = ctx.correlationId);
+        return failed("published to LinkedIn but the share record could not be written; manual review required");
     }
-    check saved;
     return {kind: DONE, note: "published"};
 }
 
@@ -329,20 +347,56 @@ isolated function handleLinkedInFailure(HandlerContext ctx, sharing:ShareRequest
         connection:LinkedInConnection conn, linkedin:ProviderError err) returns Outcome|error {
     linkedin:ProviderErrorDetail d = err.detail();
     string note = string `LinkedIn ${d.code} (HTTP ${d.httpStatus.toString()})`;
+    // The call returned an error, so it did not post: clear the in-flight marker before the row is retried or
+    // failed (a retry must not read it as "may already have posted").
+    sharing:ShareRequest cleared = check clearInFlight(ctx, share);
     if d.code == linkedin:UNAUTHORIZED {
         // Token expired or revoked: the connection needs a reconnect (B9) and this share fails with it.
         connection:ConnectionChange|types:DomainError change = connection:revoke(conn, ctx.now);
         if change is connection:ConnectionChange {
             check ctx.store.saveConnection(change, conn.version);
         }
-        return failShare(ctx, share, types:NEEDS_RECONNECT, d.code, note);
+        return failShare(ctx, cleared, types:NEEDS_RECONNECT, d.code, note);
     }
     if d.retryable {
         // 429, 5xx, timeout or open breaker: the share stays QUEUED (B14) and the outbox retries.
-        return ctx.finalAttempt ? failShare(ctx, share, types:RETRIES_EXHAUSTED, d.code, note) : retryLater(note);
+        return ctx.finalAttempt ? failShare(ctx, cleared, types:RETRIES_EXHAUSTED, d.code, note) : retryLater(note);
     }
     int? serviceCode = d.serviceErrorCode;
-    return failShare(ctx, share, types:PROVIDER_REJECTED, serviceCode is int ? serviceCode.toString() : d.code, note);
+    return failShare(ctx, cleared, types:PROVIDER_REJECTED, serviceCode is int ? serviceCode.toString() : d.code, note);
+}
+
+# Clears the in-flight marker after LinkedIn answered with an error (so it did not post), so a retry or a
+# failure can write the share row again.
+#
+# + ctx - Context
+# + share - The share row carrying the marker
+# + return - The share with the marker cleared and the next version, or an error when the write failed
+isolated function clearInFlight(HandlerContext ctx, sharing:ShareRequest share) returns sharing:ShareRequest|error {
+    sharing:ShareRequest cleared = withoutInFlight(share);
+    check ctx.store.updateShare(cleared, share.version, []);
+    return cleared;
+}
+
+# A copy of the share row carrying the in-flight marker and the next version.
+#
+# + share - The share row as read
+# + return - The copy to write before the call
+isolated function withInFlight(sharing:ShareRequest share) returns sharing:ShareRequest {
+    sharing:ShareRequest copy = {...share};
+    copy.lastErrorCode = PUBLISH_IN_FLIGHT;
+    copy.version = share.version + 1;
+    return copy;
+}
+
+# A copy of the share row with the marker cleared, at the same version (it was written by the marker step).
+#
+# + share - The share row carrying the marker
+# + return - The copy to write
+isolated function withoutInFlight(sharing:ShareRequest share) returns sharing:ShareRequest {
+    sharing:ShareRequest copy = {...share};
+    copy.lastErrorCode = ();
+    return copy;
 }
 
 isolated function failShare(HandlerContext ctx, sharing:ShareRequest share, types:FailureReason reason, string? code,

@@ -68,9 +68,10 @@ configurable boolean chatAllowInsecureHttp = false;
 # Public HTTPS Amplify avatar shown in the card header. Empty = header without an avatar.
 configurable string chatCardAvatarUrl = "";
 # Public HTTPS image (PNG or JPEG; Chat doesn't render SVG) for cards whose post has no image or an unusable one.
-# The image is `amplify-jobs/img/WSO2-Amplify-Poster-Default.png`, served through its raw GitHub URL pinned to a
-# commit (Chat fetches it anonymously, so a Drive link won't work). The original is in the Amplify Demo shared chat
-# space. Empty = such cards go out without an image.
+# Chat fetches it anonymously, so it must be a stable, WSO2-controlled URL: host `img/WSO2-Amplify-Poster-Default.png`
+# in the WSO2 media/CDN bucket and set its URL here. Do not point this at raw.githubusercontent.com in a deployed
+# environment (an untracked third-party host, not a CDN, and it breaks if the fork or path moves). The file in this
+# folder is the source asset only. Empty = such cards go out without an image.
 configurable string chatDefaultImageUrl = "";
 # Announce shares through Novera (feat/amplify_on_novera). Read from `AMPLIFY_ON_NOVERA` in local/.env, default true.
 # Not acted on yet: the Novera sender does not exist, so nothing branches on this.

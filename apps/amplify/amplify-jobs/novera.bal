@@ -24,6 +24,7 @@ import amplify_common.resilience;
 import amplify_domain.announcements;
 
 import ballerina/http;
+import ballerina/log;
 
 # Why Novera did not accept an announcement.
 type NoveraErrorDetail record {|
@@ -110,6 +111,11 @@ isolated class NoveraClient {
         if status == http:STATUS_TOO_MANY_REQUESTS {
             return noveraError("RATE_LIMITED", "Novera rate limited", status, true);
         }
+        if status == http:STATUS_UNAUTHORIZED || status == http:STATUS_FORBIDDEN {
+            // A rotated client secret or a revoked subscription is an operator problem, not a bad card: retry
+            // (the row stays queued and the run keeps trying) instead of failing every announcement for good.
+            return noveraError("UNAVAILABLE", string `Novera refused our credentials with HTTP ${status}`, status, true);
+        }
         if status >= 500 {
             return noveraError("UNAVAILABLE", string `Novera failed with HTTP ${status}`, status, true);
         }
@@ -129,17 +135,33 @@ isolated class NoveraClient {
             if existing is http:Client {
                 return existing;
             }
-            http:ClientConfiguration config = resilience:clientConfig(self.settings, self.timeoutSeconds);
-            http:OAuth2ClientCredentialsGrantConfig grant = {tokenUrl: self.tokenUrl, clientId: self.clientId,
-                clientSecret: self.clientSecret, scopes: self.scopes.clone()};
-            config.auth = grant;
-            // The OAuth2 client fetches its token while it is built and panics when it can't: trap it.
-            http:Client|error created = trap new (self.baseUrl, config);
-            if created is http:Client {
-                self.httpClient = created;
-            }
+        }
+        // The OAuth2 client fetches its token while it is built, so build it outside the lock: `breaker()` (and
+        // therefore `GET /ready`) must not wait for a slow token endpoint. Two callers may build at once; the
+        // first to publish wins and the other is dropped.
+        http:ClientConfiguration config = resilience:clientConfig(self.settings, self.timeoutSeconds);
+        http:OAuth2ClientCredentialsGrantConfig grant = {tokenUrl: self.tokenUrl, clientId: self.clientId,
+            clientSecret: self.clientSecret, scopes: self.scopes.clone()};
+        config.auth = grant;
+        // The constructor panics when it can't fetch the token: trap it.
+        http:Client|error created = trap new (self.baseUrl, config);
+        if created is error {
+            log:printWarn("Novera client could not be built (token fetch)", resilience:loggable(created));
             return created;
         }
+        http:Client? winner;
+        lock {
+            winner = self.httpClient;
+            if winner is () {
+                self.httpClient = created;
+            }
+        }
+        if winner is http:Client {
+            // A concurrent caller won the build race: ours is dropped (`http:Client` has no close here). The
+            // race happens only when the first two callers start together, so at most one client is wasted.
+            return winner;
+        }
+        return created;
     }
 }
 

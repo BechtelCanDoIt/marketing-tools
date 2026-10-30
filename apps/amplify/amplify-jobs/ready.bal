@@ -30,6 +30,12 @@ type ReadyReport record {|
     boolean runInProgress;
     # Breaker state per dependency (reported, not fatal: LinkedIn and Chat outages only defer rows)
     map<string> breakers;
+    # What the outbox holds; absent when the database is down or the backlog could not be read. Reported, not
+    # fatal: `alerting` is the signal to page on (a row waiting longer than `outboxAlertSeconds`, or one that failed)
+    OutboxReport outbox?;
+    # Days ahead with a token partition; `alerting` when fewer than `tokenPartitionAlertDays` (the daily maintenance run
+    # is the only thing that creates them)
+    TokenPartitionReport tokenPartitions?;
 |};
 
 # Readiness from its inputs. Only the database gates it: without LinkedIn, Chat or the token keys the run
@@ -38,14 +44,35 @@ type ReadyReport record {|
 # + databaseUp - Database breaker not open and the probe answered
 # + breakers - Breaker state per dependency
 # + running - Whether a run is in progress on this replica
+# + outbox - The outbox backlog, when it was read
+# + tokenPartitions - The token partition runway, when it was read
 # + return - The report
-isolated function readiness(boolean databaseUp, map<string> breakers, boolean running) returns ReadyReport => {
-    component: COMPONENT,
-    status: databaseUp ? types:UP : types:DOWN,
-    database: databaseUp ? types:UP : types:DOWN,
-    runInProgress: running,
-    breakers: breakers.clone()
-};
+isolated function readiness(boolean databaseUp, map<string> breakers, boolean running, OutboxReport? outbox = (),
+        TokenPartitionReport? tokenPartitions = ()) returns ReadyReport {
+    ReadyReport report = {
+        component: COMPONENT,
+        status: databaseUp ? types:UP : types:DOWN,
+        database: databaseUp ? types:UP : types:DOWN,
+        runInProgress: running,
+        breakers: breakers.clone()
+    };
+    if outbox is OutboxReport {
+        report.outbox = outbox;
+    }
+    if tokenPartitions is TokenPartitionReport {
+        report.tokenPartitions = tokenPartitions;
+    }
+    return report;
+}
+
+# Whether `/ready` answers 200. Choreo stops routing on any non-2xx readiness response, so a database blip
+# that opens the breaker for a few seconds would turn every scheduler call into a network failure.
+# `POST /runs` already answers a clean 503 while the database is unavailable, and the scheduler retries a
+# 5xx, so only a missing database configuration (the worker can never do its work) keeps it unready.
+#
+# + databaseConfigured - `dbHost` is set
+# + return - True when the process should stay in rotation
+isolated function readyKeepsRouting(boolean databaseConfigured) returns boolean => databaseConfigured;
 
 # Whether a run is in progress on this replica.
 #
@@ -81,10 +108,13 @@ isolated function validateRunConfig(RunConfig cfg, decimal longestCallSeconds) r
     }
 }
 
-# Longest external call one row can make: the LinkedIn timeout, or the Chat timeout plus its throttle wait.
+# Longest external call one row can make: the LinkedIn timeout, or what a `CampaignRegistered` row does: the
+# Chat timeout plus its throttle wait and, with Novera on, the token fetch and the notify (each bounded by
+# the Novera timeout) before the best-effort Chat card.
 #
 # + return - Seconds
 isolated function longestCallSeconds() returns decimal {
     decimal chat = chatTimeoutSeconds + chatMinIntervalSeconds;
-    return linkedinTimeoutSeconds > chat ? linkedinTimeoutSeconds : chat;
+    decimal registered = amplifyOnNovera ? 2d * noveraTimeoutSeconds + chat : chat;
+    return linkedinTimeoutSeconds > registered ? linkedinTimeoutSeconds : registered;
 }

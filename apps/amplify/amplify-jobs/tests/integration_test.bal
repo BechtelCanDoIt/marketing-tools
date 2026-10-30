@@ -15,7 +15,7 @@
 // under the License.
 
 // M6 integration test (group `integration`, `AMPLIFY_IT=true`) against a migrated PostgreSQL 18 as
-// `amplify_jobs` / `amplify_api`, with `projects/linkedin/apps/mock_linkedin` as LinkedIn and the Chat stub
+// `amplify_jobs` / `amplify_api`, with `apps/amplify/linkedin/apps/mock_linkedin` as LinkedIn and the Chat stub
 // below as the Club space: register campaign → announce; connect (mock OAuth, token sealed into today's
 // partition) → share → publish → engagement → points → standing; rerun safety; one run across replicas;
 // stale-lock release; idempotency-key purge. Recipe: docs/migrations/README.md.
@@ -272,4 +272,30 @@ function testM6OneRunAcrossReplicasStaleLocksAndPurge() returns error? {
     _ = check jobsDb->execute(`INSERT INTO messaging.idempotency_key (employee_id, key, request_hash, expires_at)
         VALUES ('it', ${key}, 'h', now() - interval '1 hour')`);
     test:assertTrue(check store:purgeExpiredIdempotencyKeys(jobsDb) >= 1);
+}
+
+// One partition maintenance pass at a time across replicas: a pass that outlives the scheduler's deadline is
+// not started again by its retry (no second reseal sweep, no second partition drop).
+@test:Config {groups: ["integration"]}
+function aSecondMaintenancePassIsSkippedWhileOneIsRunning() returns error? {
+    if !itEnabled {
+        return;
+    }
+    postgresql:Client first = check itConnect("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client second = check itConnect("amplify_jobs", itJobsPassword, 1);
+    PgRunLock held = new (first, MAINTENANCE_LOCK_KEY);
+    PgRunLock rival = new (second, MAINTENANCE_LOCK_KEY);
+    test:assertTrue(check held.tryAcquire());
+    test:assertFalse(check rival.tryAcquire(), "the retry answers 202 SKIPPED, not a second pass");
+    check held.release();
+    test:assertTrue(check rival.tryAcquire(), "once the pass is done the lock is free");
+    check rival.release();
+    check first.close();
+    check second.close();
+}
+
+// The maintenance pass and the run use different advisory keys, so neither blocks the other.
+@test:Config
+function theMaintenanceLockIsNotTheRunLock() {
+    test:assertNotEquals(MAINTENANCE_LOCK_KEY, RUN_LOCK_KEY);
 }
