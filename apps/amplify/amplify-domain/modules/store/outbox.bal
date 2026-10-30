@@ -212,3 +212,17 @@ public isolated function outboxBacklog(postgresql:Client db) returns OutboxBackl
         FROM messaging.outbox WHERE status <> 'DONE'`);
     return {pending: row.pending, inProgress: row.in_progress, failed: row.failed, oldestPendingSeconds: row.oldest};
 }
+
+# How many days past today (UTC) have a `connection.provider_token` partition. The partitions are named
+# `provider_token_pYYYYMMDD`; the newest one decides the runway.
+#
+# + db - Client
+# + return - Days ahead (0 when the newest partition is today, negative when it is behind), `()` when there is none, or an error
+public isolated function tokenPartitionDaysAhead(postgresql:Client db) returns int?|error {
+    record {|int? ahead;|} row = check db->queryRow(`
+        SELECT (max(to_date(substr(c.relname, 17), 'YYYYMMDD')) - (now() AT TIME ZONE 'UTC')::date)::int AS ahead
+        FROM pg_inherits i
+        JOIN pg_class c ON c.oid = i.inhrelid
+        WHERE i.inhparent = 'connection.provider_token'::regclass AND c.relname ~ '^provider_token_p[0-9]{8}$'`);
+    return row.ahead;
+}
