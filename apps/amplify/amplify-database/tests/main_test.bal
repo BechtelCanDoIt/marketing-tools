@@ -43,17 +43,20 @@ function testDuplicateVersionStopsTheRun() {
 @test:Config
 function testShippedScriptsAreWellFormed() returns error? {
     string[] migrations = check listMigrations("migrations");
-    test:assertTrue(migrations.length() >= 14);
+    // What this slice ships (V001-V007); later slices add more, so this is a floor, not the full count.
+    test:assertTrue(migrations.length() >= 7);
     test:assertEquals(migrations[0], "V001__schemas_roles.sql");
     string[] seeds = check listScripts("seed", SEED_FILE);
-    test:assertTrue(seeds.length() >= 7);
+    test:assertTrue(seeds.length() >= 4);
     test:assertEquals(versionOf("V012__x.sql"), "V012__x");
 }
 
 
 @test:Config
 function testRunnerVerifiesTheServerByDefault() {
-    test:assertEquals(dbSslMode, postgresql:VERIFY_FULL, "the runner defaults to VERIFY_FULL, like api and jobs");
+    // The declared default, not `dbSslMode`: a shell that exports BAL_CONFIG_VAR_DBSSLMODE=DISABLE for the IT
+    // recipe would otherwise fail this test for a reason unrelated to the runner.
+    test:assertEquals(DEFAULT_SSL_MODE, postgresql:VERIFY_FULL, "the runner defaults to VERIFY_FULL, like api and jobs");
     test:assertEquals(secureSocketOf(postgresql:VERIFY_FULL, " /mnt/db-ca/ca.pem "),
         {mode: postgresql:VERIFY_FULL, rootcert: "/mnt/db-ca/ca.pem"});
     test:assertEquals(secureSocketOf(postgresql:VERIFY_FULL, ""), {mode: postgresql:VERIFY_FULL});
