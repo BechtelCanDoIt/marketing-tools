@@ -40,10 +40,10 @@ echo
 echo "== mint dev JWTs (1 PO + 200 employees)"
 {
   printf '['
-  printf '"%s"' "$(local/dev-jwt/mint-dev-jwt.sh token lt-po lt-po@wso2.com amplify_po)"
+  printf '"%s"' "$(local/dev-jwt/mint-dev-jwt.sh token lt-po lt-po@example.com amplify_po)"
   for n in $(seq 1 200); do
     id=$(printf 'lt-%04d' "$(( (n * 5) % 1000 + 1 ))")
-    printf ',"%s"' "$(local/dev-jwt/mint-dev-jwt.sh token "$id" "$id@wso2.com")"
+    printf ',"%s"' "$(local/dev-jwt/mint-dev-jwt.sh token "$id" "$id@example.com")"
   done
   printf ']'
 } > "$work/tokens.json"

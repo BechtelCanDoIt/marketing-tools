@@ -1,8 +1,8 @@
 # LinkedIn Mock (mock_linkedin). DEV ENVIRONMENT ONLY, never promoted to prod. Choreo Service, Dockerfile buildpack.
 # www (OAuth) is Public because the browser follows the authorization redirect to it.
-# Docker context: projects/linkedin/apps/mock_linkedin  |  Dockerfile: projects/linkedin/apps/mock_linkedin/Dockerfile
+# Docker context: apps/amplify/linkedin/apps/mock_linkedin  |  Dockerfile: apps/amplify/linkedin/apps/mock_linkedin/Dockerfile
 # Choreo reads this file from <docker context>/.choreo/component.yaml, so every component has its own context
-# (ADR-027). Keep endpoints and env names in sync with projects/linkedin/apps/mock_linkedin/workload.yaml (scripts/check-descriptors.sh).
+# (ADR-027). Keep endpoints and env names in sync with apps/amplify/linkedin/apps/mock_linkedin/workload.yaml (scripts/check-descriptors.sh).
 # Console steps (connections, secrets, visibility): docs/runbooks/choreo-deploy.md.
 schemaVersion: "1.2"
 endpoints:
@@ -44,11 +44,6 @@ configurations:
         configForm:
           displayName: Mock OAuth client secret
           type: secret
-    - name: BAL_CONFIG_VAR_ENABLEMOCKADMIN
-      valueFrom:
-        configForm:
-          displayName: BAL_CONFIG_VAR_ENABLEMOCKADMIN (fixed true)
-          type: string
     - name: BAL_CONFIG_DATA
       valueFrom:
         configForm:
