@@ -21,7 +21,6 @@
 // Plaintext never leaves this module except as the return of `open`; errors never carry it.
 
 import ballerina/lang.array;
-import ballerina/uuid;
 
 # Key length for AES-256, in bytes.
 public const int KEY_BYTES = 32;
@@ -176,10 +175,8 @@ isolated function aadBytes(TokenAad aad) returns byte[]|error {
     return string `${aad.tokenId}|${aad.ownerId}|${aad.provider}`.toBytes();
 }
 
-# 96 random bits from a SecureRandom-backed UUIDv4: bytes 0-5 and 10-15 carry no version/variant bits.
+# 96 random bits from `java.security.SecureRandom`. Random-nonce GCM must stay under 2^32 seals per key
+# (NIST SP 800-38D 8.3); far above Amplify's volume, and the reason `reseal` and key rotation exist.
 #
 # + return - 12 random bytes
-isolated function randomNonce() returns byte[]|error {
-    byte[] u = check uuid:toBytes(uuid:createType4AsString());
-    return [...u.slice(0, 6), ...u.slice(10, 16)];
-}
+isolated function randomNonce() returns byte[]|error => secureRandomBytes(NONCE_BYTES);
