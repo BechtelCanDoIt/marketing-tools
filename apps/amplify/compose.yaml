@@ -1,3 +1,18 @@
+# Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+#
+# WSO2 LLC. licenses this file to you under the Apache License,
+# Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 # Local stack (plan M8a). Run through the Makefile: `make up`, `make e2e`, `make down`.
 #   docker compose --env-file local/.env up -d --build
 # Only amplify-api (127.0.0.1:9090) and the mock LinkedIn OAuth page (127.0.0.1:19091, the browser has to
@@ -60,6 +75,8 @@ services:
       BAL_CONFIG_VAR_DEVJWKSFILE: /dev-jwt/jwks.json
       # amplify-jobs ("Save & Share Now") and the scheduler (ADR-026)
       BAL_CONFIG_VAR_JOBSURL: http://amplify-jobs:9091
+      # Shared with amplify-jobs (security review): jobs refuses every call but its probes without it.
+      BAL_CONFIG_VAR_INTERNALAPIKEY: ${AMPLIFY_INTERNAL_API_KEY:?set AMPLIFY_INTERNAL_API_KEY in local/.env (make env)}
       BAL_CONFIG_VAR_SCHEDULERURL: http://scheduler:8080
       BAL_CONFIG_VAR_SCHEDULERJOBSURL: http://amplify-jobs:9091
       BAL_CONFIG_VAR_MINRUNINTERVALSECONDS: ${AMPLIFY_MIN_RUN_INTERVAL_SECONDS:-60}
@@ -134,6 +151,10 @@ services:
       BAL_CONFIG_VAR_LINKEDINCLIENTID: ${LINKEDIN_APP_CLIENT_ID:-${LINKEDIN_CLIENT_ID:?}}
       BAL_CONFIG_VAR_LINKEDINAPIBASEURL: ${LINKEDIN_API_BASE_URL:-http://mock-linkedin:9090}
       BAL_CONFIG_VAR_LINKEDINAUTHBASEURL: ${LINKEDIN_OAUTH_BASE_URL:-http://mock-linkedin:9091}
+      BAL_CONFIG_VAR_INTERNALAPIKEY: ${AMPLIFY_INTERNAL_API_KEY:?set AMPLIFY_INTERNAL_API_KEY in local/.env (make env)}
+      # Leaver sweep (ADR-040): off unless local/.env says otherwise; reads the same people-stub as amplify-api.
+      BAL_CONFIG_VAR_LEAVERSWEEPMODE: ${LEAVER_SWEEP_MODE:-OFF}
+      BAL_CONFIG_VAR_PEOPLEDIRECTORYURL: ${PEOPLE_DIRECTORY_URL:-http://people-stub:9096/employees/basic-info}
       BAL_CONFIG_VAR_TOKENKEYS: ${TOKEN_ENCRYPTION_KEY_ID:?}:${TOKEN_ENCRYPTION_KEY:?}
       BAL_CONFIG_VAR_TOKENCURRENTKEYID: ${TOKEN_ENCRYPTION_KEY_ID:?}
       # Google Chat (M6a). Default: chat-stub. "Send to dev space": GOOGLE_CHAT_WEBHOOK_URL = the dev test
@@ -232,6 +253,8 @@ services:
       BAL_CONFIG_VAR_CLIENTID: ${LINKEDIN_CLIENT_ID:?}
       BAL_CONFIG_VAR_CLIENTSECRET: ${LINKEDIN_CLIENT_SECRET:?}
       BAL_CONFIG_VAR_ENABLEMOCKADMIN: "true"
+      # The admin endpoints (/mock/posts, /mock/reset) also need the key; with none the mock keeps them off (404).
+      BAL_CONFIG_VAR_MOCKADMINKEY: ${MOCK_ADMIN_KEY:?set MOCK_ADMIN_KEY in local/.env (make env)}
       BAL_CONFIG_DATA: redirectUris = ["${LINKEDIN_REDIRECT_URI:?}"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9090/health >/dev/null"]

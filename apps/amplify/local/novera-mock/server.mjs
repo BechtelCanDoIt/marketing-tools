@@ -12,6 +12,7 @@
 // "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
+// under the License.
 
 // Local stand-in for Novera's gateway: POST /token (client credentials) and POST /internal/notifications.
 // Logs every notification's JSON and answers 202. Nothing reaches Google Chat.
@@ -20,10 +21,12 @@
 // Run: node server.mjs   (PORT defaults to 3003)
 import http from "node:http";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // Cards land in OUT_DIR/last-card.json (full Chat message) and last-card-builder.json (inner card only). Paste the latter into Google's Card Builder
 // (https://addons.gsuite.google.com/uikit/builder) to see the real Chat rendering.
-const OUT_DIR = process.env.OUT_DIR || new URL("./out/", import.meta.url).pathname;
+// `fileURLToPath` decodes a checkout path with a space (`my%20dir`); a trailing slash is added so `OUT_DIR=/tmp/x` works.
+const OUT_DIR = ((dir) => (dir.endsWith("/") ? dir : dir + "/"))(process.env.OUT_DIR || fileURLToPath(new URL("./out/", import.meta.url)));
 let lastCard = null;
 
 // Port of buildCard() in wso2-digital-agents/po-agent/src/chat/notify.ts (as of main 3a1138d).
@@ -59,6 +62,18 @@ function buildCard(n) {
 const PORT = Number(process.env.PORT || 3003);
 const CHECK_URL = process.env.CHECK_URL || "";
 
+// req.url is the raw request target: percent-encoded, maybe with a query string and/or a trailing slash.
+// Decode it and drop the trailing slash so /token, /token/ and /tok%65n all reach the same handler.
+// A malformed escape (e.g. /%zz) is not a path we serve, so it answers 404 like any other unknown route.
+const pathOf = (url) => {
+  try {
+    const p = new URL(String(url ?? "/"), "http://localhost").pathname;
+    return decodeURIComponent(p).replace(/\/+$/, "") || "/";
+  } catch {
+    return null;
+  }
+};
+
 const read = (req) => new Promise((resolve) => {
   let data = "";
   req.on("data", (c) => (data += c));
@@ -71,10 +86,11 @@ const send = (res, status, body) => {
 
 http.createServer(async (req, res) => {
   const raw = await read(req);
-  if (req.method === "POST" && req.url === "/token") {
+  const path = pathOf(req.url);
+  if (req.method === "POST" && path === "/token") {
     return send(res, 200, { access_token: "mock-token", token_type: "Bearer", expires_in: 3600 });
   }
-  if (req.method === "POST" && req.url === "/internal/notifications") {
+  if (req.method === "POST" && path === "/internal/notifications") {
     let json;
     try { json = JSON.parse(raw); } catch { console.log("[mock-novera] not JSON:", raw); return send(res, 400, { error: "not JSON" }); }
     console.log(`\n[mock-novera] ${new Date().toISOString()} notification\n${JSON.stringify(json, null, 2)}`);
@@ -92,7 +108,7 @@ http.createServer(async (req, res) => {
     }
     return send(res, 202, { accepted: true });
   }
-  if (req.method === "GET" && req.url === "/card") return send(res, lastCard ? 200 : 404, lastCard ?? { error: "no notification yet" });
-  if (req.url === "/health") return send(res, 200, { status: "ok" });
+  if (req.method === "GET" && path === "/card") return send(res, lastCard ? 200 : 404, lastCard ?? { error: "no notification yet" });
+  if (path === "/health") return send(res, 200, { status: "ok" });
   send(res, 404, { error: "not found" });
 }).listen(PORT, "0.0.0.0", () => console.log(`[mock-novera] listening on ${PORT}`));
