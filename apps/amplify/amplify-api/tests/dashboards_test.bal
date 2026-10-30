@@ -19,6 +19,8 @@
 // its targets, validation, the 60 s snapshot cache and degradation without the employee count.
 
 
+import amplify_domain.reporting;
+
 import ballerina/http;
 import ballerina/test;
 
@@ -249,6 +251,16 @@ function testExportIsAnEscapedCsvForDashboardReadersOnly() returns error? {
         "from=2025-02-30&to=2025-03-01"] {
         test:assertEquals((check send("GET", "/dashboards/export?" + q, (), token)).statusCode, 400, q);
     }
+}
+
+@test:Config {groups: ["dashboards"]}
+function testCsvKeepsNegativePointsNumericAndStillGuardsText() {
+    reporting:ExportRow row = {recordType: "POINTS", occurredAt: "2025-10-20T10:00:02Z", campaignId: (), campaignTitle: (),
+        category: (), isPriority: (), employeeId: "e1", employeeName: "=Ada", employeeEmail: (), action: "REPOST",
+        status: "PAID", points: -10, detail: "REVERSAL"};
+    string[] lines = re `\r\n`.split(exportCsv([row]).trim());
+    // A reversal's -10 stays a number a spreadsheet can sum; the name starting with `=` is still neutralised.
+    test:assertEquals(lines[1], "POINTS,2025-10-20T10:00:02Z,,,,,e1,'=Ada,,REPOST,PAID,-10,REVERSAL");
 }
 
 @test:Config {groups: ["dashboards"]}

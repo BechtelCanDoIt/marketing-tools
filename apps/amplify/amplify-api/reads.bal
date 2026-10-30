@@ -329,13 +329,11 @@ isolated function history(auth:Principal p, string? correlationId, string employ
             return badRequest("page must be 0-10000 and size 1-100", correlationId);
         }
         if target != p.employeeId && !can(p, auth:CAN_ADJUST_POINTS) {
-            Settings settings = check loadSettings();
-            boolean allowed = settings.teamVisibility == "COMPANY";
-            if !allowed {
-                var [roster, _] = rosterStatus(p, correlationId);
-                string? email = check standingEmailOf(target);
-                allowed = roster is Roster && email is string && roster.emails.indexOf(email.toLowerAscii()) !is ();
-            }
+            // Own, own team or `CAN_ADJUST_POINTS` only (ADR-035 section 3). `team.visibility = COMPANY` widens the
+            // Team page, never this: another person's dated ledger carries adjustment and reversal reasons.
+            var [roster, _] = rosterStatus(p, correlationId);
+            string? email = check standingEmailOf(target);
+            boolean allowed = roster is Roster && email is string && roster.emails.indexOf(email.toLowerAscii()) !is ();
             if !allowed {
                 return forbidden(TEAM_SCOPE, correlationId, "You can only see your team's history");
             }
