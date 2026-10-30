@@ -62,6 +62,18 @@ function buildCard(n) {
 const PORT = Number(process.env.PORT || 3003);
 const CHECK_URL = process.env.CHECK_URL || "";
 
+// req.url is the raw request target: percent-encoded, maybe with a query string and/or a trailing slash.
+// Decode it and drop the trailing slash so /token, /token/ and /tok%65n all reach the same handler.
+// A malformed escape (e.g. /%zz) is not a path we serve, so it answers 404 like any other unknown route.
+const pathOf = (url) => {
+  try {
+    const p = new URL(String(url ?? "/"), "http://localhost").pathname;
+    return decodeURIComponent(p).replace(/\/+$/, "") || "/";
+  } catch {
+    return null;
+  }
+};
+
 const read = (req) => new Promise((resolve) => {
   let data = "";
   req.on("data", (c) => (data += c));
@@ -74,10 +86,11 @@ const send = (res, status, body) => {
 
 http.createServer(async (req, res) => {
   const raw = await read(req);
-  if (req.method === "POST" && req.url === "/token") {
+  const path = pathOf(req.url);
+  if (req.method === "POST" && path === "/token") {
     return send(res, 200, { access_token: "mock-token", token_type: "Bearer", expires_in: 3600 });
   }
-  if (req.method === "POST" && req.url === "/internal/notifications") {
+  if (req.method === "POST" && path === "/internal/notifications") {
     let json;
     try { json = JSON.parse(raw); } catch { console.log("[mock-novera] not JSON:", raw); return send(res, 400, { error: "not JSON" }); }
     console.log(`\n[mock-novera] ${new Date().toISOString()} notification\n${JSON.stringify(json, null, 2)}`);
@@ -95,7 +108,7 @@ http.createServer(async (req, res) => {
     }
     return send(res, 202, { accepted: true });
   }
-  if (req.method === "GET" && req.url === "/card") return send(res, lastCard ? 200 : 404, lastCard ?? { error: "no notification yet" });
-  if (req.url === "/health") return send(res, 200, { status: "ok" });
+  if (req.method === "GET" && path === "/card") return send(res, lastCard ? 200 : 404, lastCard ?? { error: "no notification yet" });
+  if (path === "/health") return send(res, 200, { status: "ok" });
   send(res, 404, { error: "not found" });
 }).listen(PORT, "0.0.0.0", () => console.log(`[mock-novera] listening on ${PORT}`));
