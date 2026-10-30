@@ -1,6 +1,6 @@
 # Migrations
 
-Forward-only, versioned: `V001__schemas_roles.sql` … `V014__point_actions_all_phases.sql`. Lowercase snake_case
+Forward-only, versioned: `V001__schemas_roles.sql` … `V018__erase_employee_function.sql`. Lowercase snake_case
 after `__`. Never edit an applied script (the runner compares checksums and stops); add a new version.
 
 | Script | What |
