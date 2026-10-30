@@ -43,6 +43,7 @@ One file per decision, dated, short format (Status, Date, Context, Decision, Con
 | [ADR-035](ADR-035-open-leaderboards-and-employee-count.md) | Open leaderboards by company, BU and team; employee count cached 7 days | Accepted |
 | [ADR-036](ADR-036-dashboards-for-amplify-roles.md) | Dashboards for the amplify_* roles, read from a reporting context | Accepted |
 | [ADR-037](ADR-037-celebrate-top-three-this-week.md) | Celebrate top three and My position are for this month, cached 2 hours | Accepted |
+| [ADR-038](ADR-038-group-based-access-by-capability.md) | Group-based access by capability; Asgardeo groups per capability from configuration, `GET /me` returns grants | Accepted |
 
 ## D-number to ADR map (resolves audit B1)
 
