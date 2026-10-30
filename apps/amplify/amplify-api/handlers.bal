@@ -468,7 +468,8 @@ isolated function decideExternalShare(auth:Principal p, string? correlationId, s
             scoring:PointRule[] rules = check (check pointRuleRepository(actorOf(p, correlationId))).all();
             result = decision == APPROVE
                 ? check external_sharing:approveWithPoints(repo, rules, claimId, p.employeeId, correlationId, now)
-                : check external_sharing:amplifyWithPoints(repo, rules, claimId, p.employeeId, correlationId, now);
+                : check external_sharing:amplifyWithPoints(repo, rules, claimId, p.employeeId, correlationId, now,
+                        check ledgerRepository(actorOf(p, correlationId), settings.topN));
         }
         return <http:Ok>{body: externalShareDto(result)};
     } on fail error e {
