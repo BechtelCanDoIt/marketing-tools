@@ -22,6 +22,10 @@
 4. **Outbox alerting:** gauges `amplify_outbox_pending`, `amplify_outbox_failed`, `amplify_outbox_oldest_pending_seconds`, an `outbox`
    block on jobs' `GET /ready`, and a warning log. Alert on an oldest pending row older than `outboxAlertSeconds` (1 hour) or any failed row.
 
+5. **Token partition runway:** two weeks ahead (V009), created at amplify-jobs start-up as well as in the daily run, with
+   `amplify_token_partition_days_ahead` and a `/ready` block; alert below 3 days. No DEFAULT partition: it would stop the
+   day-based drop of expired token days from working cleanly.
+
 ## Not decided here
 
 - Whether two POs may adjust each other's points without a second approval (a business rule; the self-review rule stays).
