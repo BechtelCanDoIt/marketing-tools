@@ -16,7 +16,7 @@
 
 
 // OAuth `state` for the S2 connect flow (`connection.oauth_state`, M5). A state is random, bound to one
-// employee, valid for `OAUTH_STATE_TTL_SECONDS` and usable once: `consume` deletes it in the same statement
+// employee, valid for `oauthStateTtlSeconds` and usable once: `consume` deletes it in the same statement
 // that reads it, so a replayed callback finds nothing.
 
 import amplify_common.types;
@@ -26,8 +26,9 @@ import ballerina/time;
 import ballerina/uuid;
 import ballerinax/postgresql;
 
-# State lifetime (10 minutes).
-public const int OAUTH_STATE_TTL_SECONDS = 600;
+# State lifetime in seconds (10 minutes by default). `configurable` so a deployment can widen or narrow
+# the window without a code change; `consume` enforces it.
+configurable int oauthStateTtlSeconds = 600;
 
 # One pending connect (`connection.oauth_state`).
 public type OAuthState record {|
@@ -79,8 +80,35 @@ public isolated function newOAuthState(types:EmployeeId employeeId, string? retu
     returnTo,
     pendingCampaignId,
     createdAt: now,
-    expiresAt: time:utcAddSeconds(now, <decimal>OAUTH_STATE_TTL_SECONDS)
+    expiresAt: time:utcAddSeconds(now, <decimal>oauthStateTtlSeconds)
 };
+
+# Checks the `nonce` claim of the ID token a connect returns against the one Amplify sent on the
+# authorization request (OpenID Connect Core §3.1.3.7). A token minted for another request carries a
+# different, or no, nonce and must not complete this one.
+#
+# + state - The consumed state
+# + idTokenNonce - The ID token's `nonce` claim, `()` when it has none
+# + return - True when the nonce matches; false when it is missing or different
+public isolated function nonceMatches(OAuthState state, string? idTokenNonce) returns boolean =>
+    idTokenNonce is string && constantTimeEquals(idTokenNonce, state.nonce);
+
+# Compares two strings in time that depends only on their lengths, so a nonce check leaks nothing about
+# how many leading characters matched.
+#
+# + a - First value
+# + b - Second value
+# + return - True when equal
+isolated function constantTimeEquals(string a, string b) returns boolean {
+    byte[] x = a.toBytes();
+    byte[] y = b.toBytes();
+    int diff = x.length() ^ y.length();
+    int n = x.length() < y.length() ? x.length() : y.length();
+    foreach int i in 0 ..< n {
+        diff = diff | (x[i] ^ y[i]);
+    }
+    return diff == 0;
+}
 
 # 64 hex characters from two random UUIDv4s (`java.util.UUID.randomUUID`, backed by SecureRandom):
 # 244 random bits.
