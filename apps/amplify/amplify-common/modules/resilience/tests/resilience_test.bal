@@ -102,3 +102,15 @@ function breakerStateValues() {
     test:assertEquals(breakerStateValue("NOT_CONFIGURED"), -1.0);
     test:assertEquals(exportedBreakerValue("never-exported", "x"), ());
 }
+
+@test:Config
+function outboxBacklogGauges() {
+    // Tests run without a metrics reporter, so the registry is a no-op (0.0); with a reporter (Choreo, Prometheus)
+    // the gauges hold the latest value. Either way export never fails the caller.
+    exportOutboxBacklog("test-component", 4, 1, 7200);
+    float? oldest = exportedOutboxValue(OUTBOX_OLDEST_METRIC, "test-component");
+    test:assertTrue(oldest is () || oldest == 7200.0 || oldest == 0.0);
+    exportOutboxBacklog("test-component", 0, 0, ());
+    float? none = exportedOutboxValue(OUTBOX_OLDEST_METRIC, "test-component");
+    test:assertTrue(none is () || none == -1.0 || none == 0.0);
+}

@@ -61,7 +61,8 @@ service http:InterceptableService / on jobsListener {
         boolean database = dbBreaker.state() != "OPEN" && dbReachable();
         map<string> breakers = breakerStates();
         resilience:exportBreakerStates(COMPONENT, breakers);
-        ReadyReport body = readiness(database, breakers, isRunInProgress());
+        postgresql:Client|error pg = database ? db() : error("database down");
+        ReadyReport body = readiness(database, breakers, isRunInProgress(), pg is postgresql:Client ? outboxReport(pg) : ());
         return database ? <http:Ok>{body} : <http:ServiceUnavailable>{body};
     }
 
