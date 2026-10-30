@@ -23,7 +23,7 @@ DELETE FROM scoring.points_ledger WHERE reference LIKE 'AMP-lt-%';
 DELETE FROM identity.employee WHERE employee_id LIKE 'lt-%';
 
 INSERT INTO identity.employee (employee_id, email, display_name, first_seen_at, last_seen_at)
-SELECT format('lt-%s', lpad(n::text, 4, '0')), format('lt-%s@wso2.com', lpad(n::text, 4, '0')),
+SELECT format('lt-%s', lpad(n::text, 4, '0')), format('lt-%s@example.com', lpad(n::text, 4, '0')),
        format('Load Tester %s', n), now() - interval '200 days', now()
 FROM generate_series(1, 1000) AS n;
 

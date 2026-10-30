@@ -21,7 +21,7 @@
 #   ./mint-dev-jwt.sh init                                   # once: dev-key.pem + jwks.json (both gitignored)
 #   ./mint-dev-jwt.sh token <sub> <email> [group ...]        # prints a token valid for 30 minutes
 #
-# Then: curl -H "x-jwt-assertion: $(./mint-dev-jwt.sh token emp-1 ada@wso2.com amplify_po)" localhost:9090/me
+# Then: curl -H "x-jwt-assertion: $(./mint-dev-jwt.sh token emp-1 ada@example.com amplify_po)" localhost:9090/me
 set -euo pipefail
 cd "$(dirname "$0")"
 

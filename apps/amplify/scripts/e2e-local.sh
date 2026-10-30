@@ -42,7 +42,7 @@ RUN_ID="$(date +%s)"
 # One fixed employee: the mock signs every authorization in as the same LinkedIn member, and a member URN
 # belongs to one employee (B13). Reruns disconnect first, so the OAuth leg runs every time.
 EMP_SUB="e2e-employee"
-EMP_EMAIL="e2e.employee@wso2.com"
+EMP_EMAIL="e2e.employee@example.com"
 # On a stack someone has been using, the mock member may already belong to another employee, and it stays
 # theirs even after they disconnect (B13: unique member_urn, removed rows included). Then this run acts as
 # that employee: relinking your own member is allowed. Their shares and points get the e2e post's activity.
@@ -54,7 +54,7 @@ if [[ -n "$holder" ]]; then
   echo "note: the mock LinkedIn member belongs to $EMP_EMAIL; running the employee steps as them"
 fi
 
-ADMIN_JWT="$($MINT token e2e-admin admin.e2e@wso2.com amplify_admin amplify_marketing)"
+ADMIN_JWT="$($MINT token e2e-admin admin.e2e@example.com amplify_admin amplify_marketing)"
 EMP_JWT="$($MINT token "$EMP_SUB" "$EMP_EMAIL")"
 
 step() { printf '\n== %s\n' "$*"; }
@@ -141,7 +141,7 @@ for board in operations campaigns participation glance scorecard; do
   [[ "$code" == 403 ]] || fail "employee GET /dashboards/$board -> $code (want 403)"
 done
 echo "ok: plain employee gets 403 on all five boards"
-SLT_JWT="$($MINT token e2e-slt slt.e2e@wso2.com amplify_slt)"
+SLT_JWT="$($MINT token e2e-slt slt.e2e@example.com amplify_slt)"
 ops=$(call "$SLT_JWT" GET /dashboards/operations)
 echo "$ops" | jq -e --arg c "$CAMPAIGN_ID" '[.campaigns[] | select(.campaignId == $c and .reposts >= 1)] | length == 1' >/dev/null \
   || fail "operations board does not show the e2e campaign with its repost"

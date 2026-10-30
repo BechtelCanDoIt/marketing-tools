@@ -122,8 +122,18 @@ TOML
   for _ in $(seq 1 90); do curl -s -o /dev/null "http://127.0.0.1:19190/" && break; sleep 1; done
   BAL_ARGS="--groups integration,db-down-it" bal_test "IT the Run + DB down mid-run" "$APPS/amplify-jobs" \
     AMPLIFY_IT=true AMPLIFY_IT_DB_PORT="$PG_PORT" AMPLIFY_IT_PG_CONTAINER="$PG"
-  kill "$mock_pid" >/dev/null 2>&1 || true; pkill -f mock_linkedin >/dev/null 2>&1 || true; mock_pid=""
+  kill_tree "$mock_pid"; mock_pid=""
   docker rm -f "$PG" >/dev/null
+}
+
+# Stops one process and everything it started (`bal run` and the JVM under it). `pkill -f mock_linkedin` would
+# also hit an IDE or language server with the folder open, or a parallel run.
+kill_tree() {
+  local pid="$1" child
+  for child in $(pgrep -P "$pid" 2>/dev/null); do
+    kill_tree "$child"
+  done
+  kill "$pid" >/dev/null 2>&1 || true
 }
 
 tier_scheduler() {
