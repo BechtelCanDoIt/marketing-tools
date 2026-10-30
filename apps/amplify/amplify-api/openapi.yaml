@@ -6,8 +6,10 @@ info:
     WSO2 Amplify phase 1 published API (M5). Reached only through the Choreo API proxy at the cell edge
     (ADR-004); the proxy forwards the caller as a signed backend JWT in `x-jwt-assertion` (ADR-022).
 
-    - Roles: every operation lists the roles that may call it in `x-roles` (`EMP` = any signed-in
-      employee). This mirrors `modules/auth/matrix.bal` and `activity-matrix.md`; anyone else gets 403.
+    - Access: every operation names the grant it needs in `x-access` (`EMPLOYEE` = any signed-in
+      employee; `CAN_*` = a capability given to the Asgardeo groups configured for it, see
+      `modules/auth/access.bal`). This mirrors `modules/auth/matrix.bal` and `activity-matrix.md`; anyone
+      else gets 403.
     - Every response echoes `X-Correlation-ID` (generated when the caller sends none).
     - Every POST accepts `Idempotency-Key`: a repeat with the same key and body returns the stored
       response (`Idempotent-Replayed: true`); the same key with a different body is 422
@@ -40,7 +42,7 @@ paths:
       tags: [Probes]
       operationId: getHealth
       security: []
-      x-roles: [PUBLIC]
+      x-access: PUBLIC
       description: Liveness. Not published through the proxy.
       responses:
         "200":
@@ -53,7 +55,7 @@ paths:
       tags: [Probes]
       operationId: getReady
       security: []
-      x-roles: [PUBLIC]
+      x-access: PUBLIC
       description: Readiness. 200 when the database answers and the token-key breaker isn't open; non-critical breakers (jobs trigger, roster) are reported but don't fail readiness.
       responses:
         "200":
@@ -71,7 +73,7 @@ paths:
     get:
       tags: [Identity]
       operationId: getMe
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: The caller (upserts the employee row from the backend JWT claims), capabilities from the activity matrix, LinkedIn status.
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
@@ -90,7 +92,7 @@ paths:
     get:
       tags: [S1 Campaign]
       operationId: listCampaigns
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: Paged campaigns, priority first then newest. Employees (and SLT/Admin) see OPEN campaigns that opened inside the window only; PO and Marketing may ask for any status.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -113,7 +115,7 @@ paths:
     post:
       tags: [S1 Campaign]
       operationId: registerCampaign
-      x-roles: [PO, MKT]
+      x-access: CAN_CAMPAIGN
       description: Registers a campaign (Save). With `shareNow=true` it also asks amplify-jobs to start a Run right away (fire-and-forget behind a circuit breaker; the scheduled Run catches up when that fails).
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -142,7 +144,7 @@ paths:
     get:
       tags: [S1 Campaign]
       operationId: getCampaign
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: One campaign. Employees, SLT and Admin get 404 unless it is OPEN.
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
@@ -159,7 +161,7 @@ paths:
     patch:
       tags: [S1 Campaign]
       operationId: editCampaign
-      x-roles: [PO, MKT]
+      x-access: CAN_CAMPAIGN
       description: Edits a campaign (optimistic lock on `version`). Not on an archived campaign.
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       requestBody:
@@ -183,7 +185,7 @@ paths:
     delete:
       tags: [S1 Campaign]
       operationId: archiveCampaign
-      x-roles: [PO, MKT]
+      x-access: CAN_CAMPAIGN
       description: Archives the campaign (soft delete). Points and ledger references already earned stay.
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
@@ -202,7 +204,7 @@ paths:
     get:
       tags: [S1 Campaign]
       operationId: listTags
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
         "200":
@@ -216,7 +218,7 @@ paths:
     get:
       tags: [S1 Campaign]
       operationId: listCategories
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
         "200":
@@ -231,7 +233,7 @@ paths:
     post:
       tags: [S2 Connection]
       operationId: startLinkedInConnect
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: Starts the LinkedIn OAuth flow for the caller. Issues a single-use `state` valid for 10 minutes.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -254,7 +256,7 @@ paths:
     post:
       tags: [S2 Connection]
       operationId: completeLinkedInConnect
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: Completes the flow. The `state` must be the caller's, unused and unexpired. Exchanges the code, reads userinfo, encrypts the token into today's partition, and records `ConnectionReady`.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -279,7 +281,7 @@ paths:
     post:
       tags: [S2 Connection]
       operationId: declineLinkedInConnect
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: Records "I don't consent" from the Link Me pop-up with the caller's LinkedIn profile URL (`https://www.linkedin.com/in/<name>`), which is optional; blank or missing stores nothing. No LinkedIn link or token is created.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -301,7 +303,7 @@ paths:
     delete:
       tags: [S2 Connection]
       operationId: removeLinkedInConnection
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: Revokes the caller's access token at LinkedIn, then removes the connection and deletes the token row (`ConnectionRemoved`). A token LinkedIn already treats as invalid, or one past its own expiry, goes straight to the delete. If LinkedIn can't confirm the revoke, the connection is kept and the call returns 503 `DEPENDENCY_UNAVAILABLE`; try again.
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
@@ -316,7 +318,7 @@ paths:
     post:
       tags: [C1 Sharing]
       operationId: requestShare
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: Queues "Amplify, share this for me" (202). One per campaign per employee; asking again after FAILED retries the same row (ADR-015). Errors - `LINKEDIN_NOT_CONNECTED`, `NEEDS_RECONNECT`, `CAMPAIGN_CLOSED`, `DUPLICATE_ACTION`, `FEATURE_DISABLED`.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -342,7 +344,7 @@ paths:
     get:
       tags: [C1 Sharing]
       operationId: listMyShares
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
         "200":
@@ -357,7 +359,7 @@ paths:
     post:
       tags: [S3 External Sharing]
       operationId: claimExternalShare
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: Claims promotion done outside Amplify (My Campaign). Any public HTTPS URL; one claim per normalized URL across everyone (`EVIDENCE_ALREADY_CLAIMED`).
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -382,7 +384,7 @@ paths:
     get:
       tags: [S3 External Sharing]
       operationId: listMyExternalShares
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
         "200":
@@ -396,7 +398,7 @@ paths:
     get:
       tags: [S3 External Sharing]
       operationId: listExternalSharesForReview
-      x-roles: [PO]
+      x-access: CAN_REVIEW_SHARES
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
         - {name: status, in: query, schema: {type: string, enum: [PENDING, APPROVED, REJECTED, AMPLIFIED, ALL], default: PENDING}}
@@ -417,7 +419,7 @@ paths:
     post:
       tags: [S3 External Sharing]
       operationId: approveExternalShare
-      x-roles: [PO]
+      x-access: CAN_REVIEW_SHARES
       description: Approves a PENDING claim (not the PO's own) and awards `OWN_POST` points in the same transaction.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -439,7 +441,7 @@ paths:
     post:
       tags: [S3 External Sharing]
       operationId: rejectExternalShare
-      x-roles: [PO]
+      x-access: CAN_REVIEW_SHARES
       description: Rejects a PENDING claim; a reason is required.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -467,7 +469,7 @@ paths:
     post:
       tags: [S3 External Sharing]
       operationId: markExternalShareAmplified
-      x-roles: [PO]
+      x-access: CAN_REVIEW_SHARES
       description: Marks an APPROVED claim amplified (C4, once) and appends the T4 top-up in the same transaction.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -489,7 +491,7 @@ paths:
     get:
       tags: [C2 Scoring]
       operationId: listPointRules
-      x-roles: [PO]
+      x-access: CAN_POINT_RULES
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
         "200":
@@ -503,7 +505,7 @@ paths:
     post:
       tags: [C2 Scoring]
       operationId: addPointRuleVersion
-      x-roles: [PO]
+      x-access: CAN_POINT_RULES
       description: Adds a rule version from now on (never backdated); past awards keep their value.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -529,7 +531,7 @@ paths:
     post:
       tags: [C2 Scoring]
       operationId: adjustPoints
-      x-roles: [PO]
+      x-access: CAN_ADJUST_POINTS
       description: Adds or removes points with a reason (ADR-010). Standings update in the same transaction (B12).
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -557,7 +559,7 @@ paths:
     post:
       tags: [C2 Scoring]
       operationId: reverseLedgerEntry
-      x-roles: [PO]
+      x-access: CAN_ADJUST_POINTS
       description: Cancels a ledger row with a reversal row; reason required; once per row. Standings update in the same transaction (B12).
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -585,7 +587,7 @@ paths:
     get:
       tags: [S4 Recognition]
       operationId: getLeaderboard
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: "Company top N, personal, and My Team (leaderboards.md, B15). ETag `<period>:<standing_version>` with `Cache-Control: private, max-age=30`; `If-None-Match` gives 304 with the same two headers. When the roster lookup failed (`teamStatus = UNAVAILABLE` with a roster configured) the body has no ETag and is `Cache-Control: no-store`, so it is never revalidated into a stale My Team."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -612,7 +614,7 @@ paths:
     get:
       tags: [S4 Recognition]
       operationId: getLeaderboardTop
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: "The Celebrate top three and the caller's own position, company wide. The scope is the `leaderboard.top_scope` setting: `MONTH` (default) covers the current calendar month, the 1st 00:00 UTC to the next 1st, summed from the points ledger; `ALL` is the all-time standings. Only people with at least `leaderboard.top_min_points` (default 100) that month are ranked; `me` still carries the caller's own points when they are under it, with no rank. Monthly totals are shared by every caller and kept in memory for 2 hours (`topBoardCacheSeconds`), so the first caller after they run out loads them and the rest reuse them; a failed reload serves the previous totals of the same month. `me` comes from the same totals, so it matches the top three (ADR-037)."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -630,7 +632,7 @@ paths:
     get:
       tags: [S4 Recognition]
       operationId: getLeaderboardPeople
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: "People ranked within the whole company, a business unit (BU) or a team. Open to every employee (ADR-035). `BU` and `TEAM` default to the caller's own when `bu` / `team` is omitted; the team key is the opaque `key` from `/headcount` or `/leaderboard/groups`. Membership comes from the people directory, so `BU` and `TEAM` answer 503 `DEPENDENCY_UNAVAILABLE` when it has never loaded."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -655,7 +657,7 @@ paths:
     get:
       tags: [S4 Recognition]
       operationId: getLeaderboardGroups
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: "All teams (or one BU's teams), or all BUs, ranked against each other by the sum of their members' points. Open to every employee (ADR-035). Teams with no points are listed with 0. Participation is people with points over the employee count (`/headcount`). People the directory doesn't place are summed in `unassigned`, never dropped."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -678,7 +680,7 @@ paths:
     get:
       tags: [S4 Recognition]
       operationId: getHeadcount
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: "Current employee count, overall and by BU and team, counted from the people directory (everyone it returns with a work email). Kept in memory for `headcountCacheSeconds` (7 days); when that runs out the directory is read again, and a failed read keeps serving the last count. Never stored in the database."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -694,7 +696,7 @@ paths:
     get:
       tags: [S4 Recognition]
       operationId: getMyPoints
-      x-roles: [EMP, PO, MKT, SLT, ADM]
+      x-access: EMPLOYEE
       description: Own total, rank and monthly history. Points only, no Coin value (A11).
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -712,8 +714,8 @@ paths:
     get:
       tags: [S4 Recognition]
       operationId: getTeamPage
-      x-roles: [EMP, PO, MKT, SLT, ADM]
-      description: Team page. Employees see their own team (roster from One WSO2, server side); `amplify_po` sees the company. `team.visibility = COMPANY` widens it for everyone (ADR-019).
+      x-access: EMPLOYEE
+      description: Team page. Employees see their own team (roster from One WSO2, server side); `CAN_ADJUST_POINTS` sees the company. `team.visibility = COMPANY` widens it for everyone (ADR-019).
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
         - {$ref: "#/components/parameters/Period"}
@@ -736,8 +738,8 @@ paths:
     get:
       tags: [S4 Recognition]
       operationId: getPointsHistory
-      x-roles: [EMP, PO, MKT, SLT, ADM]
-      description: Ledger rows of one person, newest first. Non-PO callers - self or a member of their team, else 403 `TEAM_SCOPE`.
+      x-access: EMPLOYEE
+      description: Ledger rows of one person, newest first. Without `CAN_ADJUST_POINTS` - self or a member of their team, else 403 `TEAM_SCOPE`.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
         - {$ref: "#/components/parameters/Page"}
@@ -756,7 +758,7 @@ paths:
     get:
       tags: [S4 Recognition]
       operationId: getPoDashboard
-      x-roles: [PO]
+      x-access: CAN_PO_DASHBOARD
       description: The eight PO tiles (po-dashboard.md), computed in one transaction; cached 60 s.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -776,7 +778,7 @@ paths:
     get:
       tags: [S6 Dashboards]
       operationId: getDashboardOperations
-      x-roles: [PO, MKT, SLT, ADM]
+      x-access: CAN_DASHBOARD
       description: "Operations board: what is live, who is sharing, whether anything is stuck. Read-only, computed from Amplify's own tables, cached 60 s. Not for plain employees (403)."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -795,7 +797,7 @@ paths:
     get:
       tags: [S6 Dashboards]
       operationId: getDashboardCampaigns
-      x-roles: [PO, MKT, SLT, ADM]
+      x-access: CAN_DASHBOARD
       description: "Campaign performance: reposts per campaign, a selected campaign's first seven days, and reposts by category. `selected` defaults to the campaign with the most reposts. Cached 60 s."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -816,7 +818,7 @@ paths:
     get:
       tags: [S6 Dashboards]
       operationId: getDashboardExport
-      x-roles: [PO, MKT, SLT, ADM]
+      x-access: CAN_EXPORT
       description: "The raw rows behind every board for a date range as a CSV download (UTC days, both ends inclusive, at most 366 days). One row per engagement, share attempt, points ledger row, campaign opened and connection made, in one set of columns told apart by record_type. Not cached."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -836,7 +838,7 @@ paths:
     get:
       tags: [S6 Dashboards]
       operationId: getDashboardPerson
-      x-roles: [PO, MKT, SLT, ADM]
+      x-access: CAN_DASHBOARD
       description: "One person's Post Performance for the person popup: every post they have an active repost of (plain, and with their own comment) and the category split. Team and BU come from the people directory in the UI. Cached 60 s."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -856,7 +858,7 @@ paths:
     get:
       tags: [S6 Dashboards]
       operationId: getDashboardParticipation
-      x-roles: [PO, MKT, SLT, ADM]
+      x-access: CAN_DASHBOARD
       description: "Participation funnel numbers: employees, connected, reposted at least once, active in the last 30 days, expired connections. The team and BU boards come from /leaderboard/groups. Cached 60 s."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -875,7 +877,7 @@ paths:
     get:
       tags: [S6 Dashboards]
       operationId: getDashboardGlance
-      x-roles: [PO, MKT, SLT, ADM]
+      x-access: CAN_DASHBOARD
       description: "At a glance: the numbers for the leadership check-in. People, teams and the best campaign's rank come from /leaderboard and /leaderboard/groups. Cached 60 s."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -894,7 +896,7 @@ paths:
     get:
       tags: [S6 Dashboards]
       operationId: getDashboardScorecard
-      x-roles: [PO, MKT, SLT, ADM]
+      x-access: CAN_DASHBOARD
       description: "Scorecard: seven measures against their targets (`scorecard*` configuration, ADR-036). Cached 60 s."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -914,7 +916,7 @@ paths:
     get:
       tags: [S5 Admin]
       operationId: listAnnouncements
-      x-roles: [ADM]
+      x-access: CAN_ADMIN
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
         - {name: status, in: query, schema: {type: string, enum: [QUEUED, SENT, FAILED, ALL], default: FAILED}}
@@ -933,7 +935,7 @@ paths:
     post:
       tags: [S5 Admin]
       operationId: retryAnnouncement
-      x-roles: [ADM]
+      x-access: CAN_ADMIN
       description: Re-queues a FAILED Club card (by campaign id); the next Run sends it. Refused while `announcements.enabled` is false.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -954,7 +956,7 @@ paths:
     get:
       tags: [S5 Admin]
       operationId: listSettings
-      x-roles: [ADM]
+      x-access: CAN_ADMIN
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       responses:
         "200":
@@ -968,7 +970,7 @@ paths:
     put:
       tags: [S5 Admin]
       operationId: changeSettings
-      x-roles: [ADM]
+      x-access: CAN_ADMIN
       description: Changes known settings in one transaction, each guarded by its `version`. A new `leaderboard.top_n` asks amplify-jobs to rebuild the standings. A change to `run.schedule`, `run.enabled` or `maintenance.schedule` is pushed to the scheduler after the commit (ADR-026); the answer carries `schedulerSync` (`PENDING` when the scheduler couldn't be reached; the save still stands).
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       requestBody:
@@ -992,7 +994,7 @@ paths:
     post:
       tags: [S5 Admin]
       operationId: syncScheduler
-      x-roles: [ADM]
+      x-access: CAN_ADMIN
       description: Converges the scheduler's jobs (`amplify-run`, `amplify-maintenance-partitions`) to the schedule settings (ADR-026). Safe to repeat. 503 `SCHEDULER_UNAVAILABLE` when the scheduler can't be reached.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
@@ -1119,7 +1121,7 @@ components:
       description: "`NOT_CONFIGURED` = the dependency has no URL / client id in this deployment (gauge -1, ADR-028)"
     Me:
       type: object
-      required: [employee, roles, capabilities, linkedin]
+      required: [employee, roles, grants, capabilities, linkedin]
       properties:
         employee:
           type: object
@@ -1128,7 +1130,14 @@ components:
             employee_id: {type: string}
             email: {type: string}
             display_name: {type: string}
-        roles: {type: array, items: {type: string, enum: [amplify_po, amplify_marketing, amplify_slt, amplify_admin]}}
+        roles:
+          description: The caller's Asgardeo groups that the access configuration names
+          type: array
+          items: {type: string}
+        grants:
+          description: Grants from those groups; `EMPLOYEE` always. The UI gates on these, never on group names
+          type: array
+          items: {type: string, enum: [EMPLOYEE, CAN_CAMPAIGN, CAN_DASHBOARD, CAN_EXPORT, CAN_REVIEW_SHARES, CAN_POINT_RULES, CAN_ADJUST_POINTS, CAN_PO_DASHBOARD, CAN_REPORTS, CAN_ADMIN]}
         capabilities: {type: array, items: {type: string}}
         linkedin:
           type: object
