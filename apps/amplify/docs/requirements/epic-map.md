@@ -71,7 +71,7 @@ We have triage access on the repo, so we cannot create labels. Phase and stage g
 | Activity task, no phase | `[AMPLIFY][SDLCn]` (its stage) | `[AMPLIFY][SDLC5] Send the checklist and threat model to sc-team@wso2.com for +1` |
 | Activity task, phase-specific | `[AMPLIFY][PHASEn]` | `[AMPLIFY][PHASE1] Write the rollback plan: backup restore and pinned image tags` |
 | Requirement item | `[AMPLIFY][PHASEn]` | `[AMPLIFY][PHASE3] Score: apply points automatically, once per action per post per person` |
-| Feature | `[AMPLIFY][PHASEn]` | `[AMPLIFY][PHASE1] Company top three this week, cached 2 hours (ADR-037)` |
+| Feature | `[AMPLIFY][PHASEn]` | `[AMPLIFY][PHASE1] Company top three this month, cached 2 hours (ADR-037)` |
 
 | Label | Used on | Status |
 | --- | --- | --- |
@@ -295,7 +295,7 @@ Status is written in the feature body. "Built, ahead of phase N" means the code 
 
 | Key | Feature | Status | Evidence |
 | --- | --- | --- | --- |
-| F10.1 | Company top three this week, cached 2 hours (ADR-037) | Built | `/leaderboard/top`; `TopAmplifiersPodium.tsx`; `499bfd0`, `ff4d031` |
+| F10.1 | Company top three this month, cached 2 hours (ADR-037) | Built | `/leaderboard/top`; `TopAmplifiersPodium.tsx`; `499bfd0`, `ff4d031` |
 | F10.2 | Personal standing: own rank and gap | Built | `/leaderboard/people`; "My position" in `LeaderboardPanels` |
 | F10.3 | My Team leaderboard from the people directory | Built, gated on people-app deploy | `/team`, `/leaderboard/groups`; `37a6eba`; people-ops-suite `8d39e2df` |
 | F10.4 | Open leaderboards by company, BU and team, with group boards (ADR-035) | Built | `/leaderboard/groups`; `4746d57`, `68a22a3` |
