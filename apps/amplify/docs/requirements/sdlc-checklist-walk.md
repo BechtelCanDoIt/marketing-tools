@@ -69,7 +69,7 @@ No **Skipped gate** (High) findings: nothing is in stage or prod yet, so no late
 
 **Outputs**
 
-- Source code: [projects/marketing-tools/apps/amplify](../..) (Ballerina services, migrations, descriptors) and the One WSO2 UI module (M7, in `projects/one-wso2`, not this repo).
+- Source code: [apps/amplify](../..) (Ballerina services, migrations, descriptors) and the One WSO2 UI module (M7, in `projects/one-wso2`, not this repo).
 - Unit/integration tests: `make test-all` (unit, repository/IT on Postgres, adapter against `mock_linkedin`, auth matrix, breaker, rerun safety, load — see M11).
 - Code review notes: the repo follows feature→dev→stage→prod branching and a PR template. **Every PR needs 2 approvals.** PR approvals are a GitHub-side control and are not recorded in this repo. Reviews re-run 2026-10-26: [backend](../reviews/2026-10-26-code-review-backend.md), [UI, people-app and po-agent](../reviews/2026-10-26-code-review-ui-people-agents.md), [security](../reviews/2026-10-26-security-review.md), [integration boundaries](../reviews/2026-10-26-integration-boundaries.md) and [project structure](../reviews/2026-10-26-project-structure.md).
 - Dev deployment on Choreo: **not done** (console work, M8b).

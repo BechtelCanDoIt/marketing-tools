@@ -2,7 +2,7 @@
 
 How to run the whole of Amplify on your machine: the backend stack, a local One WSO2 signed in with ThunderID or Asgardeo, team rosters, and the real people-app if you want it. Then how to try the phase 1 flows end to end.
 
-Verified on 2026-10-19 from `projects/marketing-tools/apps/amplify` (backend, branch `feat/amplify-app`) and `projects/one-wso2` (branch `feat/amplify-people-data`).
+Verified on 2026-10-19 from `apps/amplify` (backend, branch `feat/amplify-app`) and `projects/one-wso2` (branch `feat/amplify-people-data`).
 
 Phase 1 (2026-10-19 breakdown) is: Marketing and PO register posts (New Post, Current Posts), new posts go to the Club Chat space, employees link LinkedIn and amplify posts, and everyone sees the individual and team leaderboards (Celebrate).
 
@@ -31,13 +31,13 @@ For the PO/Marketing screens, put your test user in `amplify_po` or `amplify_mar
 ## 3. Start the backend
 
 ```bash
-cd projects/marketing-tools/apps/amplify
+cd apps/amplify
 make up        # first run writes local/.env and the dev-JWT keys, builds images, starts everything
 ```
 
 The Compose project is always `wso2-amplify`, so your data survives restarts. `make down` **deletes the volumes**; use `docker compose --env-file local/.env stop` to stop without losing data.
 
-Team rosters come from people-stub. First copy the sample once: `cp local/people-stub/directory.json.example local/people-stub/directory.json` (the real file is gitignored, so keep real names and emails out of commits). Then edit `local/people-stub/directory.json`: it's re-read on every call, but amplify-api keeps its team index for 3 days, so restart amplify-api after an edit (`docker compose --env-file local/.env restart amplify-api`). Match `workEmail` to the email your sign-in reaches Amplify with (step 4).
+Team rosters come from people-stub. `make env` (run by `make up`) copies the sample to `local/people-stub/directory.json` the first time (the real file is gitignored, so keep real names and emails out of commits). Then edit `local/people-stub/directory.json`: it's re-read on every call, but amplify-api keeps its team index for 3 days, so restart amplify-api after an edit (`docker compose --env-file local/.env restart amplify-api`). Match `workEmail` to the email your sign-in reaches Amplify with (step 4).
 
 ## 4. Start the dev proxy
 
@@ -102,7 +102,7 @@ Their emails must be in `directory.json` (on your sub-team) to show on your team
 
 ## 8. Use the real people-app (optional)
 
-`local/people-app-proto/run.sh up` builds people-app from `projects/people-ops-suite` (in its own Ballerina image), runs it on MySQL 8.0 behind a gateway stand-in, and points amplify-api at it as a service client. `run.sh demo` runs 11 checks; `run.sh off` shows the behaviour before the service-client change; `run.sh down` puts amplify-api back on people-stub. Details and the people-app PR text: `local/people-app-proto/PR.md`.
+`local/people-app-proto/run.sh up` builds people-app from `projects/people-ops-suite` (in its own Ballerina image), runs it on MySQL 8.0 behind a gateway stand-in, and points amplify-api at it as a service client. `run.sh demo` runs 11 checks; `run.sh off` shows the behaviour before the service-client change; `run.sh down` puts amplify-api back on people-stub. The people-app change itself lives in people-ops-suite.
 
 ## 9. Tests
 

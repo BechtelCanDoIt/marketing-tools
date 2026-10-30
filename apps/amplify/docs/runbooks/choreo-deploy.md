@@ -1,6 +1,6 @@
 # Runbook: deploy Amplify to Choreo (plan M8b)
 
-Console steps that config-as-code can't do. The repo side is done: Dockerfiles, `.choreo/component.yaml` (schemaVersion 1.2) per component, `workload.yaml` for OpenChoreo, and `projects/marketing-tools/apps/amplify/scripts/check-descriptors.sh` to catch drift. Run the check before every Choreo change.
+Console steps that config-as-code can't do. The repo side is done: Dockerfiles, `.choreo/component.yaml` (schemaVersion 1.2) per component, `workload.yaml` for OpenChoreo, and `apps/amplify/scripts/check-descriptors.sh` to catch drift. Run the check before every Choreo change.
 
 Owner: a WSO2 Digital org admin in Choreo. Order matters: database first, then Jobs and Scheduler, then Backend (its connections point at them), then the API Proxy.
 
