@@ -18,13 +18,13 @@ Related: [phase1-solution-architecture.md](phase1-solution-architecture.md) (log
 | `people-stub` (local) | people-app directory stub for Compose (`GET /employees/basic-info`) | Ballerina | 2 | — | **2** | 100% |
 | people-app prototype (`local/people-app-proto`) | Real people-app behind a gateway stand-in; amplify-api reads it as a service client | Bash + Node + Ballerina | — | 11 checks | **11** | 100% |
 | people-app service clients (`projects/people-ops-suite`, PR) | Lets a listed service client read `GET /employees/basic-info` | Ballerina (2201.12.7) | 5 | — | **5** | 100% |
-| `mock_linkedin` (`projects/marketing-tools/apps/amplify/linkedin`) | LinkedIn OAuth + Posts mock | Ballerina | 30 | — | **30** | 100% |
+| `mock_linkedin` (`apps/amplify/linkedin`) | LinkedIn OAuth + Posts mock | Ballerina | 30 | — | **30** | 100% |
 | e2e (`scripts/e2e-local.sh`) | Whole local stack: register → share → points → leaderboard | Bash + curl | — | 6 checks | **6** | 100% |
 | One WSO2 Amplify UI, phase 1 (`feat/amplify-people-data`, PR) | Celebrate, New Post, Current Posts, LinkedIn link, photos and names | TypeScript / React | 13 | — | **13** | 100% |
 
 Counts from 2026-10-19: `TIERS="unit it scheduler" scripts/test-all.sh` (465 passing), `bal test` in `mock_linkedin` (30), the e2e and prototype checks, people-app's service-client tests and the Amplify vitest files in One WSO2 (13). Nothing fails in Amplify code. The full One WSO2 suite has 3 failures outside Amplify (the perspective colour cap and two InfraHomePage tests) that also fail on untouched upstream `main`.
 
-**Two One WSO2 Amplify UIs exist.** `feat/amplify-module` (46 files, 12 test files, 194 tests, worktree `amplify-wt/m7-ui`, not merged) is the earlier M7 build of the older screen set: Posts, Leaderboard, My Campaign, Team, PO (review, point rules, dashboard), Admin, Reports, Connections. `feat/amplify-people-data` is the phase 1 build from the Phase 1 UX PDF. Under the 2026-10-19 phase breakdown, most of `feat/amplify-module`'s extra screens are phase 2 or 3 work; which pieces to carry forward from it is still open. `amplify-scheduler` has no code of its own; its two tests are shell scripts that drive the image. Paths are under `projects/marketing-tools/apps/amplify/` unless noted. The UI lives in the `projects/one-wso2` submodule.
+**Two One WSO2 Amplify UIs exist.** `feat/amplify-module` (46 files, 12 test files, 194 tests, worktree `amplify-wt/m7-ui`, not merged) is the earlier M7 build of the older screen set: Posts, Leaderboard, My Campaign, Team, PO (review, point rules, dashboard), Admin, Reports, Connections. `feat/amplify-people-data` is the phase 1 build from the Phase 1 UX PDF. Under the 2026-10-19 phase breakdown, most of `feat/amplify-module`'s extra screens are phase 2 or 3 work; which pieces to carry forward from it is still open. `amplify-scheduler` has no code of its own; its two tests are shell scripts that drive the image. Paths are under `apps/amplify/` unless noted. The UI lives in the `projects/one-wso2` submodule.
 
 ## How the bricks stack (build time)
 
@@ -165,7 +165,7 @@ Locally, Compose swaps the outside bricks for stand-ins with the same interface,
 
 | Real brick | Local stand-in | Used by |
 |---|---|---|
-| LinkedIn | `mock_linkedin` (`projects/marketing-tools/apps/amplify/linkedin/apps/mock_linkedin`) | Compose, jobs integration tests, e2e |
+| LinkedIn | `mock_linkedin` (`apps/amplify/linkedin/apps/mock_linkedin`) | Compose, jobs integration tests, e2e |
 | Google Chat | `chat-stub` (`local/chat-stub`) | Compose; jobs tests use an in-test stub |
 | Asgardeo + API proxy | dev-only signed JWT (`local/dev-jwt`, ADR-023, `ENVIRONMENT=local` only) | Compose, e2e |
 | Managed Postgres | `postgres:18` container | Compose, integration tests |

@@ -11,7 +11,7 @@ B19 ("code layout vs ownership") flagged that shared modules sat in `amplify-api
 
 ## Decision (as actually built in M3)
 
-A **second shared library, `wso2/amplify_domain`** (`projects/marketing-tools/apps/amplify/amplify-domain`), holds every bounded context — types, rules, use cases, events, repository port — and its PostgreSQL repository. Both services import it:
+A **second shared library, `wso2/amplify_domain`** (`apps/amplify/amplify-domain`), holds every bounded context — types, rules, use cases, events, repository port — and its PostgreSQL repository. Both services import it:
 
 - **`amplify-api` keeps only the HTTP layer.** `amplify-api/modules/` holds just `auth`, `scheduler` and `utils`; there are no context modules. Handlers (`handlers.bal`, `reads.bal`) call the domain services.
 - **`amplify-jobs` orchestrates a run through the same domain services.** `amplify-jobs/handlers.bal` imports `amplify_domain.{announcements, campaign, connection, scoring, sharing, store}` and calls `announcements:queueAnnouncement` / `markSent` / `markFailed`, `sharing:markPublished` / `markFailed`, `connection:revoke`, `scoring:awardForEngagement`, and `store:{claimOutbox, writeOutbox, writeAudit, runPartitionMaintenance}`. There is **no copy** of the rules in `amplify-jobs`.
