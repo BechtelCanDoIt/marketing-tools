@@ -24,7 +24,7 @@
 // - Role switch: put "po", "marketing", "employee" or "token" in ./role (default "token" = use the token's
 //   groups/roles claim). Takes effect on the next request; no restart.
 // - USERINFO_URL (optional): the IdP's OIDC userinfo endpoint, asked once per user when the access token
-//   has no email (ThunderID's doesn't). Without it, a token with no email maps to <sub>@wso2.com.
+//   has no email (ThunderID's doesn't). Without it, a token with no email maps to <sub>@example.com.
 //
 // Run (stack up, from apps/amplify): node local/one-wso2-proxy/proxy.mjs
 import http from "node:http";
@@ -35,9 +35,9 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MINT = process.env.MINT_SCRIPT ?? join(HERE, "..", "dev-jwt", "mint-dev-jwt.sh");
-const TARGET = { host: "127.0.0.1", port: 9090 };
-const PORT = 9089;
-const ORIGIN = "http://localhost:3000";
+const TARGET = { host: process.env.TARGET_HOST ?? "127.0.0.1", port: Number(process.env.TARGET_PORT ?? 9090) };
+const PORT = Number(process.env.PORT ?? 9089);
+const ORIGIN = process.env.ORIGIN ?? "http://localhost:3000";
 const ROLE_GROUPS = { po: ["amplify_po"], marketing: ["amplify_marketing"], employee: [] };
 
 const cache = new Map();
@@ -84,7 +84,7 @@ function role() {
 
 function devJwt(c) {
   const sub = String(c.sub ?? "dev-user");
-  const email = String(c.email ?? c.preferred_username ?? c.username ?? `${sub}@wso2.com`);
+  const email = String(c.email ?? c.preferred_username ?? c.username ?? `${sub}@example.com`);
   const r = role();
   const raw = c.groups ?? c.roles ?? [];
   const tokenGroups = (Array.isArray(raw) ? raw : String(raw).split(/[ ,]+/)).filter((g) => g.startsWith("amplify_"));
