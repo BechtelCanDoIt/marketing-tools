@@ -47,6 +47,41 @@ configurable decimal jwksTimeoutSeconds = 5;
 # JWKS breaker reset, seconds.
 configurable decimal jwksBreakerResetSeconds = 30;
 
+// ---- Access: Asgardeo groups per capability (modules/auth/access.bal) -----------------------------
+// Each value is a comma separated list of groups (a string so `BAL_CONFIG_VAR_*` can set it); a caller
+// holding any one of them has the capability. Setup: docs/runbooks/identity-setup.md.
+
+# Groups that register, edit and archive campaigns and see every campaign status.
+configurable string canCampaignGroups = "amplify_po,amplify_marketing";
+# Groups that read the Dashboarding boards (ADR-036).
+configurable string canDashboardGroups = "amplify_po,amplify_marketing,amplify_slt,amplify_admin";
+# Groups that download the dashboard CSV export (names and emails).
+configurable string canExportGroups = "amplify_po,amplify_marketing,amplify_slt,amplify_admin";
+# Groups that review external shares.
+configurable string canReviewSharesGroups = "amplify_po";
+# Groups that manage point rules.
+configurable string canPointRulesGroups = "amplify_po";
+# Groups that adjust and reverse points and see anyone's team list and history.
+configurable string canAdjustPointsGroups = "amplify_po";
+# Groups that read the PO dashboard.
+configurable string canPoDashboardGroups = "amplify_po";
+# Groups that read the SLT reports (phase 2).
+configurable string canReportsGroups = "amplify_slt,amplify_po";
+# Groups that change settings, retry announcements and sync the scheduler.
+configurable string canAdminGroups = "amplify_admin";
+
+final auth:AccessGroups & readonly accessGroups = {
+    canCampaign: auth:groupList(canCampaignGroups),
+    canDashboard: auth:groupList(canDashboardGroups),
+    canExport: auth:groupList(canExportGroups),
+    canReviewShares: auth:groupList(canReviewSharesGroups),
+    canPointRules: auth:groupList(canPointRulesGroups),
+    canAdjustPoints: auth:groupList(canAdjustPointsGroups),
+    canPoDashboard: auth:groupList(canPoDashboardGroups),
+    canReports: auth:groupList(canReportsGroups),
+    canAdmin: auth:groupList(canAdminGroups)
+};
+
 // ---- Dev-only local signing (ADR-023). Refused unless environment = "local" ---------------------
 
 # Accept tokens signed by a local key (no API proxy). Off by default.
@@ -79,7 +114,8 @@ isolated function newVerifier() returns auth:TokenVerifier|error {
         clockSkewSeconds,
         rolesClaim,
         emailClaim,
-        nameClaim
+        nameClaim,
+        access: accessGroups
     }, dev);
 }
 

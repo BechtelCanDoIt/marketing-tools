@@ -68,8 +68,10 @@ type MeLinkedIn record {|
 type MeResponse record {|
     # Stored employee row
     MeEmployee employee;
-    # `amplify_*` roles from the token
+    # Configured groups from the token
     string[] roles;
+    # Grants those groups give (`EMPLOYEE` always)
+    auth:Access[] grants;
     # Capabilities derived from the activity matrix
     string[] capabilities;
     # LinkedIn connection
@@ -148,7 +150,8 @@ service http:InterceptableService / on apiListener {
                 display_name: employee.displayName
             },
             roles: principal.roles,
-            capabilities: auth:capabilities(principal.roles),
+            grants: principal.grants,
+            capabilities: auth:capabilities(principal.grants),
             linkedin: linkedInOf(linked, now)
         };
         // An admin's capability list alone runs past 512 chars (M11b).
@@ -160,7 +163,7 @@ service http:InterceptableService / on apiListener {
     # Campaign list (paged).
     #
     # + ctx - Request context
-    # + status - `open` (default), `scheduled`, `closed`, `archived`, `all` (non-open: PO / Marketing only)
+    # + status - `open` (default), `scheduled`, `closed`, `archived`, `all` (non-open: `CAN_CAMPAIGN` only)
     # + window - Opened in the last N days, `<N>d`
     # + tag - Tag filter
     # + page - Zero-based page

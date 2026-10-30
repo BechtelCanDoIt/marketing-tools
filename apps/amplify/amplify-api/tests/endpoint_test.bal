@@ -18,7 +18,6 @@
 // Endpoint tests on the in-memory fakes with the M4 test JWTs: S1, C1, S3, C2 main flows, stable codes,
 // idempotent replay, validation, and response shapes against openapi.yaml.
 
-import amplify_api.auth;
 import amplify_common.types;
 
 import ballerina/http;
@@ -35,7 +34,7 @@ function send(string method, string path, json body, string token, map<string> e
     return api->execute(method, path, method == "GET" ? () : body, headers);
 }
 
-function po() returns string|error => mint({sub: "po-0001", email: "po@wso2.com", groups: [auth:ROLE_PO]});
+function po() returns string|error => mint({sub: "po-0001", email: "po@wso2.com", groups: [PO_GROUP]});
 
 function employee(string sub) returns string|error => mint({sub, email: sub + "@wso2.com", name: sub});
 
@@ -206,7 +205,7 @@ function testAdjustAndReverse() returns error? {
 
 @test:Config
 function testSettingsValidation() returns error? {
-    string admin = check mint({groups: [auth:ROLE_ADMIN]});
+    string admin = check mint({groups: [ADMIN_GROUP]});
     http:Response unknown = check send("PUT", "/admin/settings", {changes: [{key: "coin.rate", value: 1, version: 1}]}, admin);
     test:assertEquals(check codeIn(unknown), "UNKNOWN_SETTING");
     http:Response bad = check send("PUT", "/admin/settings", {changes: [{key: "leaderboard.top_n", value: 0, version: 1}]},

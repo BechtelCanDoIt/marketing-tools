@@ -18,7 +18,6 @@
 // history / points visibility and degradation (leaderboards.md, ADR-019), ETag and Cache-Control, the
 // `jsonBody` encoding of every large read (M11b), the PO dashboard cache, list validation, `/ready`.
 
-import amplify_api.auth;
 import amplify_common.types;
 import amplify_domain.store;
 
@@ -177,7 +176,7 @@ function testTeamPageVisibility() returns error? {
     test:assertEquals((from json e in <json[]>check aloneBody.entries select (check e.employeeId).toString()), ["lb-1"],
             "no roster: the caller sees themselves");
 
-    http:Response po = check send("GET", "/team", (), check rvToken("po-team", groups = [auth:ROLE_PO]));
+    http:Response po = check send("GET", "/team", (), check rvToken("po-team", groups = [PO_GROUP]));
     json poBody = check po.getJsonPayload();
     test:assertEquals(check poBody.scope, "COMPANY");
     test:assertEquals(check poBody.total, 6);
@@ -221,7 +220,7 @@ function testHistoryScope() returns error? {
     test:assertEquals(rosterDown.statusCode, 403, "no roster never widens: only the caller's own history");
     setDirectory("ok");
 
-    http:Response po = check send("GET", "/team/lb-1/history", (), check rvToken("po-hist", groups = [auth:ROLE_PO]));
+    http:Response po = check send("GET", "/team/lb-1/history", (), check rvToken("po-hist", groups = [PO_GROUP]));
     test:assertEquals(po.statusCode, 200, "PO reads any row");
 
     setSetting("team.visibility", "COMPANY");
@@ -239,7 +238,7 @@ function testHistoryScope() returns error? {
 
 @test:Config {groups: ["reads"]}
 function testMeAndPointsShapesAndNoStore() returns error? {
-    string token = check rvToken("rv-a", groups = [auth:ROLE_ADMIN, auth:ROLE_PO, auth:ROLE_MARKETING]);
+    string token = check rvToken("rv-a", groups = [ADMIN_GROUP, PO_GROUP, MARKETING_GROUP]);
     http:Response me = check send("GET", "/me", (), token);
     test:assertEquals(me.statusCode, 200);
     check assertShape(me, "Me");
@@ -274,7 +273,7 @@ function testReadyReportsEveryBreakerPerContract() returns error? {
 
 @test:Config {groups: ["reads"]}
 function testDashboardCacheIsBoundedAndCacheable() returns error? {
-    string po = check rvToken("po-dash", groups = [auth:ROLE_PO]);
+    string po = check rvToken("po-dash", groups = [PO_GROUP]);
     http:Response bad = check send("GET", "/po/dashboard?month=2026-1", (), po);
     test:assertEquals(bad.statusCode, 400);
 
@@ -301,7 +300,7 @@ function testDashboardCacheIsBoundedAndCacheable() returns error? {
 
 @test:Config {groups: ["reads"], dependsOn: [testRegisterCampaignIsIdempotentAndShaped]}
 function testListValidationAndShapes() returns error? {
-    string po = check rvToken("po-list", groups = [auth:ROLE_PO]);
+    string po = check rvToken("po-list", groups = [PO_GROUP]);
     string emp = check rvToken("rv-list");
     foreach string query in ["status=bogus", "window=abc", "window=0d", "window=366d", "size=51", "size=0",
             "page=-1", "tag=" + "t".padEnd(51, "t")] {
@@ -326,7 +325,7 @@ function testListValidationAndShapes() returns error? {
     http:Response shares = check send("GET", "/me/shares", (), emp);
     check assertShape(shares, "ShareList");
 
-    string admin = check rvToken("adm-list", groups = [auth:ROLE_ADMIN]);
+    string admin = check rvToken("adm-list", groups = [ADMIN_GROUP]);
     http:Response settings = check send("GET", "/admin/settings", (), admin);
     test:assertEquals(settings.statusCode, 200);
     check assertShape(settings, "SettingList");

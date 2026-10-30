@@ -18,7 +18,6 @@
 // race), archive, share kill switch and archived campaigns, point-rule / adjustment / reversal validation,
 // announcement retry, settings version conflict, and SchedulerSync reading committed settings.
 
-import amplify_api.auth;
 import amplify_api.scheduler;
 import amplify_domain.announcements;
 import amplify_domain.store;
@@ -59,7 +58,7 @@ function testPatchLosesNoConcurrentEdit() returns error? {
 
 @test:Config {groups: ["writes"]}
 function testPatchValidationAndArchive() returns error? {
-    string token = check mint({sub: "mkt-0001", email: "mkt@wso2.com", groups: [auth:ROLE_MARKETING]});
+    string token = check mint({sub: "mkt-0001", email: "mkt@wso2.com", groups: [MARKETING_GROUP]});
     string id = check registered("urn:li:share:9102", token);
     string[] many = from int i in 0 ..< 21 select string `t${i}`;
     [json, int, string][] cases = [
@@ -95,7 +94,7 @@ function testPatchValidationAndArchive() returns error? {
     test:assertEquals((check send("POST", string `/campaigns/${id}/shares`, {kind: "REPOST"}, emp)).statusCode, 404);
     test:assertEquals((check send("GET", "/campaigns/" + id, (), token)).statusCode, 200);
     http:Response editorShare = check send("POST", string `/campaigns/${id}/shares`, {kind: "REPOST"},
-            check mint({sub: "emp-arch-1", email: "emp-arch-1@wso2.com", groups: [auth:ROLE_MARKETING]}));
+            check mint({sub: "emp-arch-1", email: "emp-arch-1@wso2.com", groups: [MARKETING_GROUP]}));
     test:assertEquals(check codeIn(editorShare), "CAMPAIGN_CLOSED");
 }
 
@@ -193,7 +192,7 @@ function testAnnouncementRetry() returns error? {
     string failedId = "01900000-0000-7000-8000-0000000000b1";
     fakeAnnouncements.put({campaignId: failedId, outboxId: 1, space: "club", threadKey: "campaign-b1",
         chatMessageName: (), queuedAt: [1760000000, 0], sentAt: (), failedAt: [1760000100, 0], lastError: "HTTP 500"});
-    string admin = check mint({sub: "adm-ann", email: "adm-ann@wso2.com", groups: [auth:ROLE_ADMIN]});
+    string admin = check mint({sub: "adm-ann", email: "adm-ann@wso2.com", groups: [ADMIN_GROUP]});
     http:Response list = check send("GET", "/admin/announcements", (), admin);
     test:assertEquals(list.statusCode, 200);
     check assertShape(list, "AnnouncementList");

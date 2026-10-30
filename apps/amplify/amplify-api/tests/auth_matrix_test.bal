@@ -29,30 +29,29 @@ type Caller record {|
     string label;
     string sub;
     string[] groups;
-    auth:Audience column;
+    auth:Access[] grants;
 |};
 
+// Expected grants written out by hand from tests/Config.toml, independent of `auth:grantsOf`.
 final Caller[] & readonly MATRIX_CALLERS = [
-    {label: "employee", sub: "mx-emp", groups: [], column: auth:EMP},
-    {label: "po", sub: "mx-po", groups: [auth:ROLE_PO], column: auth:PO},
-    {label: "marketing", sub: "mx-mkt", groups: [auth:ROLE_MARKETING], column: auth:MKT},
-    {label: "slt", sub: "mx-slt", groups: [auth:ROLE_SLT], column: auth:SLT},
-    {label: "admin", sub: "mx-adm", groups: [auth:ROLE_ADMIN], column: auth:ADM}
+    {label: "employee", sub: "mx-emp", groups: [], grants: [auth:EMPLOYEE]},
+    {label: "po", sub: "mx-po", groups: [PO_GROUP], grants: [auth:EMPLOYEE, auth:CAN_CAMPAIGN, auth:CAN_DASHBOARD,
+        auth:CAN_EXPORT, auth:CAN_REVIEW_SHARES, auth:CAN_POINT_RULES, auth:CAN_ADJUST_POINTS, auth:CAN_PO_DASHBOARD,
+        auth:CAN_REPORTS]},
+    {label: "marketing", sub: "mx-mkt", groups: [MARKETING_GROUP], grants: [auth:EMPLOYEE, auth:CAN_CAMPAIGN,
+        auth:CAN_DASHBOARD, auth:CAN_EXPORT]},
+    {label: "slt", sub: "mx-slt", groups: [SLT_GROUP], grants: [auth:EMPLOYEE, auth:CAN_DASHBOARD, auth:CAN_EXPORT,
+        auth:CAN_REPORTS]},
+    {label: "admin", sub: "mx-adm", groups: [ADMIN_GROUP], grants: [auth:EMPLOYEE, auth:CAN_DASHBOARD, auth:CAN_EXPORT,
+        auth:CAN_ADMIN]},
+    {label: "campaign-only", sub: "mx-cmp", groups: [CAMPAIGN_ONLY_GROUP], grants: [auth:EMPLOYEE, auth:CAN_CAMPAIGN]}
 ];
 
 function matrixPath(string template, string sub) returns string =>
     re `\{[^}]+\}`.replaceAll(re `\{employeeId\}`.replaceAll(template, sub), SAMPLE_UUID);
 
-// Independent of `auth:isAllowed`: a caller reaches a route when the row lists its column or EMP (every
-// role also holds the employee column).
-function opens(auth:Rule rule, Caller caller) returns boolean {
-    foreach auth:Audience a in rule.allowed {
-        if a == caller.column || a == "EMP" {
-            return true;
-        }
-    }
-    return false;
-}
+// Independent of `auth:isAllowed`: a caller reaches a route when it holds the row's grant.
+function opens(auth:Rule rule, Caller caller) returns boolean => caller.grants.indexOf(rule.requires) !is ();
 
 @test:Config
 function testEveryRouteAgainstTheActivityMatrix() returns error? {
@@ -74,7 +73,6 @@ function testEveryRouteAgainstTheActivityMatrix() returns error? {
             http:Response res = check send(rule.method, matrixPath(rule.path, caller.sub), {}, token,
                     {"Idempotency-Key": string `mx-${caller.sub}-${checks}`});
             checks += 1;
-            // Every role also holds the employee column (audiences() always adds EMP).
             boolean allowed = opens(rule, caller);
             if allowed {
                 if res.statusCode == 401 || res.statusCode == 403 {

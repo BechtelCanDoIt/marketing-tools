@@ -20,3 +20,14 @@ settingsCacheSeconds = 0.0
 peopleDirectoryUrl = "http://localhost:9591/people/employees/basic-info"
 # Off 9090, so `bal test` never talks to a local Compose amplify-api that already holds it.
 port = 19590
+# Access (modules/auth/access.bal): the defaults, plus a second campaign group so a test can prove
+# a capability is shared by configuration alone.
+canCampaignGroups = "amplify_po, amplify_marketing, amplify_campaign_extra"
+canDashboardGroups = "amplify_po,amplify_marketing,amplify_slt,amplify_admin"
+canExportGroups = "amplify_po,amplify_marketing,amplify_slt,amplify_admin"
+canReviewSharesGroups = "amplify_po"
+canPointRulesGroups = "amplify_po"
+canAdjustPointsGroups = "amplify_po"
+canPoDashboardGroups = "amplify_po"
+canReportsGroups = "amplify_slt,amplify_po"
+canAdminGroups = "amplify_admin"
