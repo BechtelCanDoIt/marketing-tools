@@ -273,3 +273,29 @@ function testM6OneRunAcrossReplicasStaleLocksAndPurge() returns error? {
         VALUES ('it', ${key}, 'h', now() - interval '1 hour')`);
     test:assertTrue(check store:purgeExpiredIdempotencyKeys(jobsDb) >= 1);
 }
+
+// One partition maintenance pass at a time across replicas: a pass that outlives the scheduler's deadline is
+// not started again by its retry (no second reseal sweep, no second partition drop).
+@test:Config {groups: ["integration"]}
+function aSecondMaintenancePassIsSkippedWhileOneIsRunning() returns error? {
+    if !itEnabled {
+        return;
+    }
+    postgresql:Client first = check itConnect("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client second = check itConnect("amplify_jobs", itJobsPassword, 1);
+    PgRunLock held = new (first, MAINTENANCE_LOCK_KEY);
+    PgRunLock rival = new (second, MAINTENANCE_LOCK_KEY);
+    test:assertTrue(check held.tryAcquire());
+    test:assertFalse(check rival.tryAcquire(), "the retry answers 202 SKIPPED, not a second pass");
+    check held.release();
+    test:assertTrue(check rival.tryAcquire(), "once the pass is done the lock is free");
+    check rival.release();
+    check first.close();
+    check second.close();
+}
+
+// The maintenance pass and the run use different advisory keys, so neither blocks the other.
+@test:Config
+function theMaintenanceLockIsNotTheRunLock() {
+    test:assertNotEquals(MAINTENANCE_LOCK_KEY, RUN_LOCK_KEY);
+}

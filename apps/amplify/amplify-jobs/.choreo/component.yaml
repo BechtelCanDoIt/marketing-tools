@@ -1,7 +1,9 @@
 # Amplify Jobs (amplify-jobs). Choreo Service, Dockerfile buildpack. Never published.
-# Docker context: apps/amplify  |  Dockerfile: apps/amplify/amplify-jobs/Dockerfile
-# Choreo reads this file from <docker context>/.choreo/component.yaml, so every component has its own context
-# (ADR-027). Keep endpoints and env names in sync with apps/amplify/amplify-jobs/workload.yaml (scripts/check-descriptors.sh).
+# Dockerfile: apps/amplify/amplify-jobs/Dockerfile, built from the apps/amplify context (shared packages).
+# Choreo reads the descriptor from <docker context>/.choreo/component.yaml. This file is only picked up when
+# the Choreo component is created on amplify-jobs/; created on apps/amplify it would read amplify-api's
+# descriptor instead (ADR-027 keeps one context per component, and api and jobs currently share one).
+# Keep endpoints and env names in sync with workload.yaml (scripts/check-descriptors.sh).
 # Console steps (connections, secrets, visibility): docs/runbooks/choreo-deploy.md.
 schemaVersion: "1.2"
 endpoints:

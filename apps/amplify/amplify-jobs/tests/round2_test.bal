@@ -212,6 +212,10 @@ function dbConfigVerifiesTheServerByDefault() {
     test:assertTrue(store:verifiesServer(cfg));
     test:assertEquals(cfg.sslRootCert, "");
     test:assertEquals(dbConfig(maxOpenConnections = 1).maxOpenConnections, 1, "the run-lock connection");
+    test:assertEquals(dbConfig(maxConnectionLifeTime = 0).maxConnectionLifeTime, 0d,
+            "the session advisory lock must outlive the run, so its connection is never retired");
+    test:assertTrue(dbMaintenanceSocketTimeoutSeconds < 180d,
+            "stay below amplify-api's 180 s maintenance deadline, so a slow pass answers 500 and its retry is skipped");
 }
 
 // Item 12.5: a pool with leaked connections answers "Connection is not available"; the breaker counts it as
