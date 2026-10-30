@@ -40,7 +40,7 @@ const string HEADER_RESTLI_ID = "x-restli-id";
 const string HEADER_AUTHORIZATION = "Authorization";
 
 # Endpoints and client credentials. Base URLs are configurable so the adapter runs against
-# `projects/linkedin/apps/mock_linkedin` locally (API port 9090, www port 9091).
+# `apps/amplify/linkedin/apps/mock_linkedin` locally (API port 9090, www port 9091).
 public type LinkedInConfig record {|
     # REST API base, `https://api.linkedin.com` (mock: `http://localhost:9090`)
     string apiBaseUrl = "https://api.linkedin.com";
