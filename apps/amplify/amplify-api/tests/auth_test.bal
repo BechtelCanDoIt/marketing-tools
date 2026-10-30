@@ -222,14 +222,14 @@ function testMeUpsertsEmployeeAndReportsCapabilities() returns error? {
     test:assertEquals(res.statusCode, 200);
     json body = check res.getJsonPayload();
     test:assertEquals(check body.employee.email, "ada.lovelace@wso2.com");
-    test:assertEquals(check body.employee.display_name, "Ada Lovelace");
+    test:assertEquals(check body.employee.displayName, "Ada Lovelace");
     test:assertEquals(check body.roles, [MARKETING_GROUP]);
     test:assertEquals(check body.grants, [auth:EMPLOYEE, auth:CAN_CAMPAIGN, auth:CAN_DASHBOARD, auth:CAN_EXPORT]);
     json[] caps = check (check body.capabilities).ensureType();
     test:assertTrue(caps.indexOf("campaigns.manage") !is ());
     test:assertTrue(caps.indexOf("po.dashboard") is ());
     test:assertEquals(check body.linkedin.status, "NOT_CONNECTED");
-    test:assertEquals(check body.linkedin.expires_at, ());
+    test:assertEquals(check body.linkedin.expiresAt, ());
     test:assertTrue(fakeEmployees.findById("emp-0001") is record {});
 }
 
@@ -254,9 +254,9 @@ function testMeReportsLinkedInStatus() returns error? {
     http:Response res = check call("GET", "/me", check mint({sub: "emp-0002", email: "grace@wso2.com", name: ()}));
     test:assertEquals(res.statusCode, 200);
     json body = check res.getJsonPayload();
-    test:assertEquals(check body.employee.display_name, "grace");
+    test:assertEquals(check body.employee.displayName, "grace");
     test:assertEquals(check body.linkedin.status, "ACTIVE");
-    test:assertEquals(check body.linkedin.expires_at, time:utcToString(expires));
+    test:assertEquals(check body.linkedin.expiresAt, time:utcToString(expires));
 }
 
 // ---- Dev-only local signing (ADR-023) ------------------------------------------------------------

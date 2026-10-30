@@ -80,6 +80,16 @@ isolated function idempotent(http:RequestContext ctx, http:Request req, auth:Pri
         log:printError("Could not store the idempotent response", resilience:loggable(stored),
                 correlationId = correlationId);
         recordDbFailure(stored);
+        if status < 500 {
+            // The response exists but could not be stored, so the claim would stay "in progress" until its
+            // 24 h TTL and every retry would get 409. Free the key, best effort; the domain's own uniqueness
+            // rules answer a retry that repeats a committed action.
+            error? released = releaseIdempotency(principal.employeeId, key);
+            if released is error {
+                log:printWarn("Could not release the idempotency key", resilience:loggable(released),
+                        correlationId = correlationId);
+            }
+        }
     }
     return toResponse(outcome);
 }

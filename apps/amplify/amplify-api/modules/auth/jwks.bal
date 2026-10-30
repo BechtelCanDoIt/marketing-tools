@@ -89,7 +89,9 @@ public isolated class JwksCache {
             boolean empty = self.keys.length() == 0;
             boolean stale = self.fetchedAt < 0d || now - self.fetchedAt >= self.refreshSeconds;
             boolean unknownKid = kid is string && keysMatching(self.keys, kid).length() == 0;
-            boolean gated = !empty && self.lastAttemptAt >= 0d && now - self.lastAttemptAt < self.minRefreshIntervalSeconds;
+            // Holds on a cold cache too: a burst of requests at start-up, or during a JWKS outage, makes one
+            // fetch per interval instead of one per request.
+            boolean gated = self.lastAttemptAt >= 0d && now - self.lastAttemptAt < self.minRefreshIntervalSeconds;
             refresh = (empty || stale || unknownKid) && !gated;
             if refresh {
                 self.lastAttemptAt = now;
