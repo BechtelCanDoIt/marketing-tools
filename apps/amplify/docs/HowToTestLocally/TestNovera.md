@@ -177,10 +177,10 @@ Amplify announces a new campaign by calling Novera's `POST /internal/notificatio
 
 Code: BechtelCanDoIt/marketing-tools PR #12 (`feat/amplify_on_novera`). It needs Novera's `imageUrl` and `button` fields (BechtelCanDoIt/wso2-digital-agents PR #1) deployed first in any real environment.
 
-`projects/marketing-tools/apps/amplify/local/novera-mock/server.mjs` stands in for the gateway. It answers `POST /token` and `POST /internal/notifications`, logs each notification's JSON, and replies 202. Nothing reaches Google Chat.
+`apps/amplify/local/novera-mock/server.mjs` stands in for the gateway. It answers `POST /token` and `POST /internal/notifications`, logs each notification's JSON, and replies 202. Nothing reaches Google Chat.
 
 ```bash
-cd projects/marketing-tools/apps/amplify/local/novera-mock
+cd apps/amplify/local/novera-mock
 # optional: also check each body against a local Novera's schema (400 = rejected, 503 = accepted, no Google key)
 CHECK_URL=http://localhost:3002/internal/notifications node server.mjs      # :3003
 ```
@@ -198,7 +198,7 @@ NOVERA_ALLOW_INSECURE_HTTP=true        # local only, default false, never set in
 ```
 
 ```bash
-cd projects/marketing-tools/apps/amplify
+cd apps/amplify
 scripts/compose.sh up -d --build amplify-jobs        # not `make down`: that deletes local data
 ```
 
