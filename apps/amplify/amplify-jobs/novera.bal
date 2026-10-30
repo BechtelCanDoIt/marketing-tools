@@ -110,6 +110,11 @@ isolated class NoveraClient {
         if status == http:STATUS_TOO_MANY_REQUESTS {
             return noveraError("RATE_LIMITED", "Novera rate limited", status, true);
         }
+        if status == http:STATUS_UNAUTHORIZED || status == http:STATUS_FORBIDDEN {
+            // A rotated client secret or a revoked subscription is an operator problem, not a bad card: retry
+            // (the row stays queued and the run keeps trying) instead of failing every announcement for good.
+            return noveraError("UNAVAILABLE", string `Novera refused our credentials with HTTP ${status}`, status, true);
+        }
         if status >= 500 {
             return noveraError("UNAVAILABLE", string `Novera failed with HTTP ${status}`, status, true);
         }

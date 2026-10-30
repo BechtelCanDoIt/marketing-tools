@@ -15,7 +15,7 @@
 // under the License.
 
 // M6 integration test (group `integration`, `AMPLIFY_IT=true`) against a migrated PostgreSQL 18 as
-// `amplify_jobs` / `amplify_api`, with `projects/linkedin/apps/mock_linkedin` as LinkedIn and the Chat stub
+// `amplify_jobs` / `amplify_api`, with `apps/amplify/linkedin/apps/mock_linkedin` as LinkedIn and the Chat stub
 // below as the Club space: register campaign → announce; connect (mock OAuth, token sealed into today's
 // partition) → share → publish → engagement → points → standing; rerun safety; one run across replicas;
 // stale-lock release; idempotency-key purge. Recipe: docs/migrations/README.md.

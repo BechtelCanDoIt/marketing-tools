@@ -81,10 +81,13 @@ isolated function validateRunConfig(RunConfig cfg, decimal longestCallSeconds) r
     }
 }
 
-# Longest external call one row can make: the LinkedIn timeout, or the Chat timeout plus its throttle wait.
+# Longest external call one row can make: the LinkedIn timeout, or what a `CampaignRegistered` row does: the
+# Chat timeout plus its throttle wait and, with Novera on, the token fetch and the notify (each bounded by
+# the Novera timeout) before the best-effort Chat card.
 #
 # + return - Seconds
 isolated function longestCallSeconds() returns decimal {
     decimal chat = chatTimeoutSeconds + chatMinIntervalSeconds;
-    return linkedinTimeoutSeconds > chat ? linkedinTimeoutSeconds : chat;
+    decimal registered = amplifyOnNovera ? 2d * noveraTimeoutSeconds + chat : chat;
+    return linkedinTimeoutSeconds > registered ? linkedinTimeoutSeconds : registered;
 }
