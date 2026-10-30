@@ -24,6 +24,7 @@ import amplify_common.crypto;
 import amplify_common.types;
 import amplify_domain.campaign;
 import amplify_domain.connection;
+import amplify_domain.identity;
 import amplify_domain.scoring;
 import amplify_domain.sharing;
 import amplify_domain.store;
@@ -51,11 +52,8 @@ function tokenRows(postgresql:Client db, string tokenId) returns int|error =>
 
 // api H3: the sealed token goes in with the connection change. A connection write that fails (a stale
 // version, as when two tabs finish the OAuth flow at once) rolls the token row back with it.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testConnectionWriteFailureLeavesNoTokenRow() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     crypto:TokenCipher cipher = check new ([{keyId: "r2-a", key: keyBytes(1)}], "r2-a");
     string emp = check newEmployee(db, "tokatomic");
@@ -92,25 +90,26 @@ function testConnectionWriteFailureLeavesNoTokenRow() returns error? {
 
 // common H4 / domain H-2 / jobs H2: two keys. Rows sealed under the old key move to the new one in place,
 // open with the ring, and no longer open with the old key alone; a second pass is a no-op.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testResealStaleTokensAgainstTheDatabase() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check jobs();
     string oldId = "r2-old-" + uniq();
     string newId = "r2-new-" + uniq();
     crypto:TokenCipher oldCipher = check new ([{keyId: oldId, key: keyBytes(5)}], oldId);
     crypto:TokenCipher ring = check new ([{keyId: oldId, key: keyBytes(5)}, {keyId: newId, key: keyBytes(77)}], newId);
     connection:PgTokenRepository tokens = new (db);
+    // Only a sign-in creates a token row, so the fixtures go in through the API role: amplify_jobs has no INSERT.
+    postgresql:Client seedDb = check api();
+    connection:PgTokenRepository seeder = new (seedDb);
     time:Utc now = time:utcNow();
     connection:StoredToken[] mine = [];
     foreach int i in 0 ..< 3 {
         connection:StoredToken t = check connection:sealToken(oldCipher, string `bearer-rot-${i}`,
                 "emp-rot-" + uniq(), time:utcAddSeconds(now, 3600), now);
-        check tokens.insert(t);
+        check seeder.insert(t);
         mine.push(t);
     }
+    check seedDb.close();
     connection:ResealReport report = check connection:resealStaleTokens(ring, tokens, batchSize = 2);
     test:assertTrue(report.resealed >= 3, string `re-sealed ${report.resealed}`);
     foreach int i in 0 ..< mine.length() {
@@ -132,11 +131,8 @@ function testResealStaleTokensAgainstTheDatabase() returns error? {
 // domain H-5: the engagement unique key fires on publish (this employee already has an engagement for the
 // target); the request settles as PUBLISHED on the existing engagement instead of staying QUEUED, and no
 // second EngagementRecorded is written.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testDuplicatePublishSettlesTheShare() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client apiDb = check api();
     postgresql:Client jobsDb = check jobs();
     string po = check newEmployee(apiDb, "duppo");
@@ -184,11 +180,8 @@ function testDuplicatePublishSettlesTheShare() returns error? {
 // failed and released the key). The claim retries the insert once and wins instead of answering NoRows
 // (a 503). The window is forced with a statement trigger that deletes the holder's row right after the
 // conflicting INSERT, once.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testIdempotencyClaimRetriesWhenTheHolderVanishes() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client su = check admin();
     postgresql:Client db = check api();
     string emp = "emp-race-" + uniq();
@@ -235,11 +228,8 @@ function ddl(postgresql:Client db, string text) returns error? {
 // (`scoring:adjustPoints` -> `PgLedgerRepository.append` -> `store:inTransaction`). Every reported success
 // must be committed, nothing may fail, and no session may be left idle in a transaction (a lost commit or
 // a leaked pool connection). Without the gate this loses commits and leaks connections on 2201.13.3.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testGatedParallelWritesAllCommit() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: "amplify_api",
         password: apiDbPassword, sslMode: dbSslMode, maxOpenConnections: 12, poolAcquireTimeoutSeconds: 10});
     string marker = "IT gate " + uniq();
@@ -286,4 +276,86 @@ function testGatedParallelWritesAllCommit() returns error? {
 isolated function adjustWith(postgresql:Client db, string emp, int points, string reason) returns error? {
     scoring:PgLedgerRepository ledger = new (db, {actorId: "it-po-gate", roles: ["amplify_po"]}, 3);
     _ = check scoring:adjustPoints(ledger, emp, points, reason, "it-po-gate", (), (), time:utcNow());
+}
+
+// Outbox backlog (security review): pending, in-progress and failed rows are counted and the oldest pending row's age
+// is measured from `created_at`, so a deferred row that keeps being retried still reads as old.
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testOutboxBacklogCountsWhatIsWaiting() returns error? {
+    postgresql:Client db = check jobs();
+    store:OutboxBacklog before = check store:outboxBacklog(db);
+    string tag = "backlog-" + uniq();
+    foreach [string, string, string] [suffix, status, age] in [["a", "PENDING", "3 hours"], ["b", "PENDING", "1 minute"],
+            ["c", "IN_PROGRESS", "1 minute"], ["d", "FAILED", "1 minute"]] {
+        _ = check db->execute(`INSERT INTO messaging.outbox (aggregate_type, aggregate_id, event_type, payload,
+                idempotency_key, status, created_at, next_attempt_at)
+            VALUES ('t', ${tag}, 'T', '{}'::jsonb, ${"it:" + tag + suffix}, ${status}, now() - CAST(${age} AS interval),
+                now() + interval '1 day')`);
+    }
+    _ = check db->execute(`INSERT INTO messaging.outbox (aggregate_type, aggregate_id, event_type, payload,
+            idempotency_key, status, processed_at) VALUES ('t', ${tag}, 'T', '{}'::jsonb, ${"it:" + tag + "e"},
+            'DONE', now())`);
+    store:OutboxBacklog after = check store:outboxBacklog(db);
+    test:assertEquals(after.pending - before.pending, 2, "two pending, the deferred one included");
+    test:assertEquals(after.inProgress - before.inProgress, 1);
+    test:assertEquals(after.failed - before.failed, 1);
+    int oldest = after.oldestPendingSeconds ?: -1;
+    test:assertTrue(oldest >= 3 * 3600 - 5, string `oldest pending is ${oldest}s, at least the 3 hour row`);
+    // DONE rows are not part of the backlog.
+    test:assertEquals(after.pending + after.inProgress + after.failed,
+            before.pending + before.inProgress + before.failed + 4);
+    check db.close();
+}
+
+// Leavers (security review): not in the directory AND away from Amplify for the grace period; erasing one is audited
+// and takes the person off the candidate list.
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testLeaverCandidatesNeedBothAbsenceAndDormancyAndErasureRemovesThem() returns error? {
+    postgresql:Client apiDb = check api();
+    postgresql:Client jobsDb = check jobs();
+    string tag = "lv" + uniq();
+    string[] ids = [tag + "-listed", tag + "-gone", tag + "-gone-recent"];
+    foreach [string, string] [id, age] in [[ids[0], "90 days"], [ids[1], "90 days"], [ids[2], "2 days"]] {
+        _ = check apiDb->execute(`INSERT INTO identity.employee (employee_id, email, display_name, first_seen_at, last_seen_at)
+            VALUES (${id}, ${id + "@example.com"}, ${"Name " + id}, now() - interval '100 days',
+                    now() - CAST(${age} AS interval))`);
+    }
+    string[] directory = [ids[0] + "@example.com"];
+    string[] found = check identity:leaverCandidates(jobsDb, directory, 30, 1000);
+    test:assertTrue(found.indexOf(ids[1]) !is (), "gone and dormant is a candidate");
+    test:assertTrue(found.indexOf(ids[0]) is (), "listed in the directory is never a candidate, however dormant");
+    test:assertTrue(found.indexOf(ids[2]) is (), "gone but active two days ago waits out the grace period");
+    // The directory is compared case-insensitively.
+    string[] upper = [(ids[0] + "@example.com").toUpperAscii(), ids[1] + "@example.com"];
+    string[] foundUpper = check identity:leaverCandidates(jobsDb, upper, 30, 1000);
+    test:assertTrue(foundUpper.indexOf(ids[0]) is () && foundUpper.indexOf(ids[1]) is ());
+
+    json erased = check identity:eraseEmployee(jobsDb, ids[1], "system", "LEAVER_SWEEP");
+    test:assertTrue(erased.toJsonString().includes("\"employee\":1") || erased.toJsonString().includes("\"employee\": 1"),
+            erased.toJsonString());
+    string[] after = check identity:leaverCandidates(jobsDb, directory, 30, 1000);
+    test:assertTrue(after.indexOf(ids[1]) is (), "an erased person is not found again");
+    int audited = check count(jobsDb, `SELECT count(*)::int FROM audit.audit_log
+        WHERE entity_id = ${ids[1]} AND action = 'EMPLOYEE_DATA_ERASED' AND reason = 'LEAVER_SWEEP'`);
+    test:assertEquals(audited, 1);
+    check apiDb.close();
+    check jobsDb.close();
+}
+
+// Token partition runway (review of V009): the migration creates two weeks ahead, and the days-ahead read is what
+// amplify-jobs exports and alerts on.
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testTokenPartitionRunwayIsTwoWeeksAndReadable() returns error? {
+    postgresql:Client db = check jobs();
+    int? ahead = check store:tokenPartitionDaysAhead(db);
+    int days = ahead ?: -99;
+    // 14 on the day the database was built; allow a day for a UTC rollover while the suite runs.
+    test:assertTrue(days >= 13, string `newest token partition is ${days} days ahead`);
+    // Creating more moves the runway out; creating fewer never shrinks it.
+    _ = check db->queryRow(`SELECT connection.create_token_partitions(20)`, int);
+    int? longer = check store:tokenPartitionDaysAhead(db);
+    test:assertTrue((longer ?: -99) >= 20, "asking for 20 days creates 20 days");
+    _ = check db->queryRow(`SELECT connection.create_token_partitions(2)`, int);
+    test:assertEquals(check store:tokenPartitionDaysAhead(db), longer, "a shorter request does not drop partitions");
+    check db.close();
 }

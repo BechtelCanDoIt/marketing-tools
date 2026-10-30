@@ -106,22 +106,43 @@ public isolated function awardForExternalShare(PointRule[] rules, ExternalShareF
             types:OWN_POST, rule, rule.points, correlationId, now));
 }
 
-# T4 top-up row when an approved claim is amplified (C4): `OWN_POST_AMPLIFIED` points minus `OWN_POST`
-# points, both at the rules in force on approval. The original `OWN_POST` row stays (append-only).
+# Net `OWN_POST` points already on the ledger for an approved claim: the award row plus its reversal, so a
+# fully reversed own post nets to 0. Priced from the ledger, not from the rules, so a rule change between
+# approval and amplification (or a reversal) can't over- or under-award the top-up.
+#
+# + ledger - Ledger repository
+# + fact - Approved claim
+# + return - Net `OWN_POST` points (0 when the award is absent), or a repository error
+public isolated function ownPostNet(LedgerRepository ledger, ExternalShareFact fact) returns int|error {
+    types:LedgerReference reference = check types:awardReference(fact.provider, fact.evidenceUrl, fact.employeeId,
+            types:OWN_POST);
+    types:LedgerEntry? award = check ledger.findByReference(reference);
+    int net = award is types:LedgerEntry ? award.points : 0;
+    types:LedgerEntry? reversal = check ledger.findReversalOf(reference);
+    if reversal is types:LedgerEntry {
+        net += reversal.points;
+    }
+    return net;
+}
+
+# T4 top-up row when an approved claim is amplified (C4): `OWN_POST_AMPLIFIED` points minus the net
+# `OWN_POST` points actually awarded for the claim (`ownPostNet`; 0 after a full reversal). The original
+# rows stay (append-only), so original tier plus top-up is exactly the amplified tier.
 #
 # + rules - Rule versions
 # + fact - Approved claim
+# + ownPostPoints - Net `OWN_POST` points already awarded (from `ownPostNet`)
 # + correlationId - Request correlation id
 # + now - Insert time
-# + return - Row and event, `TOP_UP_NOT_POSITIVE` if the amplified tier isn't above own post, or another error
-public isolated function amplifiedTopUp(PointRule[] rules, ExternalShareFact fact, string? correlationId, time:Utc now)
-        returns LedgerAppend|types:DomainError {
-    PointRule ownPost = check ruleInForce(rules, types:OWN_POST, fact.approvedAt);
+# + return - Row and event, `TOP_UP_NOT_POSITIVE` if the amplified tier isn't above what was awarded, or
+#            another error
+public isolated function amplifiedTopUp(PointRule[] rules, ExternalShareFact fact, int ownPostPoints,
+        string? correlationId, time:Utc now) returns LedgerAppend|types:DomainError {
     PointRule amplified = check ruleInForce(rules, types:OWN_POST_AMPLIFIED, fact.approvedAt);
-    int difference = amplified.points - ownPost.points;
+    int difference = amplified.points - ownPostPoints;
     if difference <= 0 {
         return types:domainError(types:ERR_TOP_UP_NOT_POSITIVE,
-                "The amplified tier must be worth more than an own post");
+                "The amplified tier must be worth more than the points already awarded");
     }
     types:LedgerReference reference = check types:awardReference(fact.provider, fact.evidenceUrl, fact.employeeId,
             types:OWN_POST_AMPLIFIED);

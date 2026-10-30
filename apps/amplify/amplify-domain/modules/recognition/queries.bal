@@ -123,7 +123,9 @@ public isolated function teamStandingsOf(postgresql:Client db, string periodKey,
 public isolated function teamPage(postgresql:Client db, string periodKey, string[]? teamEmails, string? q,
         TeamSort sort, int page, int size) returns TeamPage|error {
     [int, int] ['limit, offset] = store:pageWindow(page, size);
-    sql:ParameterizedQuery cond = `WHERE s.period_key = ${periodKey}`;
+    // Phase 1 lists only people with points (leaderboards.md): a row reversed back to 0 drops off the board
+    // instead of holding a rank slot. `recognitionTotals` counts the same way for `employeesWithPoints`.
+    sql:ParameterizedQuery cond = `WHERE s.period_key = ${periodKey} AND s.total_points > 0`;
     if teamEmails is string[] {
         string emails = store:arrayLiteral(teamEmails.map(e => e.toLowerAscii()));
         cond = sql:queryConcat(cond, ` AND s.email = ANY (CAST(${emails} AS citext[]))`);
@@ -142,7 +144,8 @@ public isolated function teamPage(postgresql:Client db, string periodKey, string
                 : ` ORDER BY team_rank, s.display_name, s.employee_id`;
     sql:ParameterizedQuery ranking = whole
         ? `COALESCE(s.rank, 0) AS team_rank,
-               (SELECT count(*) FROM recognition.standing c WHERE c.period_key = ${periodKey})::int AS total`
+               (SELECT count(*) FROM recognition.standing c
+                WHERE c.period_key = ${periodKey} AND c.total_points > 0)::int AS total`
         : `(dense_rank() OVER (ORDER BY s.total_points DESC))::int AS team_rank,
                (count(*) OVER ())::int AS total`;
     stream<TeamRow, error?> rows = db->query(sql:queryConcat(`
@@ -212,7 +215,8 @@ public isolated function recognitionTotals(postgresql:Client db, string month, t
     int monthTotal = check db->queryRow(`
         SELECT COALESCE(sum(points), 0)::int FROM recognition.employee_points_monthly WHERE month = CAST(${month} AS date)`);
     record {|int all_time; int with_points; int active;|} row = check db->queryRow(`
-        SELECT COALESCE(sum(total_points), 0)::int AS all_time, count(*)::int AS with_points,
+        SELECT COALESCE(sum(total_points), 0)::int AS all_time,
+               count(*) FILTER (WHERE total_points > 0)::int AS with_points,
                count(*) FILTER (WHERE last_activity_at >= CAST(${since} AS timestamptz))::int AS active
         FROM recognition.standing WHERE period_key = ${PERIOD_ALL}`);
     return {monthTotal, allTimeTotal: row.all_time, employeesWithPoints: row.with_points, activeLast30Days: row.active};
