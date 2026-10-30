@@ -31,6 +31,8 @@ listener http:Listener jobsListener = new (port);
 function init() returns error? {
     check checkInternalKey(internalApiKey);
     check validateSweepConfig(sweepConfig(), peopleDirectoryUrl.trim() != "");
+    // The database may still be starting: create the next two weeks of token partitions in the background.
+    _ = start ensurePartitionsAtStartup();
     check validateRunConfig(runConfig(), longestCallSeconds());
     log:printInfo(string `${COMPONENT} starting on port ${port}`);
     string? tls = store:tlsWarning(dbConfig());
@@ -63,7 +65,8 @@ service http:InterceptableService / on jobsListener {
         map<string> breakers = breakerStates();
         resilience:exportBreakerStates(COMPONENT, breakers);
         postgresql:Client|error pg = database ? db() : error("database down");
-        ReadyReport body = readiness(database, breakers, isRunInProgress(), pg is postgresql:Client ? outboxReport(pg) : ());
+        ReadyReport body = readiness(database, breakers, isRunInProgress(), pg is postgresql:Client ? outboxReport(pg) : (),
+                pg is postgresql:Client ? tokenPartitionReport(pg) : ());
         return database ? <http:Ok>{body} : <http:ServiceUnavailable>{body};
     }
 

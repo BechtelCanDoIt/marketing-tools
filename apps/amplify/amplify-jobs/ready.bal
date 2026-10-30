@@ -33,6 +33,9 @@ type ReadyReport record {|
     # What the outbox holds; absent when the database is down or the backlog could not be read. Reported, not
     # fatal: `alerting` is the signal to page on (a row waiting longer than `outboxAlertSeconds`, or one that failed)
     OutboxReport outbox?;
+    # Days ahead with a token partition; `alerting` when fewer than `tokenPartitionAlertDays` (the daily maintenance run
+    # is the only thing that creates them)
+    TokenPartitionReport tokenPartitions?;
 |};
 
 # Readiness from its inputs. Only the database gates it: without LinkedIn, Chat or the token keys the run
@@ -42,9 +45,10 @@ type ReadyReport record {|
 # + breakers - Breaker state per dependency
 # + running - Whether a run is in progress on this replica
 # + outbox - The outbox backlog, when it was read
+# + tokenPartitions - The token partition runway, when it was read
 # + return - The report
-isolated function readiness(boolean databaseUp, map<string> breakers, boolean running, OutboxReport? outbox = ())
-        returns ReadyReport {
+isolated function readiness(boolean databaseUp, map<string> breakers, boolean running, OutboxReport? outbox = (),
+        TokenPartitionReport? tokenPartitions = ()) returns ReadyReport {
     ReadyReport report = {
         component: COMPONENT,
         status: databaseUp ? types:UP : types:DOWN,
@@ -54,6 +58,9 @@ isolated function readiness(boolean databaseUp, map<string> breakers, boolean ru
     };
     if outbox is OutboxReport {
         report.outbox = outbox;
+    }
+    if tokenPartitions is TokenPartitionReport {
+        report.tokenPartitions = tokenPartitions;
     }
     return report;
 }
