@@ -41,10 +41,19 @@ local/dev-jwt/jwks.json:
 	@local/dev-jwt/mint-dev-jwt.sh init
 
 # The people-stub mounts this file; if it is missing Docker creates an empty directory in its place and the stub
-# answers 500. Gitignored (real names and emails), so a fresh clone starts from the example.
-local/people-stub/directory.json:
-	@cp local/people-stub/directory.json.example local/people-stub/directory.json
-	@echo "Wrote local/people-stub/directory.json from the example."
+# answers 500. Gitignored (real names and emails), so a fresh clone starts from the example. Checked on every
+# `make env` rather than as a plain file target: make counts an existing directory as an up-to-date target, so
+# the leftover empty directory would never be repaired. An existing directory.json is left alone.
+.PHONY: people-stub-directory
+people-stub-directory:
+	@set -e; if [ ! -f local/people-stub/directory.json ]; then \
+	  if [ -d local/people-stub/directory.json ]; then \
+	    rmdir local/people-stub/directory.json || { \
+	      echo "local/people-stub/directory.json is a non-empty directory; move it aside first." >&2; exit 1; }; \
+	  fi; \
+	  cp local/people-stub/directory.json.example local/people-stub/directory.json; \
+	  echo "Wrote local/people-stub/directory.json from the example."; \
+	fi
 
 # An existing local/.env predates the internal key: add one rather than failing `make up`.
 .PHONY: env-internal-key
@@ -54,7 +63,7 @@ env-internal-key: local/.env
 	  echo "AMPLIFY_INTERNAL_API_KEY=$$(openssl rand -hex 24)" >> local/.env; \
 	  echo "Added AMPLIFY_INTERNAL_API_KEY to local/.env."; }
 
-env: local/.env env-internal-key local/dev-jwt/jwks.json local/people-stub/directory.json
+env: local/.env env-internal-key local/dev-jwt/jwks.json people-stub-directory
 
 up: env
 	$(COMPOSE) up -d --build --wait
