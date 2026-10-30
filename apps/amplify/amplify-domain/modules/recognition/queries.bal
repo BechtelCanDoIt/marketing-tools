@@ -212,7 +212,8 @@ public isolated function recognitionTotals(postgresql:Client db, string month, t
     int monthTotal = check db->queryRow(`
         SELECT COALESCE(sum(points), 0)::int FROM recognition.employee_points_monthly WHERE month = CAST(${month} AS date)`);
     record {|int all_time; int with_points; int active;|} row = check db->queryRow(`
-        SELECT COALESCE(sum(total_points), 0)::int AS all_time, count(*)::int AS with_points,
+        SELECT COALESCE(sum(total_points), 0)::int AS all_time,
+               count(*) FILTER (WHERE total_points > 0)::int AS with_points,
                count(*) FILTER (WHERE last_activity_at >= CAST(${since} AS timestamptz))::int AS active
         FROM recognition.standing WHERE period_key = ${PERIOD_ALL}`);
     return {monthTotal, allTimeTotal: row.all_time, employeesWithPoints: row.with_points, activeLast30Days: row.active};

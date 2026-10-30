@@ -34,11 +34,8 @@ import ballerina/test;
 import ballerina/time;
 import ballerinax/postgresql;
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testM5RegisterListAndShare() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string po = check newEmployee(db, "m5po");
     campaign:Campaign c = check registerCampaign(db, po);
@@ -62,11 +59,8 @@ function testM5RegisterListAndShare() returns error? {
                                        WHERE idempotency_key = ${"RepostRequested:" + r.id + ":1"}`), 1);
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testM5OAuthStateIsSingleUseAndOwned() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string emp = check newEmployee(db, "m5oauth");
     connection:PgOAuthStateRepository repo = new (db);
@@ -82,11 +76,8 @@ function testM5OAuthStateIsSingleUseAndOwned() returns error? {
     test:assertEquals(check repo.consume(old.state, emp, now), (), "expired after 10 minutes");
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testM5ApproveAndAmplifyAwardInTheSameTransaction() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string emp = check newEmployee(db, "m5ext");
     string po = check newEmployee(db, "m5extpo");
@@ -111,7 +102,8 @@ function testM5ApproveAndAmplifyAwardInTheSameTransaction() returns error? {
     test:assertEquals(check count(db, `SELECT count(*)::int FROM scoring.points_ledger WHERE employee_id = ${emp}`), 2);
 
     external_sharing:ReviewQueue queue = check external_sharing:reviewQueue(db, 48, time:utcNow());
-    test:assertTrue(queue.pending >= 0);
+    test:assertEquals(queue.pending, check count(db, `SELECT count(*)::int FROM external_sharing.external_share
+                                                      WHERE decision IS NULL`), "the queue counts the undecided claims");
     external_sharing:ReviewThroughput tp = check external_sharing:reviewThroughput(db, time:utcAddSeconds(now, -60));
     test:assertTrue(tp.approved >= 1 && tp.amplified >= 1);
     external_sharing:ExternalSharePage review = check external_sharing:claimsForReview(db, external_sharing:AMPLIFIED, 0, 10);
@@ -119,11 +111,8 @@ function testM5ApproveAndAmplifyAwardInTheSameTransaction() returns error? {
     test:assertEquals((check external_sharing:claimsOf(db, emp)).length(), 1);
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testM5AdjustReverseUpdatesStanding() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string emp = check newEmployee(db, "m5adj");
     string po = check newEmployee(db, "m5adjpo");
@@ -168,11 +157,8 @@ function testM5AdjustReverseUpdatesStanding() returns error? {
     test:assertTrue((check recognition:topStandings(db)).length() >= 1);
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testM5IdempotencyKeysAndSettings() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string emp = "emp-idem-" + uniq();
     time:Utc now = time:utcNow();
@@ -198,11 +184,8 @@ function testM5IdempotencyKeysAndSettings() returns error? {
     test:assertTrue(stale is types:DomainError && stale.detail().code == types:ERR_VERSION_CONFLICT);
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testM5DashboardQueriesRun() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     time:Utc now = time:utcNow();
     string month = time:utcToString(now).substring(0, 7);

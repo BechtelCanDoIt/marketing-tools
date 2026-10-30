@@ -90,11 +90,8 @@ function registerCampaign(postgresql:Client db, string actor) returns campaign:C
 
 // ---- campaign ------------------------------------------------------------------------------------
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testCampaignRoundTripOutboxAndAudit() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string po = check newEmployee(db, "po");
     campaign:Campaign c = check registerCampaign(db, po);
@@ -131,11 +128,8 @@ function testCampaignRoundTripOutboxAndAudit() returns error? {
     check db.close();
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testFailedWriteRollsBackAggregateOutboxAndAudit() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string po = check newEmployee(db, "po");
     campaign:Campaign good = check campaign:newCampaign({resourceUrn: "urn:li:share:" + uniq(), ownerUrn: WSO2_ORG,
@@ -155,11 +149,8 @@ function testFailedWriteRollsBackAggregateOutboxAndAudit() returns error? {
 
 // ---- connection + token --------------------------------------------------------------------------
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testConnectionWithEncryptedTokenAndReconnect() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     byte[] key = [];
     foreach int i in 0 ..< 32 {
@@ -218,11 +209,8 @@ function testConnectionWithEncryptedTokenAndReconnect() returns error? {
 
 // ---- sharing -------------------------------------------------------------------------------------
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testShareRequestRetryAndPublishByJobs() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client apiDb = check api();
     postgresql:Client jobsDb = check jobs();
     string po = check newEmployee(apiDb, "po");
@@ -260,17 +248,16 @@ function testShareRequestRetryAndPublishByJobs() returns error? {
     // Publishing twice is refused by the domain guard and the engagement keys.
     error? twice = jobsRepo.recordPublish(published, published.request.version);
     test:assertTrue(twice is error);
+    test:assertEquals(check count(jobsDb, `SELECT count(*)::int FROM messaging.outbox WHERE idempotency_key = ${key}`), 1,
+            "the refused second publish recorded nothing");
     check apiDb.close();
     check jobsDb.close();
 }
 
 // ---- external sharing ----------------------------------------------------------------------------
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testExternalShareOneClaimPerUrlAndAmplifiedCheck() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string emp = check newEmployee(db, "claim");
     string other = check newEmployee(db, "claim2");
@@ -298,11 +285,8 @@ function testExternalShareOneClaimPerUrlAndAmplifiedCheck() returns error? {
 
 // ---- scoring + recognition -----------------------------------------------------------------------
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client jobsDb = check jobs();
     postgresql:Client apiDb = check api();
     string a = check newEmployee(apiDb, "rank-a");
@@ -376,11 +360,8 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
     check jobsDb.close();
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testPartitionMaintenanceAsJobs() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check jobs();
     store:MaintenanceResult result = check store:runPartitionMaintenance(db);
     test:assertEquals(result.token_partitions_created, 0, "already 7 days ahead");

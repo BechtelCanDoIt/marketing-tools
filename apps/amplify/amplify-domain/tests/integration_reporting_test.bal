@@ -31,11 +31,8 @@ import ballerina/test;
 import ballerina/time;
 import ballerinax/postgresql;
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testPointsByEmailReturnsLowercaseEmailAndTotal() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string emp = check newEmployee(db, "rptpts");
     string po = check newEmployee(db, "rptptspo");
@@ -63,11 +60,8 @@ function testPointsByEmailReturnsLowercaseEmailAndTotal() returns error? {
     check db.close();
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testRepostsAndPostsFeedTheBoards() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client apiDb = check api();
     postgresql:Client jobsDb = check jobs();
     string po = check newEmployee(apiDb, "rptpo");
@@ -141,11 +135,8 @@ function testRepostsAndPostsFeedTheBoards() returns error? {
     check jobsDb.close();
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testConnectionBreakdownSplitsExpiredFromRevoked() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string expiredEmp = check newEmployee(db, "rptexp");
     string revokedEmp = check newEmployee(db, "rptrev");
@@ -176,11 +167,8 @@ function testConnectionBreakdownSplitsExpiredFromRevoked() returns error? {
     check db.close();
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testAnnouncementDeliveryShowsRetriesAndCounts() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client apiDb = check api();
     postgresql:Client jobsDb = check jobs();
     string po = check newEmployee(apiDb, "rptcard");
@@ -218,11 +206,8 @@ function testAnnouncementDeliveryShowsRetriesAndCounts() returns error? {
     check jobsDb.close();
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testPointsInMonthAndEmptyIdLists() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     test:assertTrue((check reporting:pointsInMonth(db, "1999-01-01")) == 0);
     test:assertEquals((check reporting:deliveryOf(db, [])).length(), 0);
@@ -236,11 +221,8 @@ function deliveryFor(postgresql:Client db, string campaignId) returns reporting:
     return d is () ? error("no announcement row for " + campaignId) : d;
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testPointsAwardedMoveWithTheLedgerInEveryWindow() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     string emp = check newEmployee(db, "rptwin");
     string po = check newEmployee(db, "rptwinpo");
@@ -257,11 +239,8 @@ function testPointsAwardedMoveWithTheLedgerInEveryWindow() returns error? {
     check db.close();
 }
 
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testSnapshotReadsEverythingInOneRepeatableReadTransaction() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client apiDb = check api();
     postgresql:Client jobsDb = check jobs();
     string po = check newEmployee(apiDb, "rptsnap");

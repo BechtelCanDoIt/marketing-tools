@@ -42,7 +42,7 @@ function testRecognitionLocksAreTakenInOrder() returns error? {
     }
     int callSites = 0;
     foreach string path in files {
-        string src = check io:fileReadString(path);
+        string src = stripComments(check io:fileReadString(path));
         foreach var span in re `recognition\.(apply_ledger_entry|rebuild|rerank)\s*\(`.findAll(src) {
             int at = span.startIndex;
             int fnStart = src.lastIndexOf("function ", at) ?: 0;
@@ -54,6 +54,27 @@ function testRecognitionLocksAreTakenInOrder() returns error? {
         }
     }
     test:assertTrue(callSites >= 2, "found the ledger append and rebuild call sites");
+}
+
+# Blanks whole-line `//` and `#` comments, so a comment that mentions `lockRecognition(` or the word
+# "function " can't satisfy (or confuse) the scan.
+#
+# + src - Ballerina source
+# + return - The source with comment lines emptied (line breaks kept)
+function stripComments(string src) returns string {
+    string[] kept = from string line in re `\n`.split(src)
+        select line.trim().startsWith("//") || line.trim().startsWith("#") ? "" : line;
+    return string:'join("\n", ...kept);
+}
+
+@test:Config
+function testLockOrderScanIgnoresComments() {
+    string src = stripComments("// see lockRecognition( below\nisolated function bad() {\n"
+        + "  _ = db->queryRow(`SELECT recognition.rebuild(3)`);\n}\n");
+    int at = <int>src.indexOf("recognition.rebuild(");
+    int fnStart = src.lastIndexOf("function ", at) ?: 0;
+    int? lockAt = src.lastIndexOf(LOCK_CALL, at);
+    test:assertFalse(lockAt is int && lockAt > fnStart, "a comment naming the lock call doesn't count as taking it");
 }
 
 @test:Config

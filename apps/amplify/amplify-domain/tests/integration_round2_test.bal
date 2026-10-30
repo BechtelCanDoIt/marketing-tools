@@ -51,11 +51,8 @@ function tokenRows(postgresql:Client db, string tokenId) returns int|error =>
 
 // api H3: the sealed token goes in with the connection change. A connection write that fails (a stale
 // version, as when two tabs finish the OAuth flow at once) rolls the token row back with it.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testConnectionWriteFailureLeavesNoTokenRow() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check api();
     crypto:TokenCipher cipher = check new ([{keyId: "r2-a", key: keyBytes(1)}], "r2-a");
     string emp = check newEmployee(db, "tokatomic");
@@ -92,11 +89,8 @@ function testConnectionWriteFailureLeavesNoTokenRow() returns error? {
 
 // common H4 / domain H-2 / jobs H2: two keys. Rows sealed under the old key move to the new one in place,
 // open with the ring, and no longer open with the old key alone; a second pass is a no-op.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testResealStaleTokensAgainstTheDatabase() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check jobs();
     string oldId = "r2-old-" + uniq();
     string newId = "r2-new-" + uniq();
@@ -132,11 +126,8 @@ function testResealStaleTokensAgainstTheDatabase() returns error? {
 // domain H-5: the engagement unique key fires on publish (this employee already has an engagement for the
 // target); the request settles as PUBLISHED on the existing engagement instead of staying QUEUED, and no
 // second EngagementRecorded is written.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testDuplicatePublishSettlesTheShare() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client apiDb = check api();
     postgresql:Client jobsDb = check jobs();
     string po = check newEmployee(apiDb, "duppo");
@@ -184,11 +175,8 @@ function testDuplicatePublishSettlesTheShare() returns error? {
 // failed and released the key). The claim retries the insert once and wins instead of answering NoRows
 // (a 503). The window is forced with a statement trigger that deletes the holder's row right after the
 // conflicting INSERT, once.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testIdempotencyClaimRetriesWhenTheHolderVanishes() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client su = check admin();
     postgresql:Client db = check api();
     string emp = "emp-race-" + uniq();
@@ -235,11 +223,8 @@ function ddl(postgresql:Client db, string text) returns error? {
 // (`scoring:adjustPoints` -> `PgLedgerRepository.append` -> `store:inTransaction`). Every reported success
 // must be committed, nothing may fail, and no session may be left idle in a transaction (a lost commit or
 // a leaked pool connection). Without the gate this loses commits and leaks connections on 2201.13.3.
-@test:Config {groups: ["integration"]}
+@test:Config {groups: ["integration"], enable: itEnabled}
 function testGatedParallelWritesAllCommit() returns error? {
-    if !itEnabled {
-        return;
-    }
     postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: "amplify_api",
         password: apiDbPassword, sslMode: dbSslMode, maxOpenConnections: 12, poolAcquireTimeoutSeconds: 10});
     string marker = "IT gate " + uniq();

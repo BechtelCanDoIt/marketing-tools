@@ -48,7 +48,7 @@ public isolated function topStandings(postgresql:Client db, string periodKey = P
         SELECT period_key, employee_id, display_name, email::text AS email, total_points, rank, previous_rank,
                points_to_next_rank, points_to_top_n, last_activity_at
         FROM recognition.standing
-        WHERE period_key = ${periodKey} AND rank <= ${topN}
+        WHERE period_key = ${periodKey} AND rank <= ${topN} AND total_points > 0
         ORDER BY rank, display_name, employee_id`);
     return from StandingRow r in rows
         select toStanding(r);
