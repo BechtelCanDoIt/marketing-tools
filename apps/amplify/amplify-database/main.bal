@@ -27,7 +27,8 @@ import ballerinax/postgresql.driver as _;
 configurable string migrationsDir = "migrations";
 # Folder holding the reference-data scripts, applied after the migrations.
 configurable string seedDir = "seed";
-# Only list pending scripts; apply nothing.
+# Only list the scripts this image ships; apply nothing. It never connects, so it does not compare against
+# `public.schema_version` and cannot tell which scripts are pending.
 configurable boolean dryRun = false;
 
 # Database host.
@@ -43,7 +44,7 @@ configurable string dbPassword = "";
 # TLS mode. `VERIFY_FULL` (default) checks the server certificate against `dbSslRootCert` and the host
 # name, as the deployment security checklist requires (same default as amplify-api and amplify-jobs);
 # `DISABLE` only for local Docker.
-configurable postgresql:SSLMode dbSslMode = postgresql:VERIFY_FULL;
+configurable postgresql:SSLMode dbSslMode = DEFAULT_SSL_MODE;
 # PEM file with the CA that signs the managed Postgres certificate (Choreo file mount, set per environment
 # through `BAL_CONFIG_VAR_DBSSLROOTCERT`). Empty = the driver default `~/.postgresql/root.crt`.
 configurable string dbSslRootCert = "";
@@ -60,6 +61,12 @@ final regexp:RegExp SEED_FILE = re `S[0-9]{3}__[a-z0-9_]+\.sql`;
 
 # Key for the transaction-level advisory lock that serializes concurrent runners.
 const int MIGRATE_LOCK_KEY = 4242001;
+
+# TLS mode when `dbSslMode` is not configured: verify the server, like amplify-api and amplify-jobs.
+const postgresql:SSLMode DEFAULT_SSL_MODE = postgresql:VERIFY_FULL;
+
+# Oldest server the scripts run on: V002 uses `uuidv7()` (PostgreSQL 18).
+const int MIN_SERVER_VERSION_NUM = 180000;
 
 # Kind of a recorded script.
 public type ScriptKind "MIGRATION"|"SEED";
@@ -87,7 +94,7 @@ public function main() returns error? {
     log:printInfo(string `Found ${migrations.length()} migration(s) in ${migrationsDir}, ${seeds.length()} seed(s) in ${seedDir}`);
     if dryRun {
         foreach string script in [...migrations, ...seeds] {
-            log:printInfo(string `Listed: ${script}`);
+            log:printInfo(string `Shipped: ${script}`);
         }
         return;
     }
@@ -166,7 +173,9 @@ function isLocalHost(string host) returns boolean {
 # + seedPath - Seed folder
 # + return - What ran, or the first error
 public function migrate(postgresql:Client db, string migrationsPath, string seedPath) returns RunSummary|error {
+    check checkServerVersion(db);
     check ensureVersionTable(db);
+    check checkBootstrapRole(db);
     RunSummary summary = {applied: [], skipped: 0};
     foreach string script in check listMigrations(migrationsPath) {
         check applyScript(db, migrationsPath, script, "MIGRATION", summary);
@@ -219,16 +228,57 @@ function listScripts(string dir, regexp:RegExp pattern) returns string[]|error {
 # + return - Version key
 function versionOf(string script) returns string => script.substring(0, script.length() - 4);
 
+# Stops before any script runs when the server is older than the scripts need, instead of recording V001 and
+# failing on V002.
+#
+# + db - Client connected as the bootstrap admin
+# + return - An error when the server is too old or can't be asked
+function checkServerVersion(postgresql:Client db) returns error? {
+    int versionNum = check db->queryRow(`SELECT current_setting('server_version_num')::int`);
+    if versionNum < MIN_SERVER_VERSION_NUM {
+        return error(string `Amplify needs PostgreSQL 18 or later (uuidv7); the server reports version number ${versionNum}`);
+    }
+}
+
+# V001 grants `amplify_migrate` to whoever ran it, and later scripts `SET LOCAL ROLE amplify_migrate`. When the
+# bootstrap login has changed since (`dbUser` rotated), those scripts would fail with a bare "permission denied
+# to set role"; say why instead. Skipped on a fresh database, where V001 has not created the role yet.
+#
+# + db - Client connected as the bootstrap admin
+# + return - An error when V001 ran but this login can't switch to `amplify_migrate`
+function checkBootstrapRole(postgresql:Client db) returns error? {
+    boolean v001Recorded = check db->queryRow(
+            `SELECT EXISTS (SELECT 1 FROM public.schema_version WHERE version = 'V001__schemas_roles')`);
+    if !v001Recorded {
+        return;
+    }
+    boolean canSwitch = check db->queryRow(`SELECT pg_has_role(current_user, 'amplify_migrate', 'SET')`);
+    if !canSwitch {
+        return error("This login cannot SET ROLE amplify_migrate: V001 granted the role to the login that first ran "
+            + "it, and V001 is already recorded so it will not grant again. Run as that login, or grant it: "
+            + "GRANT amplify_migrate TO <this login> WITH SET TRUE");
+    }
+}
+
+# Creates `public.schema_version` once. Under the same advisory lock the scripts use, so two runners starting
+# on an empty database can't race on the CREATE.
+#
+# + db - Client connected as the bootstrap admin
+# + return - An error on failure
 function ensureVersionTable(postgresql:Client db) returns error? {
-    _ = check db->execute(`
-        CREATE TABLE IF NOT EXISTS public.schema_version (
-            version      text        PRIMARY KEY,
-            kind         text        NOT NULL CHECK (kind IN ('MIGRATION', 'SEED')),
-            checksum     text        NOT NULL,
-            applied_at   timestamptz NOT NULL DEFAULT now(),
-            applied_by   text        NOT NULL DEFAULT current_user,
-            execution_ms int         NOT NULL
-        )`);
+    transaction {
+        _ = check db->queryRow(`SELECT 1 FROM (SELECT pg_advisory_xact_lock(${MIGRATE_LOCK_KEY})) l`, int);
+        _ = check db->execute(`
+            CREATE TABLE IF NOT EXISTS public.schema_version (
+                version      text        PRIMARY KEY,
+                kind         text        NOT NULL CHECK (kind IN ('MIGRATION', 'SEED')),
+                checksum     text        NOT NULL,
+                applied_at   timestamptz NOT NULL DEFAULT now(),
+                applied_by   text        NOT NULL DEFAULT current_user,
+                execution_ms int         NOT NULL
+            )`);
+        check commit;
+    }
 }
 
 function applyScript(postgresql:Client db, string dir, string script, ScriptKind kind, RunSummary summary)
@@ -251,7 +301,12 @@ function applyScript(postgresql:Client db, string dir, string script, ScriptKind
             // The script file is trusted code shipped in the image, never user input: it is the one place
             // SQL text is executed as-is (it holds DDL and dollar-quoted bodies, which can't be bound).
             // `call`, not `execute`: execute asks the driver for generated keys, which appends RETURNING.
-            sql:ProcedureCallResult result = check db->call(scriptQuery(content));
+            log:printInfo(string `Applying ${kind} ${script}`);
+            sql:ProcedureCallResult|sql:Error result = db->call(scriptQuery(content));
+            if result is sql:Error {
+                // Name the script: the driver's own message ("relation x already exists") doesn't.
+                fail error(string `${kind} ${script} failed: ${result.message()}`, result);
+            }
             check result.close();
             // Scripts switch to amplify_migrate with SET LOCAL ROLE; record the version as the runner.
             sql:ProcedureCallResult reset = check db->call(`RESET ROLE`);
