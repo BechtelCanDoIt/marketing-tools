@@ -50,7 +50,7 @@ Check: both services are healthy in prod.
 ### Step 4: API Proxy (D)
 
 1. Proxy targets the Backend's Project endpoint. If Choreo refuses that, set the endpoint to `Organization` and record it in an ADR.
-2. Import `amplify-api/openapi.yaml`. Key manager is Asgardeo. Per-resource scopes come from `x-roles`; rate limits are tighter on shares and external shares than on reads.
+2. Import `amplify-api/openapi.yaml`. Key manager is Asgardeo. Per-resource scopes come from `x-access`; rate limits are tighter on shares and external shares than on reads.
 3. Turn on backend JWT. Copy its JWKS URL, issuer and audience into the Backend's `GATEWAYJWKSURL`, `GATEWAYISSUER`, `GATEWAYAUDIENCES` and redeploy the Backend.
 4. Security headers at the proxy if supported. If the org uses egress control, allow only `api.linkedin.com`, `www.linkedin.com`, `chat.googleapis.com` and the people-app gateway host.
 

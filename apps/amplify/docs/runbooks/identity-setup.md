@@ -31,10 +31,25 @@ Owner: Amplify technical owner. Do non-prod first, test, then repeat for prod.
 | `gatewayAudiences` | comma-separated `aud` values of the backend JWT (usually the client id of the subscribed app) |
 | `rolesClaim` / `emailClaim` / `nameClaim` | claim names as they appear in the **backend JWT** (defaults `groups`, `email`, `name`; the gateway may rename them, e.g. to `http://wso2.org/claims/...`) |
 | `jwtHeader` | `x-jwt-assertion` (default) |
+| `canCampaignGroups` … `canAdminGroups` | Asgardeo groups per capability, comma separated ([ADR-038](../../architecture/decisions/ADR-038-group-based-access-by-capability.md)). Leave empty for the defaults in the table below. Any one listed group grants the capability |
 | `dbHost`, `dbPassword`, `dbSslMode` | DB user `amplify_api`; password is a secret |
 
+Access groups (`BAL_CONFIG_VAR_CAN<CAPABILITY>GROUPS`; defaults in `amplify-api/config.bal`):
+
+| Configurable | Grants | Default |
+| --- | --- | --- |
+| `canCampaignGroups` | `CAN_CAMPAIGN`: register, edit, archive campaigns; any status | `amplify_po,amplify_marketing` |
+| `canDashboardGroups` | `CAN_DASHBOARD`: Dashboarding boards, person popup | `amplify_po,amplify_marketing,amplify_slt,amplify_admin` |
+| `canExportGroups` | `CAN_EXPORT`: dashboard CSV (names, emails) | `amplify_po,amplify_marketing,amplify_slt,amplify_admin` |
+| `canReviewSharesGroups` | `CAN_REVIEW_SHARES`: external-share queue | `amplify_po` |
+| `canPointRulesGroups` | `CAN_POINT_RULES`: point rules | `amplify_po` |
+| `canAdjustPointsGroups` | `CAN_ADJUST_POINTS`: adjust/reverse, company Team page, anyone's history | `amplify_po` |
+| `canPoDashboardGroups` | `CAN_PO_DASHBOARD`: PO dashboard | `amplify_po` |
+| `canReportsGroups` | `CAN_REPORTS`: SLT reports (phase 2) | `amplify_slt,amplify_po` |
+| `canAdminGroups` | `CAN_ADMIN`: settings, kill switches, scheduler sync, announcement retry | `amplify_admin` |
+
 - [ ] **C1** Set the keys above in dev.
-- [ ] **C2** Call `GET /me` through the proxy as each test user. Expect 200, `roles` and `capabilities` matching [activity-matrix.md](../../architecture/solution/Phase%201/activity-matrix.md).
+- [ ] **C2** Call `GET /me` through the proxy as each test user. Expect 200, `roles`, `grants` and `capabilities` matching [activity-matrix.md](../../architecture/solution/Phase%201/activity-matrix.md).
 - [ ] **C3** As the no-group user, call `GET /po/dashboard`: expect 403 `ROLE_NOT_PERMITTED` and an `audit.audit_log` row with `outcome = DENIED`.
 - [ ] **C4** If you get 401, the problem `code` says why: `TOKEN_ISSUER_INVALID` / `TOKEN_AUDIENCE_INVALID` → set log level DEBUG for `wso2/amplify_api.auth` once; it logs the received `iss` / `aud` (never the token). `TOKEN_CLAIMS_INVALID` → email or sub claim missing (A5/B2 or claim name). 503 `DEPENDENCY_UNAVAILABLE` → JWKS URL unreachable.
 - [ ] **C5** Repeat C1–C3 in prod with the prod org.
