@@ -2,4 +2,9 @@
 **/generated
 **/Config.toml
 local/.env
+local/.load/
+local/dev-jwt/*.pem
+local/dev-jwt/jwks.json
+local/people-stub/directory.json
+**/*.secret
 .git

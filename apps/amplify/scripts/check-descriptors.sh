@@ -20,7 +20,7 @@
 #   Dockerfile EXPOSE                                            : same ports
 #   compose.yaml service env                                     : subset of the descriptor env + LOCAL_ONLY
 # No yq needed: the descriptors are written one key per line on purpose.
-set -uo pipefail
+set -uo pipefail  # no -e on purpose: report every drift, then exit non-zero at the end
 cd "$(dirname "$0")/.."
 LINKEDIN=linkedin/apps/mock_linkedin
 
@@ -36,7 +36,8 @@ COMPONENTS=(
 # the local Postgres, browser-facing mock OAuth URL).
 LOCAL_ONLY="BAL_CONFIG_VAR_DEVLOCALJWTENABLED BAL_CONFIG_VAR_DEVJWKSFILE BAL_CONFIG_VAR_CHATALLOWINSECUREHTTP BAL_CONFIG_VAR_NOVERAALLOWINSECUREHTTP
 BAL_CONFIG_VAR_MINRUNINTERVALSECONDS BAL_CONFIG_VAR_RECONCILEDELAYSECONDS BAL_CONFIG_VAR_DBSSLMODE
-BAL_CONFIG_VAR_LINKEDINAUTHORIZEBASEURL"
+BAL_CONFIG_VAR_LINKEDINAUTHORIZEBASEURL
+BAL_CONFIG_VAR_ENABLEMOCKADMIN"
 
 envs()  { grep -E '^\s*- name: (BAL_CONFIG_[A-Z_]+|DSN)\s*$' "$1" | awk '{print $3}' | sort -u; }
 ports() { grep -E '^\s+port: [0-9]+' "$1" | awk '{print $2}' | sort -u; }
@@ -62,10 +63,16 @@ for row in "${COMPONENTS[@]}"; do
   [[ "$(ports "$desc")" == "$(ports "$wl")" ]] || err "$name" "ports differ ($desc vs $wl)"
   [[ "$(epnames "$desc")" == "$(epnames "$wl")" ]] || err "$name" "endpoint names differ"
   [[ "$(ports "$desc")" == "$(exposed "$dockerfile")" ]] || err "$name" "Dockerfile EXPOSE $(exposed "$dockerfile" | xargs) != descriptor ports $(ports "$desc" | xargs)"
-  grep -qE '^USER 10014' "$dockerfile" || err "$name" "Dockerfile must end as USER 10014"
-  [[ "$(grep -E '^USER ' "$dockerfile" | tail -1)" == "USER 10014" ]] || err "$name" "the last USER must be 10014"
-  # Base images pinned by digest (tag kept for readers), mock-linkedin included (same digests, jobs H5).
-  unpinned=$(grep -E '^FROM ' "$dockerfile" | grep -v '@sha256:[0-9a-f]\{64\}' | grep -vE '^FROM [a-z0-9_-]+$' || true)
+  # The final stage only: a USER set in a build stage does not carry into the image that runs.
+  final_stage="$(awk '/^FROM /{s=""} {s=s $0 "\n"} END{printf "%s", s}' "$dockerfile")"
+  [[ "$(grep -E '^USER ' <<<"$final_stage" | tail -1)" == "USER 10014" ]] || err "$name" "the final stage must end as USER 10014"
+  # Base images pinned by digest (tag kept for readers), mock-linkedin included (same digests, jobs H5). A bare
+  # `FROM name` passes only when `name` is an earlier stage (`AS name`), never as an unpinned base image.
+  stages="$(grep -iE '^FROM .* AS ' "$dockerfile" | awk '{print tolower($NF)}')"
+  unpinned=$(grep -E '^FROM ' "$dockerfile" | grep -v '@sha256:[0-9a-f]\{64\}' | while read -r _ ref rest; do
+    if [[ -z "$rest" ]] && grep -qxF "$(tr 'A-Z' 'a-z' <<<"$ref")" <<<"$stages"; then continue; fi
+    echo "FROM $ref $rest"
+  done || true)
   [[ -z "$unpinned" ]] || err "$name" "base image not pinned by digest: $(echo $unpinned)"
   allowed=$(printf '%s\n' $(envs "$desc") $LOCAL_ONLY | sort -u)
   extra=$(comm -23 <(compose_envs "$svc") <(echo "$allowed"))
