@@ -62,6 +62,11 @@ const UPLOAD_PATH = "dms-uploads";
 const MOCK_ADMIN_BASE_PATH = "mock";
 final readonly & string[] USERINFO_PATH = ["v2", "userinfo"];
 
+// Admin endpoints. Same header and key length as amplify-jobs' internal key, so one habit covers both.
+const ADMIN_KEY_HEADER = "X-Amplify-Internal-Key";
+const int MIN_ADMIN_KEY_LENGTH = 32;
+const MSG_ADMIN_UNAUTHORIZED = "Unauthorized";
+
 // Generated value shapes.
 const OPAQUE_VALUE_PREFIX = "AQ";
 const MEDIA_ID_PREFIX = "D4E10AQ";

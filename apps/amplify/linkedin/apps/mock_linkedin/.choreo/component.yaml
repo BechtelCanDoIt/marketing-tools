@@ -4,6 +4,9 @@
 # Choreo reads this file from <docker context>/.choreo/component.yaml, so every component has its own context
 # (ADR-027). Keep endpoints and env names in sync with apps/amplify/linkedin/apps/mock_linkedin/workload.yaml (scripts/check-descriptors.sh).
 # Console steps (connections, secrets, visibility): docs/runbooks/choreo-deploy.md.
+# The admin endpoints (`/mock/posts`, `/mock/reset`) deliberately have no field here: `enableMockAdmin`
+# stays off for the deployed mock. A local run that wants them sets `enableMockAdmin = true` and a
+# `mockAdminKey` of at least 32 characters in BAL_CONFIG_DATA; without the key they are not attached.
 schemaVersion: "1.2"
 endpoints:
   - name: mock-linkedin-api

@@ -46,8 +46,18 @@ configurable int memberDailyLimit = 150;
 # Requests allowed per app per UTC day.
 configurable int appDailyLimit = 100000;
 
+# Largest image body `PUT /dms-uploads` accepts, in bytes. The body is read in chunks and refused as
+# soon as it passes this, so an oversized upload is never buffered in full. LinkedIn's own image
+# upload ceiling is 10 MB.
+configurable int maxUploadBytes = 10485760;
+
 # Exposes the mock admin endpoints (`/mock/posts`, `/mock/reset`). Keep off outside local testing.
 configurable boolean enableMockAdmin = false;
+
+# Shared key the admin endpoints require in `X-Amplify-Internal-Key`. Required when `enableMockAdmin`
+# is true: with the flag on and no key set, the endpoints are not attached at all.
+@display {label: "Mock admin key", kind: "password"}
+configurable string mockAdminKey = "";
 
 # The member every authorization signs in as.
 configurable MockMember member = {
