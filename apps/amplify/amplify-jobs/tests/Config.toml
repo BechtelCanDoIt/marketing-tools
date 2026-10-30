@@ -1,0 +1,3 @@
+# Test-only configuration. The key is not a secret; it only has to match TEST_INTERNAL_KEY in service_test.bal.
+[wso2.amplify_jobs]
+internalApiKey = "test-internal-key-0123456789abcdef0123456789"
