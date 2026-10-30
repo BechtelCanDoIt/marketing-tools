@@ -53,6 +53,22 @@ function testConnectStartRefusesOpenRedirects() returns error? {
 }
 
 @test:Config {groups: ["connect"]}
+function testConnectStartSeparatesMissingBodyFromMalformedBody() returns error? {
+    // `start` reads the body itself, so no body (`{}`) and a body that is not JSON must not be the same case.
+    setLinkedInMode("OK");
+    string token = check employee("emp-conn-1b");
+    http:Response malformed = check api->execute("POST", "/connections/linkedin/start", "{not json", {
+        "x-jwt-assertion": token,
+        "Content-Type": "application/json"
+    });
+    test:assertEquals(malformed.statusCode, 400, "unparseable JSON is a 400, not a 200 with the defaults");
+    test:assertEquals(malformed.getContentType(), "application/problem+json");
+    test:assertEquals(check codeIn(malformed), "VALIDATION_FAILED");
+    test:assertEquals((check send("POST", "/connections/linkedin/start", (), token)).statusCode, 200,
+            "and a request with no body still starts the flow");
+}
+
+@test:Config {groups: ["connect"]}
 function testConnectCompleteFlowAndStateRules() returns error? {
     setLinkedInMode("OK");
     string token = check employee("emp-conn-2");
