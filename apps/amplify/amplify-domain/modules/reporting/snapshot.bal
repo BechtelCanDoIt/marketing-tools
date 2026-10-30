@@ -26,6 +26,20 @@ import amplify_domain.store;
 import ballerina/time;
 import ballerinax/postgresql;
 
+// ---- Dashboard windows ----------------------------------------------------------------------------
+
+# Campaigns opened in the last N days in the dashboard campaign table.
+configurable int dashboardCampaignWindowDays = 90;
+
+# Most rows in the dashboard campaign table.
+configurable int dashboardCampaignLimit = 200;
+
+# Months on the repost trend chart, this one included.
+configurable int dashboardMonthlyMonths = 6;
+
+# Campaigns opened in the last N days counted on the cards tile.
+configurable int dashboardCardsWindowDays = 30;
+
 # Everything the five boards need, as of one moment.
 public type Snapshot record {|
     # When it was taken
@@ -38,7 +52,7 @@ public type Snapshot record {|
     int repostsThisMonthWithCommentary;
     # Reposts last calendar month
     int repostsPrevMonth;
-    # Last six months, oldest first
+    # Last N months (default six), oldest first
     MonthCount[] monthly;
     # Connections by state
     ConnectionBreakdown connections;
@@ -48,13 +62,14 @@ public type Snapshot record {|
     PointsAwarded points;
     # People with points
     int peopleWithPoints;
-    # Open campaigns and campaigns opened in the last 90 days, priority first then newest (at most 200)
+    # Open campaigns and campaigns opened in the dashboard window (default 90 days), priority first then
+    # newest, at most `dashboardCampaignLimit`
     CampaignRow[] campaigns;
     # Announcement delivery by campaign id
     map<Delivery> delivery;
     # Shares this calendar month (UTC)
     sharing:ShareHealth shares;
-    # Cards for campaigns opened in the last 30 days
+    # Cards for campaigns opened in the cards window (default 30 days)
     CardCounts cards;
 |};
 
@@ -77,7 +92,7 @@ isolated function snapshotTx(postgresql:Client db, time:Utc now) returns Snapsho
     transaction {
         // First statement of the transaction: every query below sees one committed state.
         _ = check db->execute(`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`);
-        CampaignRow[] campaigns = check campaignRows(db, 90, 200, now);
+        CampaignRow[] campaigns = check campaignRows(db, dashboardCampaignWindowDays, dashboardCampaignLimit, now);
         string[] ids = from CampaignRow p in campaigns
             select p.campaignId;
         result = {
@@ -86,7 +101,7 @@ isolated function snapshotTx(postgresql:Client db, time:Utc now) returns Snapsho
             repostsThisMonth: check repostsBetween(db, monthStart, soon),
             repostsThisMonthWithCommentary: check commentaryRepostsBetween(db, monthStart, soon),
             repostsPrevMonth: check repostsBetween(db, prevMonthStart, monthStart),
-            monthly: check monthlyReposts(db, 6),
+            monthly: check monthlyReposts(db, dashboardMonthlyMonths),
             connections: check connectionBreakdown(db),
             participation: check participationCounts(db),
             points: check pointsAwarded(db),
@@ -94,7 +109,7 @@ isolated function snapshotTx(postgresql:Client db, time:Utc now) returns Snapsho
             campaigns,
             delivery: check deliveryOf(db, ids),
             shares: check sharing:shareHealth(db, monthStart),
-            cards: check cardCounts(db, time:utcAddSeconds(now, -30d * 86400d))
+            cards: check cardCounts(db, time:utcAddSeconds(now, -<decimal>dashboardCardsWindowDays * 86400d))
         };
         check commit;
     }
