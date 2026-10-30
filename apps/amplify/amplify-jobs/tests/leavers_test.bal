@@ -24,12 +24,14 @@ isolated class FakeLeaverPorts {
     private final boolean directoryDown;
     private final readonly & string[] leavers;
     private final boolean leaversDown;
+    private final int employees;
     private final readonly & string[] failErasing;
     private string[] erasedIds = [];
     private int candidateLimit = -1;
 
     isolated function init(string[] directory, string[] leavers, string[] failErasing = [],
-            boolean directoryDown = false, boolean leaversDown = false) {
+            boolean directoryDown = false, boolean leaversDown = false, int employees = 1000) {
+        self.employees = employees;
         self.directory = directory.cloneReadOnly();
         self.directoryDown = directoryDown;
         self.leavers = leavers.cloneReadOnly();
@@ -55,6 +57,8 @@ isolated class FakeLeaverPorts {
         return all.length() > 'limit ? all.slice(0, 'limit) : all.clone();
     }
 
+    public isolated function knownEmployees() returns int|error => self.employees;
+
     public isolated function erase(string employeeId) returns error? {
         if self.failErasing.indexOf(employeeId) !is () {
             return error("database said no");
@@ -79,8 +83,8 @@ isolated class FakeLeaverPorts {
 
 isolated function crowd(int n) returns string[] => from int i in 0 ..< n select string `person${i}@example.com`;
 
-isolated function config(SweepMode mode, int graceDays = 30, int maxPerRun = 5) returns SweepConfig =>
-    {mode, graceDays, minDirectorySize: 100, maxPerRun};
+isolated function config(SweepMode mode, int graceDays = 30, int maxPerRun = 5, int maxPercent = 10) returns SweepConfig =>
+    {mode, graceDays, minDirectorySize: 100, maxPerRun, maxPercent};
 
 final SweepConfig & readonly ERASING = config(ERASE).cloneReadOnly();
 
@@ -148,6 +152,21 @@ function testMoreLeaversThanTheCapErasesNobody() {
 }
 
 @test:Config
+function testLeaversThatAreTooLargeAShareOfAmplifyEraseNobody() {
+    // Few people use Amplify during the pilot: 3 leavers of 20 employees is 15%, over the 10% cap, even though 3 is
+    // far under the absolute cap of 5. A directory that is missing some of them looks exactly like this.
+    FakeLeaverPorts ports = new (crowd(500), ["a", "b", "c"], employees = 20);
+    LeaverSweepReport report = sweepLeavers(ports, ERASING);
+    test:assertTrue((report.skipped ?: "").includes("over 10%"), report.skipped ?: "");
+    test:assertEquals(ports.erased(), []);
+    // The same three among 100 employees is 3%, fine; exactly at the cap is fine too.
+    FakeLeaverPorts roomy = new (crowd(500), ["a", "b", "c"], employees = 100);
+    test:assertEquals(sweepLeavers(roomy, ERASING).erased, 3);
+    FakeLeaverPorts exact = new (crowd(500), ["a", "b"], employees = 20);
+    test:assertEquals(sweepLeavers(exact, ERASING).erased, 2);
+}
+
+@test:Config
 function testUnreadableCandidatesSkipTheSweep() {
     FakeLeaverPorts ports = new (crowd(500), [], leaversDown = true);
     test:assertEquals(sweepLeavers(ports, ERASING).skipped, "candidates unreadable");
@@ -161,4 +180,6 @@ function testSweepSettingsAreCheckedAtStartUp() {
     test:assertEquals(validateSweepConfig(ERASING, true), ());
     test:assertTrue(validateSweepConfig(config(ERASE, graceDays = 0), true) is error);
     test:assertTrue(validateSweepConfig(config(ERASE, maxPerRun = 0), true) is error);
+    test:assertTrue(validateSweepConfig(config(ERASE, maxPercent = 0), true) is error);
+    test:assertTrue(validateSweepConfig(config(ERASE, maxPercent = 101), true) is error);
 }

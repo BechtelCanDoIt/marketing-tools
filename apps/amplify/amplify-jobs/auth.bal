@@ -43,7 +43,7 @@ public isolated service class InternalKeyInterceptor {
             return ctx.next();
         }
         string|http:HeaderNotFoundError presented = req.getHeader(INTERNAL_KEY_HEADER);
-        if presented is string && crypto:constantTimeEquals(presented, internalApiKey) {
+        if presented is string && keyMatches(presented, internalApiKey) {
             return ctx.next();
         }
         // The route and whether a key was sent, never the key itself.
@@ -52,6 +52,16 @@ public isolated service class InternalKeyInterceptor {
         return <http:Unauthorized>{body: {message: "Unauthorized"}};
     }
 }
+
+# Whether a presented key is the configured one. Both sides are trimmed: amplify-api and the scheduler send the
+# trimmed value, and a secret mounted from a file often ends in a newline, which would otherwise be accepted at
+# start-up and then refuse every call.
+#
+# + presented - Key from the request header
+# + configured - `internalApiKey`
+# + return - True when equal, compared in constant time
+isolated function keyMatches(string presented, string configured) returns boolean =>
+    crypto:constantTimeEquals(presented.trim(), configured.trim());
 
 # Stops start-up when the key is blank or too short to be a secret.
 #

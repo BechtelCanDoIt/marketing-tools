@@ -23,6 +23,7 @@
 // that answers with too few people, or a sweep that finds more leavers than `leaverMaxPerRun`, erases nobody and says why:
 // both look like a broken directory, not a company that lost people overnight.
 
+import amplify_common.resilience;
 import amplify_domain.identity;
 import amplify_domain.store;
 
@@ -48,6 +49,9 @@ configurable int leaverGraceDays = 30;
 configurable int leaverMinDirectorySize = 100;
 # Most leavers one sweep will erase. More than this erases nobody: it points to a directory problem, not to leavers.
 configurable int leaverMaxPerRun = 10;
+# Most leavers one sweep will erase, as a percentage of the employees Amplify knows. The absolute cap alone lets a partial
+# directory erase a handful of active people while Amplify is small; this one scales with the pilot.
+configurable int leaverMaxPercent = 10;
 
 # people-app's directory, the full `GET .../employees/basic-info` URL (the same one amplify-api reads).
 configurable string peopleDirectoryUrl = "";
@@ -86,6 +90,8 @@ public type LeaverPorts isolated object {
     public isolated function candidates(string[] emails, int graceDays, int 'limit) returns string[]|error;
     # Erases one employee.
     public isolated function erase(string employeeId) returns error?;
+    # Employees Amplify holds data for (not yet erased), the base of the percentage cap.
+    public isolated function knownEmployees() returns int|error;
 };
 
 # The sweep settings.
@@ -98,6 +104,8 @@ public type SweepConfig record {|
     int minDirectorySize;
     # Most erased in one sweep
     int maxPerRun;
+    # Most erased in one sweep, as a percentage of the employees Amplify knows
+    int maxPercent;
 |};
 
 # Runs one sweep. Never fails: every problem becomes `skipped` or a count, and is logged.
@@ -113,7 +121,7 @@ public isolated function sweepLeavers(LeaverPorts ports, SweepConfig cfg) return
     }
     string[]|error emails = ports.directoryEmails();
     if emails is error {
-        log:printWarn("Leaver sweep skipped: the people directory is unavailable", 'error = emails);
+        log:printWarn("Leaver sweep skipped: the people directory is unavailable", resilience:loggable(emails));
         report.skipped = "directory unavailable";
         return report;
     }
@@ -127,7 +135,7 @@ public isolated function sweepLeavers(LeaverPorts ports, SweepConfig cfg) return
     // One more than the cap, so "more than the cap" is visible without reading every leaver.
     string[]|error found = ports.candidates(emails, cfg.graceDays, cfg.maxPerRun + 1);
     if found is error {
-        log:printWarn("Leaver sweep skipped: could not read the candidates", 'error = found);
+        log:printWarn("Leaver sweep skipped: could not read the candidates", resilience:loggable(found));
         report.skipped = "candidates unreadable";
         return report;
     }
@@ -139,6 +147,18 @@ public isolated function sweepLeavers(LeaverPorts ports, SweepConfig cfg) return
         report.skipped = string `more than ${cfg.maxPerRun} leavers; nobody erased, check the directory`;
         return report;
     }
+    int|error known = ports.knownEmployees();
+    if known is error {
+        log:printWarn("Leaver sweep skipped: could not count the employees", resilience:loggable(known));
+        report.skipped = "employee count unreadable";
+        return report;
+    }
+    if found.length() * 100 > cfg.maxPercent * known {
+        log:printError("Leaver sweep skipped: the leavers are too large a share of the employees; check the directory",
+                leavers = found.length(), employees = known, maxPercent = cfg.maxPercent);
+        report.skipped = string `${found.length()} leavers of ${known} employees is over ${cfg.maxPercent}%; nobody erased, check the directory`;
+        return report;
+    }
     if cfg.mode == DRY_RUN {
         log:printInfo("Leaver sweep (dry run)", candidates = found.length());
         return report;
@@ -147,7 +167,7 @@ public isolated function sweepLeavers(LeaverPorts ports, SweepConfig cfg) return
         error? erased = ports.erase(employeeId);
         if erased is error {
             report.failed += 1;
-            log:printError("Leaver erase failed", 'error = erased);
+            log:printError("Leaver erase failed", resilience:loggable(erased));
         } else {
             report.erased += 1;
         }
@@ -195,6 +215,8 @@ isolated class ProductionLeaverPorts {
     public isolated function candidates(string[] emails, int graceDays, int 'limit) returns string[]|error =>
         identity:leaverCandidates(self.db, emails, graceDays, 'limit);
 
+    public isolated function knownEmployees() returns int|error => identity:countEmployees(self.db);
+
     public isolated function erase(string employeeId) returns error? {
         json|error result = identity:eraseEmployee(self.db, employeeId, store:SYSTEM.actorId, "LEAVER_SWEEP");
         if result is error {
@@ -229,6 +251,9 @@ isolated function validateSweepConfig(SweepConfig cfg, boolean directoryConfigur
     if cfg.graceDays < 1 || cfg.minDirectorySize < 1 || cfg.maxPerRun < 1 {
         return error("leaverGraceDays, leaverMinDirectorySize and leaverMaxPerRun must be at least 1");
     }
+    if cfg.maxPercent < 1 || cfg.maxPercent > 100 {
+        return error("leaverMaxPercent must be between 1 and 100");
+    }
 }
 
 # The configured sweep settings.
@@ -238,7 +263,8 @@ isolated function sweepConfig() returns SweepConfig => {
     mode: leaverSweepMode,
     graceDays: leaverGraceDays,
     minDirectorySize: leaverMinDirectorySize,
-    maxPerRun: leaverMaxPerRun
+    maxPerRun: leaverMaxPerRun,
+    maxPercent: leaverMaxPercent
 };
 
 # Runs the sweep against the real database and directory.

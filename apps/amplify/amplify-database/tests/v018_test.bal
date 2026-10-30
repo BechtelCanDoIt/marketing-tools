@@ -96,6 +96,10 @@ function testEraseEmployeeRemovesPersonalDataAndKeepsTheLedger() returns error? 
         WHERE entity_id = 'erase-gone' AND action = 'EMPLOYEE_DATA_ERASED' AND actor_id = 'system'
           AND reason = 'leaver sweep'`);
     test:assertEquals(audited, 1);
+    // The database user that really called it is recorded next to the actor the caller named.
+    string calledBy = check admin->queryRow(`SELECT after->>'calledBy' FROM audit.audit_log
+        WHERE entity_id = 'erase-gone' AND action = 'EMPLOYEE_DATA_ERASED' AND reason = 'leaver sweep'`);
+    test:assertEquals(calledBy, "amplify_jobs");
     // Someone else is untouched.
     test:assertEquals(check remaining(admin, "erase-stays"), 7, "another employee keeps everything");
     string keptEmail = check admin->queryRow(`SELECT email::text FROM identity.employee WHERE employee_id = 'erase-stays'`);

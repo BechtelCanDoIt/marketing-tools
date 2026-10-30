@@ -46,6 +46,16 @@ public isolated function leaverCandidates(postgresql:Client db, string[] directo
         select r.employee_id;
 }
 
+# How many employees Amplify holds data for (erased ones excluded): the base for the leaver percentage cap.
+#
+# + db - Client
+# + return - Count, or an error
+public isolated function countEmployees(postgresql:Client db) returns int|error {
+    int total = check db->queryRow(`SELECT count(*)::int FROM identity.employee
+        WHERE email::text NOT LIKE 'erased-%@amplify.invalid'`);
+    return total;
+}
+
 # Erases one employee's personal data with `identity.erase_employee`, which audits the call and keeps the ledger.
 #
 # + db - Client connected as a role allowed to execute it (`amplify_jobs`)

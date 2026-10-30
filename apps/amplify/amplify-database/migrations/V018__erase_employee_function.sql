@@ -28,7 +28,17 @@
 -- the monthly totals, so the leaderboard arithmetic and the audit trail stay intact. Backups keep the old data
 -- until their retention ends.
 --
--- Safe to run twice: a second call changes nothing and reports zeros.
+-- Not removed, and why:
+--   * The LinkedIn member URN also sits in audit.audit_log (before/after of connection events; the log is append-only
+--     and kept 60 months) and in messaging.outbox (payload and idempotency key) until the purge of DONE rows. Erasing
+--     those would break the audit trail or the idempotency guard, so the URN is kept there until retention removes it.
+--     Legal / Privacy should confirm that is acceptable.
+--   * The tokens are deleted here but not revoked at LinkedIn: they stay valid there until they expire. When the person
+--     is still reachable, Remove Connection (Me > Settings) revokes first.
+--   * external_sharing.external_share keeps the post URLs the person submitted, keyed by the pseudonymous id.
+--
+-- The audit row records who called it (session_user) next to the actor the caller names, so a caller cannot pass
+-- itself off as someone else. Safe to run twice: a second call changes nothing and reports zeros.
 
 SET LOCAL ROLE amplify_migrate;
 
@@ -91,8 +101,8 @@ BEGIN
         'engagements', v_engagements, 'employee', v_employee, 'standings', v_standings);
 
     INSERT INTO audit.audit_log (actor_id, actor_roles, action, entity_type, entity_id, outcome, after, reason)
-    VALUES (p_actor, ARRAY['amplify_migrate'], 'EMPLOYEE_DATA_ERASED', 'employee', p_employee_id, 'SUCCESS',
-            v_result, p_reason);
+    VALUES (p_actor, ARRAY[session_user::text], 'EMPLOYEE_DATA_ERASED', 'employee', p_employee_id, 'SUCCESS',
+            v_result || jsonb_build_object('calledBy', session_user), p_reason);
     RETURN v_result;
 END
 $fn$;
