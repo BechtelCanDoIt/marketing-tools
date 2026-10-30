@@ -75,6 +75,7 @@ After each build, confirm the endpoint Choreo shows matches the descriptor (name
 1. **E1** First version **v1.0.0 from `main`**; no extra deployment tracks.
 2. **E2** Build once, promote the same image dev → prod. Only config and secrets differ per environment.
 3. **E3** Before promoting: run DB Migrate in prod, then deploy Jobs, Scheduler, Backend; check Backend `GET /ready` (via the proxy test console) and that the startup log says `Scheduler sync … SYNCED`.
+4. **E4** No CI workflow runs the quality gates yet (the marketing-tools repo has none), so nothing checks a PR automatically. Until one is added, run them by hand before every promotion: `make check` (descriptors, log PII, transaction gate), `scripts/lint-openapi-names.sh`, and `scripts/test-all.sh`. A workflow that runs all of them on every PR is still to be added.
 
 ## F. Observability
 
