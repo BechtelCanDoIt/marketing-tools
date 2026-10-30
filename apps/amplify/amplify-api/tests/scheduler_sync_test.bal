@@ -383,3 +383,23 @@ function testRealSchedulerReconcileUpdateAndFire() returns error? {
         itScheduler = ();
     }
 }
+
+@test:Config
+function testRegisteredJobsCarryTheInternalKeyAndTheKeyIsRequiredWhenJobsIsConfigured() {
+    foreach scheduler:JobSpec spec in desiredJobs({}) {
+        test:assertEquals(spec.headers, [{name: INTERNAL_KEY_HEADER, value: internalApiKey}], spec.id);
+    }
+    test:assertTrue(checkInternalKey("http://jobs", "", "") is error);
+    test:assertTrue(checkInternalKey("", "http://scheduler", "short") is error);
+    test:assertEquals(checkInternalKey("http://jobs", "http://scheduler", internalApiKey), ());
+    test:assertEquals(checkInternalKey("", "", ""), (), "nothing to call, nothing to authenticate");
+}
+
+@test:Config
+function testSchedulerWithNoJobTargetIsRefused() {
+    // Both job URLs empty: every job's URI would be just "/runs". One clear startup error, not one per job.
+    test:assertTrue(schedulerTargetError("", "") is error, "both empty: the scheduler has nowhere to call");
+    test:assertTrue(schedulerTargetError("   ", "") is error);
+    test:assertEquals(schedulerTargetError("http://amplify-jobs:9598", ""), (), "schedulerJobsUrl is enough");
+    test:assertEquals(schedulerTargetError("", "http://amplify-jobs:9598"), (), "jobsUrl is enough");
+}

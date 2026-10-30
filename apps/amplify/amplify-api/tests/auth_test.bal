@@ -49,6 +49,8 @@ function testMissingTokenIs401() returns error? {
     test:assertEquals(res.statusCode, 401);
     test:assertEquals(res.getContentType(), "application/problem+json");
     test:assertEquals(check codeOf(res), auth:TOKEN_MISSING);
+    // RFC 9110 section 11.6.1: a 401 names the scheme it expects.
+    test:assertEquals(check res.getHeader("WWW-Authenticate"), "Bearer realm=\"amplify\"");
     store:AuditEntry[] audit = takeDenials();
     test:assertEquals(audit.length(), 1);
     test:assertEquals(audit[0].actorId, "anonymous");
@@ -222,14 +224,14 @@ function testMeUpsertsEmployeeAndReportsCapabilities() returns error? {
     test:assertEquals(res.statusCode, 200);
     json body = check res.getJsonPayload();
     test:assertEquals(check body.employee.email, "ada.lovelace@wso2.com");
-    test:assertEquals(check body.employee.display_name, "Ada Lovelace");
+    test:assertEquals(check body.employee.displayName, "Ada Lovelace");
     test:assertEquals(check body.roles, [MARKETING_GROUP]);
     test:assertEquals(check body.grants, [auth:EMPLOYEE, auth:CAN_CAMPAIGN, auth:CAN_DASHBOARD, auth:CAN_EXPORT]);
     json[] caps = check (check body.capabilities).ensureType();
     test:assertTrue(caps.indexOf("campaigns.manage") !is ());
     test:assertTrue(caps.indexOf("po.dashboard") is ());
     test:assertEquals(check body.linkedin.status, "NOT_CONNECTED");
-    test:assertEquals(check body.linkedin.expires_at, ());
+    test:assertEquals(check body.linkedin.expiresAt, ());
     test:assertTrue(fakeEmployees.findById("emp-0001") is record {});
 }
 
@@ -254,9 +256,9 @@ function testMeReportsLinkedInStatus() returns error? {
     http:Response res = check call("GET", "/me", check mint({sub: "emp-0002", email: "grace@wso2.com", name: ()}));
     test:assertEquals(res.statusCode, 200);
     json body = check res.getJsonPayload();
-    test:assertEquals(check body.employee.display_name, "grace");
+    test:assertEquals(check body.employee.displayName, "grace");
     test:assertEquals(check body.linkedin.status, "ACTIVE");
-    test:assertEquals(check body.linkedin.expires_at, time:utcToString(expires));
+    test:assertEquals(check body.linkedin.expiresAt, time:utcToString(expires));
 }
 
 // ---- Dev-only local signing (ADR-023) ------------------------------------------------------------
@@ -313,4 +315,44 @@ function testJwksOutageServesCachedKeys() returns error? {
         return e;
     }
     setJwksDown(false);
+}
+
+// ---- Token length matches the listener header limit ----------------------------------------------
+
+@test:Config
+function testTokenLengthLimitMatchesTheListener() returns error? {
+    // The HTTP listener refuses a header over its default `maxHeaderSize` (8192) before the verifier runs,
+    // so a larger limit here would never fire. Keep the two equal.
+    test:assertEquals(auth:MAX_TOKEN_LENGTH, 8192, "the token limit must not exceed the listener's header limit");
+    auth:JwksCache jwks = check new ({url: "http://localhost:9591/jwks"});
+    auth:TokenVerifier verifier = new (jwks, {issuer: TEST_ISSUER, audiences: [TEST_AUDIENCE]});
+    // Three parts (so only the length check can reject it), one byte past the limit.
+    string tooLong = "a".padEnd(auth:MAX_TOKEN_LENGTH, "a") + ".b.c";
+    auth:Principal|auth:AuthError result = verifier.verify(tooLong);
+    test:assertTrue(result is auth:AuthError, "a token past the limit is malformed");
+    if result is auth:AuthError {
+        test:assertEquals(result.detail().code, auth:TOKEN_MALFORMED);
+    }
+}
+
+// ---- JWKS refresh gate: one fetch per interval, warm or cold -------------------------------------
+
+@test:Config
+function testColdJwksCacheFetchesOncePerInterval() returns error? {
+    setJwksEmptyBody(true);
+    resetJwksHits();
+    do {
+        // No usable keys, so the cache stays empty after each call: the gate must hold on a cold cache
+        // too (an old `!empty &&` gate let every request in a start-up burst fetch).
+        auth:JwksCache cold = check new ({url: "http://localhost:9591/jwks", minRefreshIntervalSeconds: 60});
+        foreach int i in 0 ..< 4 {
+            auth:Jwk[]|auth:AuthError keys = cold.keysFor("unknown-" + i.toString());
+            test:assertTrue(keys is auth:AuthError && keys.detail().code == auth:KEYS_UNAVAILABLE);
+        }
+        test:assertEquals(jwksHitCount(), 1, "a cold cache must fetch once per interval, not once per request");
+    } on fail error e {
+        setJwksEmptyBody(false);
+        return e;
+    }
+    setJwksEmptyBody(false);
 }

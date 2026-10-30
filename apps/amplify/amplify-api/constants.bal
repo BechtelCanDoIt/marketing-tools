@@ -21,6 +21,8 @@ const string COMPONENT = "amplify-api";
 const string PRINCIPAL_KEY = "amplify.principal";
 # Correlation header.
 const string CORRELATION_HEADER = "X-Correlation-ID";
+// Header amplify-jobs requires on every call except its probes (security review, back-office components).
+const string INTERNAL_KEY_HEADER = "X-Amplify-Internal-Key";
 # Problem details media type.
 const string PROBLEM_JSON = "application/problem+json";
 # Problem `type` prefix.
@@ -41,6 +43,8 @@ const string ACCESS_DENIED = "AccessDenied";
 const string ROUTE_ENTITY = "http.route";
 # Actor id when the caller couldn't be authenticated.
 const string ANONYMOUS = "anonymous";
+# Most denial keys the audit throttle holds; past it, keys older than the window are dropped.
+const int DENIAL_THROTTLE_MAX = 1024;
 # `GET /me` LinkedIn status when the employee never connected.
 const string NOT_CONNECTED = "NOT_CONNECTED";
 

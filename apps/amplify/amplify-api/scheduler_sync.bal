@@ -60,7 +60,22 @@ isolated function newSchedulerClient() returns scheduler:Api?|error {
     if runDeadlineSeconds < 1 || maintenanceDeadlineSeconds < 1 {
         return error("runDeadlineSeconds and maintenanceDeadlineSeconds must be positive");
     }
+    check schedulerTargetError(schedulerJobsUrl, jobsUrl);
     return check new scheduler:Client(schedulerUrl, schedulerTimeoutSeconds, schedulerResilience);
+}
+
+# Refuses a configured scheduler with no target for its jobs: every job's URI would be just "/runs", which
+# would log an error per job on every reconcile and answer 503 on /admin/scheduler/sync for what is a
+# configuration mistake. One clear startup error instead.
+#
+# + schedulerJobsUrl - amplify-jobs URL as the scheduler reaches it
+# + jobsUrl - fallback amplify-jobs URL
+# + return - An error when both are empty
+isolated function schedulerTargetError(string schedulerJobsUrl, string jobsUrl) returns error? {
+    if schedulerJobsUrl.trim() != "" || jobsUrl.trim() != "" {
+        return ();
+    }
+    return error("schedulerUrl is set but neither schedulerJobsUrl nor jobsUrl is: the scheduler has nowhere to call");
 }
 
 # Test seam: the scheduler client.
@@ -114,7 +129,8 @@ isolated function desiredJobs(Settings s) returns scheduler:JobSpec[] {
             // One retry for a 5xx or a dropped connection; 202 SKIPPED (run in progress) is a success.
             retryCount: 1,
             retryIntervalSeconds: 30,
-            deadlineSeconds: runDeadlineSeconds
+            deadlineSeconds: runDeadlineSeconds,
+            headers: internalKeyHeaders()
         },
         {
             id: JOB_MAINTENANCE,
@@ -123,7 +139,8 @@ isolated function desiredJobs(Settings s) returns scheduler:JobSpec[] {
             uri: base + "/maintenance/partitions",
             retryCount: 2,
             retryIntervalSeconds: 60,
-            deadlineSeconds: maintenanceDeadlineSeconds
+            deadlineSeconds: maintenanceDeadlineSeconds,
+            headers: internalKeyHeaders()
         }
     ];
 }
@@ -149,7 +166,8 @@ isolated function syncScheduler(Settings? s, string? correlationId) returns Sche
         // the commit this sync follows, and pushing those would report SYNCED with the old schedule.
         Settings|error settings = given is Settings ? given : freshSettings();
         if settings is error {
-            log:printError("Scheduler sync: settings unreadable", settings, correlationId = correlationId);
+            log:printError("Scheduler sync: settings unreadable", resilience:loggable(settings),
+                    correlationId = correlationId);
             return {status: "PENDING", jobs: []};
         }
         return pushJobs(api, settings.cloneReadOnly(), correlationId).cloneReadOnly();
@@ -209,7 +227,8 @@ isolated function auditSync(store:Actor actor, SchedulerSyncResult result) {
     error? written = recordAudit(store:auditOf(actor, "SchedulerSynced", "scheduler.job", schedulerCollection,
             result.toJson()));
     if written is error {
-        log:printError("Scheduler sync audit not written", written, correlationId = actor.correlationId);
+        log:printError("Scheduler sync audit not written", resilience:loggable(written),
+                correlationId = actor.correlationId);
     }
 }
 
