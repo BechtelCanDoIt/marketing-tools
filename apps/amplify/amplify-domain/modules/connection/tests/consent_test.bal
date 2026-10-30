@@ -32,3 +32,11 @@ function profileUrlRejectsEverythingElse() {
     test:assertFalse(isProfileUrl("https://www.linkedin.com/in/scott-bechtel?utm=1"));
     test:assertFalse(isProfileUrl("https://www.linkedin.com/in/ab"));
 }
+
+@test:Config {}
+function profileUrlRejectsABarePercent() {
+    // `%` only counts as an escape when two hex digits follow it.
+    test:assertFalse(isProfileUrl("https://www.linkedin.com/in/%zz-garcia"));
+    test:assertFalse(isProfileUrl("https://www.linkedin.com/in/scott%00"));
+    test:assertFalse(isProfileUrl("https://www.linkedin.com/in/scott%"));
+}

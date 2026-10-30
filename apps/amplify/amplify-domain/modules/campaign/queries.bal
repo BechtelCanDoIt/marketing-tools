@@ -105,8 +105,7 @@ public isolated function listCampaigns(postgresql:Client db, CampaignQuery query
         cond = sql:queryConcat(cond, ` AND EXISTS (SELECT 1 FROM campaign.campaign_tag t
                                                      WHERE t.campaign_id = c.id AND t.tag = ${tag})`);
     }
-    int size = query.size < 1 ? 1 : query.size > MAX_PAGE_SIZE ? MAX_PAGE_SIZE : query.size;
-    int offset = (query.page < 0 ? 0 : query.page) * size;
+    [int, int] [size, offset] = store:pageWindow(query.page, query.size, MAX_PAGE_SIZE);
     sql:ParameterizedQuery sqlQuery = sql:queryConcat(`
         SELECT c.id::text AS id, c.provider, c.resource_urn, c.resource_type, c.owner_urn, c.resource_url, c.title,
                c.summary, c.image_url, c.category_code, c.is_priority, c.opens_at, c.closes_at, c.archived_at,
