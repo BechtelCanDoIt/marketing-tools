@@ -15,6 +15,7 @@
 // under the License.
 
 
+import ballerina/http;
 import ballerina/test;
 
 @test:Config
@@ -45,4 +46,52 @@ function noveraTokenEndpointDownIsARetryableUnavailableNotAStartUpFailure() {
             test:assertTrue(result.detail().retryable);
         }
     }
+}
+
+// A Novera stand-in: a token endpoint and a notifications endpoint that answers whatever status the test sets.
+const int NOVERA_STUB_PORT = 18299;
+isolated int noveraStubStatus = 202;
+
+listener http:Listener noveraStub = new (NOVERA_STUB_PORT);
+
+service / on noveraStub {
+    isolated resource function post token() returns json => {access_token: "stub-token", token_type: "Bearer", expires_in: 3600};
+
+    isolated resource function post internal/notifications() returns http:Response {
+        http:Response res = new;
+        lock {
+            res.statusCode = noveraStubStatus;
+        }
+        return res;
+    }
+}
+
+function noveraAnswers(int status) returns NoveraError? {
+    lock {
+        noveraStubStatus = status;
+    }
+    NoveraClient|error novera = new (string `http://127.0.0.1:${NOVERA_STUB_PORT}/internal/notifications`,
+        string `http://127.0.0.1:${NOVERA_STUB_PORT}/token`, "id", "secret", [], 5, allowInsecureHttp = true);
+    if novera is error {
+        return noveraError("UNAVAILABLE", "client not built", (), false);
+    }
+    return novera.notify({'source: "amplify", title: "T", subtitle: "S", body: "B",
+        button: {url: "https://one.wso2.com", label: "Amplify"}}, ());
+}
+
+@test:Config
+function noveraStatusesAreClassifiedByWhoCanFixThem() {
+    test:assertEquals(noveraAnswers(202), ());
+    // A bad card is permanent; a refused credential or a limit is something an operator or time fixes.
+    NoveraError? bad = noveraAnswers(400);
+    test:assertTrue(bad is NoveraError && bad.detail().code == "REJECTED" && !bad.detail().retryable);
+    foreach int status in [401, 403] {
+        NoveraError? refused = noveraAnswers(status);
+        test:assertTrue(refused is NoveraError && refused.detail().code == "UNAVAILABLE" && refused.detail().retryable,
+                string `HTTP ${status} from Novera is retryable`);
+    }
+    NoveraError? limited = noveraAnswers(429);
+    test:assertTrue(limited is NoveraError && limited.detail().code == "RATE_LIMITED" && limited.detail().retryable);
+    NoveraError? down = noveraAnswers(503);
+    test:assertTrue(down is NoveraError && down.detail().code == "UNAVAILABLE" && down.detail().retryable);
 }

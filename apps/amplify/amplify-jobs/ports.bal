@@ -30,6 +30,7 @@ import amplify_domain.sharing;
 import amplify_domain.store;
 
 import ballerina/lang.runtime;
+import ballerina/log;
 import ballerina/time;
 import ballerinax/postgresql;
 
@@ -251,7 +252,12 @@ isolated class PgRunLock {
     }
 
     isolated function release() returns error? {
-        boolean _ = check self.db->queryRow(`SELECT pg_advisory_unlock(CAST(${RUN_LOCK_KEY} AS bigint))`);
+        boolean released = check self.db->queryRow(`SELECT pg_advisory_unlock(CAST(${RUN_LOCK_KEY} AS bigint))`);
+        if !released {
+            // The lock is a session lock on a pooled connection. `false` means this connection no longer
+            // holds it (it was retired mid-run), so another replica may have started a run meanwhile.
+            log:printWarn("Run lock was no longer held when the run finished");
+        }
     }
 }
 
