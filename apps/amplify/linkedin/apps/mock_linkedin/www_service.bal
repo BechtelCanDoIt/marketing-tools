@@ -19,7 +19,8 @@ import ballerina/http;
 import ballerina/log;
 
 # Listener for the `www.linkedin.com` host.
-listener http:Listener wwwListener = new (wwwPort, host = listenerHost);
+// Uploads are small test images; without a limit `PUT /dms-uploads` buffers whatever it is sent.
+listener http:Listener wwwListener = new (wwwPort, host = listenerHost, requestLimits = {maxEntityBodySize: 10485760});
 
 # Mock of LinkedIn's 3-legged OAuth 2.0 authorization code flow. There is no login page:
 # every authorization signs in as the configured `member` and consents straight away.

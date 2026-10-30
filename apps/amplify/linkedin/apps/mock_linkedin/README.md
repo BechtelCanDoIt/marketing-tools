@@ -107,7 +107,8 @@ With `enableMockAdmin = true` (off by default), the API listener also serves:
 - `GET /mock/posts` lists every post the mock holds.
 - `POST /mock/reset` clears tokens, codes, posts, uploads and rate counters.
 
-They have no authentication. Don't turn them on anywhere but your machine or CI.
+They have no authentication. Don't turn them on anywhere but your machine or CI. The Choreo descriptor deliberately
+has no field for this flag, so a deployed mock never serves them; only the local Compose stack sets it.
 
 ## Limits
 
