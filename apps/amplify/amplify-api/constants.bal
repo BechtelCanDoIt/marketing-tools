@@ -43,6 +43,8 @@ const string ACCESS_DENIED = "AccessDenied";
 const string ROUTE_ENTITY = "http.route";
 # Actor id when the caller couldn't be authenticated.
 const string ANONYMOUS = "anonymous";
+# Most denial keys the audit throttle holds; past it, keys older than the window are dropped.
+const int DENIAL_THROTTLE_MAX = 1024;
 # `GET /me` LinkedIn status when the employee never connected.
 const string NOT_CONNECTED = "NOT_CONNECTED";
 
