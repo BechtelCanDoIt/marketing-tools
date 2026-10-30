@@ -489,8 +489,7 @@ dependencies = [
 modules = [
 	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api"},
 	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api.auth"},
-	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api.scheduler"},
-	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api.utils"}
+	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api.scheduler"}
 ]
 
 [[package]]

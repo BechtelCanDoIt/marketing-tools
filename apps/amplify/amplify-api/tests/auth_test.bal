@@ -49,6 +49,8 @@ function testMissingTokenIs401() returns error? {
     test:assertEquals(res.statusCode, 401);
     test:assertEquals(res.getContentType(), "application/problem+json");
     test:assertEquals(check codeOf(res), auth:TOKEN_MISSING);
+    // RFC 9110 section 11.6.1: a 401 names the scheme it expects.
+    test:assertEquals(check res.getHeader("WWW-Authenticate"), "Bearer realm=\"amplify\"");
     store:AuditEntry[] audit = takeDenials();
     test:assertEquals(audit.length(), 1);
     test:assertEquals(audit[0].actorId, "anonymous");
@@ -313,4 +315,44 @@ function testJwksOutageServesCachedKeys() returns error? {
         return e;
     }
     setJwksDown(false);
+}
+
+// ---- Token length matches the listener header limit ----------------------------------------------
+
+@test:Config
+function testTokenLengthLimitMatchesTheListener() returns error? {
+    // The HTTP listener refuses a header over its default `maxHeaderSize` (8192) before the verifier runs,
+    // so a larger limit here would never fire. Keep the two equal.
+    test:assertEquals(auth:MAX_TOKEN_LENGTH, 8192, "the token limit must not exceed the listener's header limit");
+    auth:JwksCache jwks = check new ({url: "http://localhost:9591/jwks"});
+    auth:TokenVerifier verifier = new (jwks, {issuer: TEST_ISSUER, audiences: [TEST_AUDIENCE]});
+    // Three parts (so only the length check can reject it), one byte past the limit.
+    string tooLong = "a".padEnd(auth:MAX_TOKEN_LENGTH, "a") + ".b.c";
+    auth:Principal|auth:AuthError result = verifier.verify(tooLong);
+    test:assertTrue(result is auth:AuthError, "a token past the limit is malformed");
+    if result is auth:AuthError {
+        test:assertEquals(result.detail().code, auth:TOKEN_MALFORMED);
+    }
+}
+
+// ---- JWKS refresh gate: one fetch per interval, warm or cold -------------------------------------
+
+@test:Config
+function testColdJwksCacheFetchesOncePerInterval() returns error? {
+    setJwksEmptyBody(true);
+    resetJwksHits();
+    do {
+        // No usable keys, so the cache stays empty after each call: the gate must hold on a cold cache
+        // too (an old `!empty &&` gate let every request in a start-up burst fetch).
+        auth:JwksCache cold = check new ({url: "http://localhost:9591/jwks", minRefreshIntervalSeconds: 60});
+        foreach int i in 0 ..< 4 {
+            auth:Jwk[]|auth:AuthError keys = cold.keysFor("unknown-" + i.toString());
+            test:assertTrue(keys is auth:AuthError && keys.detail().code == auth:KEYS_UNAVAILABLE);
+        }
+        test:assertEquals(jwksHitCount(), 1, "a cold cache must fetch once per interval, not once per request");
+    } on fail error e {
+        setJwksEmptyBody(false);
+        return e;
+    }
+    setJwksEmptyBody(false);
 }

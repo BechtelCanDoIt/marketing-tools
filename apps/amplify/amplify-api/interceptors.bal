@@ -19,6 +19,7 @@ import amplify_common.resilience;
 
 import ballerina/http;
 import ballerina/log;
+import ballerina/time;
 import ballerina/uuid;
 
 # Runs before every resource: verifies the gateway's backend JWT (signature against the JWKS, then
@@ -62,7 +63,70 @@ isolated service class AuthInterceptor {
     }
 }
 
-# Logs a denial and writes its audit row. A failed audit write is logged; the call is still denied.
+# Seconds within which a repeat of the same denial is counted instead of written. A scanner on the
+# project network otherwise turns every 401 into a synchronous audit INSERT; `0` disables the throttle.
+configurable decimal denialAuditWindowSeconds = 60;
+
+# A denial key's throttle state: when it was last written, and how many repeats were counted since.
+type DenialBucket record {|
+    # Monotonic seconds of the last write
+    decimal writtenAt;
+    # Repeats counted since that write
+    int suppressed = 0;
+|};
+
+isolated map<DenialBucket> denialBuckets = {};
+
+isolated function denialKey(string actorId, string[] roles, string route, string code) returns string =>
+    actorId + "\t" + string:'join(",", ...roles) + "\t" + route + "\t" + code;
+
+# Decides whether a denial is written now, and how many identical ones the row stands for. A repeat of
+# the same denial inside the window is counted and reported on the next row, so the trail stays honest
+# without a write per request.
+#
+# + actorId - Employee id, or `anonymous`
+# + roles - Caller's roles
+# + route - `METHOD /template`
+# + code - Stable denial code
+# + now - Monotonic seconds (injectable for tests)
+# + windowSeconds - Throttle window
+# + return - The suppressed count to record (`0` for the first), or `()` when this denial is only counted
+isolated function shouldWriteDenialAt(string actorId, string[] roles, string route, string code, decimal now,
+        decimal windowSeconds) returns int? {
+    string key = denialKey(actorId, roles, route, code);
+    lock {
+        DenialBucket? bucket = denialBuckets[key];
+        if bucket is DenialBucket && now - bucket.writtenAt < windowSeconds {
+            bucket.suppressed += 1;
+            return ();
+        }
+        if bucket is () && denialBuckets.length() >= DENIAL_THROTTLE_MAX {
+            decimal horizon = now - windowSeconds;
+            foreach [string, DenialBucket] [k, b] in denialBuckets.entries() {
+                if b.writtenAt < horizon {
+                    _ = denialBuckets.remove(k);
+                }
+            }
+        }
+        int suppressed = bucket is DenialBucket ? bucket.suppressed : 0;
+        denialBuckets[key] = {writtenAt: now};
+        return suppressed;
+    }
+}
+
+isolated function shouldWriteDenial(string actorId, string[] roles, string route, string code) returns int? =>
+    shouldWriteDenialAt(actorId, roles, route, code, time:monotonicNow(), denialAuditWindowSeconds);
+
+# Clears the throttle (tests).
+isolated function resetDenialAudit() {
+    lock {
+        denialBuckets = {};
+    }
+}
+
+# Logs a denial and writes its audit row. A failed audit write is logged; the call is still denied. When
+# the same denial repeats inside the throttle window, the log still records it and the audit row carries
+# the number of repeats it stands for on the next write.
 #
 # + actorId - Employee id, or `anonymous`
 # + roles - Caller's roles
@@ -71,6 +135,11 @@ isolated service class AuthInterceptor {
 # + correlationId - Correlation id
 isolated function deny(string actorId, string[] roles, string route, string code, string? correlationId) {
     log:printWarn("Access denied", errorCode = code, route = route, correlationId = correlationId);
+    int? suppressed = shouldWriteDenial(actorId, roles, route, code);
+    if suppressed is () {
+        return;
+    }
+    json after = suppressed > 0 ? {"suppressed": suppressed} : ();
     error? written = recordDenial({
         actorId,
         actorRoles: roles,
@@ -79,6 +148,7 @@ isolated function deny(string actorId, string[] roles, string route, string code
         entityId: route,
         outcome: "DENIED",
         reason: code,
+        after,
         correlationId
     });
     if written is error {
