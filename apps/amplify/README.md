@@ -55,6 +55,14 @@ make e2e     # scripts/e2e-local.sh: campaign -> scheduler Run -> Chat card -> m
 make seed    # rerun Amplify DB Migrate (migrations + seeds; idempotent)
 make logs    # follow all logs; `docker compose --env-file local/.env logs -f chat-stub` for cards
 make check   # descriptor drift check (Choreo component.yaml vs workload.yaml vs Dockerfile vs compose) + log hygiene (scripts/check-logs-pii.sh)
+```
+
+The gates under `scripts/` are the only thing between a drift and a release, so each one carries its own
+fixtures: `scripts/check-descriptors.sh --self-test`, `scripts/check-logs-pii.sh --self-test` and
+`scripts/lint-openapi-names.sh --self-test`, plus `scripts/check-transaction-gate.sh --self-test`. Run them
+after changing a gate; each one exercises the bypasses a reviewer has found in it.
+
+```sh
 make load-test  # k6 (Docker image) against the running stack: 1k employees / 50k ledger rows, p95 < 50 ms (docs/testing/load-test-2026-10.md)
 make down    # stop and REMOVE volumes
 ```
