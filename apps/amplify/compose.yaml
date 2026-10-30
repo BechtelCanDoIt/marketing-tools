@@ -75,6 +75,8 @@ services:
       BAL_CONFIG_VAR_DEVJWKSFILE: /dev-jwt/jwks.json
       # amplify-jobs ("Save & Share Now") and the scheduler (ADR-026)
       BAL_CONFIG_VAR_JOBSURL: http://amplify-jobs:9091
+      # Shared with amplify-jobs (security review): jobs refuses every call but its probes without it.
+      BAL_CONFIG_VAR_INTERNALAPIKEY: ${AMPLIFY_INTERNAL_API_KEY:?set AMPLIFY_INTERNAL_API_KEY in local/.env (make env)}
       BAL_CONFIG_VAR_SCHEDULERURL: http://scheduler:8080
       BAL_CONFIG_VAR_SCHEDULERJOBSURL: http://amplify-jobs:9091
       BAL_CONFIG_VAR_MINRUNINTERVALSECONDS: ${AMPLIFY_MIN_RUN_INTERVAL_SECONDS:-60}
@@ -149,6 +151,7 @@ services:
       BAL_CONFIG_VAR_LINKEDINCLIENTID: ${LINKEDIN_APP_CLIENT_ID:-${LINKEDIN_CLIENT_ID:?}}
       BAL_CONFIG_VAR_LINKEDINAPIBASEURL: ${LINKEDIN_API_BASE_URL:-http://mock-linkedin:9090}
       BAL_CONFIG_VAR_LINKEDINAUTHBASEURL: ${LINKEDIN_OAUTH_BASE_URL:-http://mock-linkedin:9091}
+      BAL_CONFIG_VAR_INTERNALAPIKEY: ${AMPLIFY_INTERNAL_API_KEY:?set AMPLIFY_INTERNAL_API_KEY in local/.env (make env)}
       BAL_CONFIG_VAR_TOKENKEYS: ${TOKEN_ENCRYPTION_KEY_ID:?}:${TOKEN_ENCRYPTION_KEY:?}
       BAL_CONFIG_VAR_TOKENCURRENTKEYID: ${TOKEN_ENCRYPTION_KEY_ID:?}
       # Google Chat (M6a). Default: chat-stub. "Send to dev space": GOOGLE_CHAT_WEBHOOK_URL = the dev test

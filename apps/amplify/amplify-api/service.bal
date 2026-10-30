@@ -35,7 +35,8 @@ configurable int port = 9090;
 // idempotency hash serialises it again, before validation can refuse it.
 listener http:Listener apiListener = new (port, requestLimits = {maxEntityBodySize: 65536});
 
-function init() {
+function init() returns error? {
+    check checkInternalKey(jobsUrl, schedulerUrl, internalApiKey);
     log:printInfo(string `${COMPONENT} starting on port ${port}`);
     string? tls = store:tlsWarning(dbConfig());
     if tls is string {
