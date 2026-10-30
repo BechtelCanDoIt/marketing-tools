@@ -15,6 +15,8 @@
 // under the License.
 import amplify_api.auth;
 
+import amplify_common.resilience;
+
 import ballerina/http;
 import ballerina/log;
 import ballerina/uuid;
@@ -80,7 +82,8 @@ isolated function deny(string actorId, string[] roles, string route, string code
         correlationId
     });
     if written is error {
-        log:printError("Could not write the denial audit row", written, errorCode = code, route = route);
+        log:printError("Could not write the denial audit row", resilience:loggable(written), errorCode = code,
+                route = route);
     }
 }
 
@@ -195,7 +198,7 @@ isolated function errorResponse(http:RequestContext ctx, error err) returns http
         title = status == 404 ? "Not Found" : status == 405 ? "Method Not Allowed" : "Bad Request";
         detail = status == 404 ? "No such resource" : "The request can't be routed";
     } else {
-        log:printError("Unhandled error", err, correlationId = id);
+        log:printError("Unhandled error", resilience:loggable(err), correlationId = id);
     }
     http:Response res = new;
     res.statusCode = status;
