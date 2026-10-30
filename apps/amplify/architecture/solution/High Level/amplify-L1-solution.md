@@ -78,11 +78,11 @@ SYSTEMS       │ WSO2 company page + "WSO2 Amplify" app     │        │ new 
 
 | System | Role in Amplify | Change type | Owner |
 | --- | --- | --- | --- |
-| WSO2 Amplify | Agent, API, back-office jobs, data | New system | Scott Bechtel |
+| WSO2 Amplify | Agent, API, back-office jobs, data | New system | Developer |
 | Google Chat · Novera (PO Agent repo) | Announcements, chat access to the Amplify Agent | Update | Visal Rajapakse |
-| One WSO2 | Leaderboards, dashboards, admin screens, agent access | Add features | Scott Bechtel |
-| Asgardeo (WSO2 production) | SSO, LinkedIn account linking | Add config | Scott Bechtel |
-| LinkedIn Community Management API | Post engagement data | External vendor | Scott Bechtel |
+| One WSO2 | Leaderboards, dashboards, admin screens, agent access | Add features | Developer |
+| Asgardeo (WSO2 production) | SSO, LinkedIn account linking | Add config | Developer |
+| LinkedIn Community Management API | Post engagement data | External vendor | Developer |
 | WSO2 Coins | Coin issuance | New system, other team | Nikeshala Samanthilake (business), technical TBD |
 | WSO2 Agent Orchestrator | *Out of scope:* no phase-1 ETA | n/a | Visal Rajapakse |
 
@@ -92,11 +92,4 @@ SYSTEMS       │ WSO2 company page + "WSO2 Amplify" app     │        │ new 
 - LinkedIn account linking runs through Asgardeo as a federated LinkedIn connection. Confirmed: the LinkedIn sign-in member ID matches the Community Management actor URN.
 - Amplify sends Google Chat announcements through the existing Novera app, not a separate bot.
 
-## Open questions carried to L2
 
-Resolved in [L2](../BrainStorms/amplify-L2-Choreo-Solution.md): ID matching, coin placeholder, LLM in phase 1, runtime and stack.
-
-1. Does the Community Management API expose who reposted, and does it separate plain reposts from reposts with commentary?
-2. How does Engagement Sync handle LinkedIn rate limits for 10–30 posts a month across 830+ employees?
-3. How do points convert to coins, and what API does WSO2 Coins expose? (Pending with Shashini K. and Nikeshala S.)
-4. How does One WSO2 call the Amplify Agent: embedded chat, or through the Amplify API?
