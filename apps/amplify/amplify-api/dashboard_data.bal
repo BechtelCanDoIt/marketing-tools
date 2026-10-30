@@ -18,6 +18,7 @@
 // What the dashboards read from the database (ADR-036): one snapshot of every aggregate, taken in one
 // transaction and kept for 60 seconds, plus two small per-request reads. Each loader is a test seam.
 
+import amplify_common.resilience;
 import amplify_domain.reporting;
 
 import ballerina/time;
@@ -59,7 +60,8 @@ isolated function snapshotCacheSize() returns int {
 }
 
 # Reads the snapshot from the database (a test seam): one repeatable-read, read-only transaction in
-# `reporting:loadSnapshot`.
+# `reporting:loadSnapshot`. Not wrapped in the transient retry the per-request reads use: it runs a
+# `transaction`, and ADR-032 keeps a transaction out of a `retry` (a retried block races the one gate).
 #
 # + now - Current time
 # + return - The snapshot, or an error
@@ -70,8 +72,10 @@ isolated function loadSnapshot(time:Utc now) returns Snapshot|error => reporting
 # + since - Window start
 # + return - Categories, or an error
 isolated function categoryCounts(time:Utc since) returns reporting:CategoryCount[]|error {
-    postgresql:Client pg = check db();
-    return reporting:repostsByCategory(pg, since);
+    retry<resilience:TransientDbRetry> (dbReadRetries) {
+        postgresql:Client pg = check db();
+        return reporting:repostsByCategory(pg, since);
+    }
 }
 
 # One campaign's reposts by day since it opened, the first seven days.
@@ -79,8 +83,10 @@ isolated function categoryCounts(time:Utc since) returns reporting:CategoryCount
 # + campaignId - Campaign
 # + return - Seven counts, or an error
 isolated function campaignByDay(string campaignId) returns int[]|error {
-    postgresql:Client pg = check db();
-    return reporting:repostsByDay(pg, campaignId, 7);
+    retry<resilience:TransientDbRetry> (dbReadRetries) {
+        postgresql:Client pg = check db();
+        return reporting:repostsByDay(pg, campaignId, 7);
+    }
 }
 
 # One campaign's card and everyone who reposted it, for the Post Performance popup.
@@ -88,9 +94,11 @@ isolated function campaignByDay(string campaignId) returns int[]|error {
 # + campaignId - Campaign
 # + return - Card and people, or an error
 isolated function campaignPeople(string campaignId) returns [reporting:CampaignCard, reporting:Reposter[]]|error {
-    postgresql:Client pg = check db();
-    reporting:CampaignCard card = (check reporting:campaignCard(pg, campaignId)) ?: {summary: (), imageUrl: (), resourceUrl: (), resourceUrn: ""};
-    return [card, check reporting:campaignReposters(pg, campaignId)];
+    retry<resilience:TransientDbRetry> (dbReadRetries) {
+        postgresql:Client pg = check db();
+        reporting:CampaignCard card = (check reporting:campaignCard(pg, campaignId)) ?: {summary: (), imageUrl: (), resourceUrl: (), resourceUrn: ""};
+        return [card, check reporting:campaignReposters(pg, campaignId)];
+    }
 }
 
 # The raw rows behind the boards for a date range (the Participation export).
@@ -99,8 +107,10 @@ isolated function campaignPeople(string campaignId) returns [reporting:CampaignC
 # + to - First moment not included
 # + return - Rows, or an error
 isolated function exportRows(time:Utc 'from, time:Utc to) returns reporting:ExportRow[]|error {
-    postgresql:Client pg = check db();
-    return reporting:exportRows(pg, 'from, to);
+    retry<resilience:TransientDbRetry> (dbReadRetries) {
+        postgresql:Client pg = check db();
+        return reporting:exportRows(pg, 'from, to);
+    }
 }
 
 # One person and the posts they reposted, for the person popup.
@@ -108,10 +118,12 @@ isolated function exportRows(time:Utc 'from, time:Utc to) returns reporting:Expo
 # + employeeId - Employee id
 # + return - The person, their posts and the points they earned this month, `()` when Amplify has never seen the id, or an error
 isolated function personPosts(string employeeId) returns [reporting:PersonIdentity, reporting:PersonPost[], int]?|error {
-    postgresql:Client pg = check db();
-    reporting:PersonIdentity? who = check reporting:personIdentity(pg, employeeId);
-    if who is () {
-        return ();
+    retry<resilience:TransientDbRetry> (dbReadRetries) {
+        postgresql:Client pg = check db();
+        reporting:PersonIdentity? who = check reporting:personIdentity(pg, employeeId);
+        if who is () {
+            return ();
+        }
+        return [who, check reporting:personPosts(pg, employeeId), check reporting:personPointsThisMonth(pg, employeeId)];
     }
-    return [who, check reporting:personPosts(pg, employeeId), check reporting:personPointsThisMonth(pg, employeeId)];
 }

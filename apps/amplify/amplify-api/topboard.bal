@@ -22,6 +22,7 @@
 // totals, so it matches the top three. `leaderboard.top_scope = ALL` serves the all-time standings instead.
 
 import amplify_api.auth;
+import amplify_common.resilience;
 import amplify_domain.recognition;
 
 import ballerina/http;
@@ -86,7 +87,7 @@ isolated function monthlyTotals(time:Utc now) returns MonthlyTotals|error {
     recognition:EmployeeTotal[]|error totals = monthlyTotalsRead(monthStart);
     if totals is error {
         if stale is MonthlyTotals {
-            log:printWarn("Monthly top board read failed, serving the previous totals", reason = totals.message());
+            log:printWarn("Monthly top board read failed, serving the previous totals", reason = resilience:loggable(totals).message());
             return stale;
         }
         return totals;

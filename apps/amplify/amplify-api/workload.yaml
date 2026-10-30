@@ -22,6 +22,11 @@ configurations:
       value: ""
     - name: BAL_CONFIG_VAR_GATEWAYAUDIENCES
       value: ""
+    - name: BAL_CONFIG_VAR_INTERNALAPIKEY
+      valueFrom:
+        secretRef:
+          name: amplify-api-secrets
+          key: BAL_CONFIG_VAR_INTERNALAPIKEY
     - name: BAL_CONFIG_VAR_DBHOST
       value: ""
     - name: BAL_CONFIG_VAR_DBPORT

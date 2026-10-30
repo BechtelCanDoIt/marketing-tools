@@ -96,7 +96,12 @@ function specEnum(string... path) returns string[]|error {
         }
     }
     node = resolve(node, all);
-    return (check node.'enum).cloneWithType();
+    // OAS 3.0: a nullable field's `enum` must list `null` itself to allow it. `null` is not a value of the
+    // Ballerina type, so it is left out of the comparison.
+    json[] values = check (check node.'enum).cloneWithType();
+    return from json v in values
+        where v !is ()
+        select v.toString();
 }
 
 function resolve(json node, map<json> all) returns json {
