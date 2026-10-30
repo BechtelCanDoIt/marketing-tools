@@ -22,7 +22,7 @@ import ballerina/log;
 listener http:Listener apiListener = new (apiPort, host = listenerHost);
 
 # Mock of the Share on LinkedIn (`w_member_social`) API, built from
-# `projects/linkedin/resources/openapi/openapi/w-member-social.openapi.yaml`. Image byte
+# `apps/amplify/linkedin/resources/openapi/openapi/w-member-social.openapi.yaml`. Image byte
 # uploads live on the `www` host, so that operation is in `www_service.bal`.
 @display {
     label: "Mock LinkedIn Share API",
