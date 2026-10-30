@@ -77,7 +77,7 @@ Rules the mock enforces, matching LinkedIn:
 | `POST /rest/posts/{urn}` | `w_member_social` | `X-RestLi-Method: PARTIAL_UPDATE`. `204`, or `404` if unknown. |
 | `DELETE /rest/posts/{urn}` | `w_member_social` | Idempotent `204`. |
 | `POST /rest/images?action=initializeUpload` | `w_member_social` | Returns an `uploadUrl` on the www host and an `urn:li:image:` URN. |
-| `PUT /dms-uploads/...` | `w_member_social` | Upload the bytes with the same bearer token. `201`. |
+| `PUT /dms-uploads/...` | `w_member_social` | Upload the bytes with the same bearer token. `201`, or `413` past `maxUploadBytes` (10 MB by default). |
 | `POST /v2/ugcPosts` | `w_member_social` | Legacy share. `NONE`, `ARTICLE` or `IMAGE`. `201` with `x-restli-id`. |
 | `DELETE /v2/ugcPosts/{urn}` | `w_member_social` | Idempotent `204`. |
 | `POST /v2/assets?action=registerUpload` | `w_member_social` | Returns an `uploadUrl` and an `urn:li:digitalmediaAsset:` URN. |
@@ -93,6 +93,8 @@ Validation that returns LinkedIn-style errors (`{"status", "message", "serviceEr
   Reshare parents the mock never saw (real company posts) are accepted.
 - `422` for the same text from the same member within 10 minutes.
 - `429` past 150 calls per member, or 100,000 per app, per UTC day.
+- `413` for an upload body over `maxUploadBytes`. The body is read in chunks and refused as soon as it
+  passes the limit, so an oversized upload is never held in memory in full.
 
 A body, header or query parameter that doesn't match the contract gets a generic `400`.
 The exact binding error goes to the debug log, not the caller.
@@ -102,13 +104,16 @@ Every response on both hosts carries an `x-li-uuid` correlation id that also app
 
 ## Admin endpoints (local only)
 
-With `enableMockAdmin = true` (off by default), the API listener also serves:
+With `enableMockAdmin = true` (off by default) and `mockAdminKey` set to at least 32 characters, the API
+listener also serves:
 
 - `GET /mock/posts` lists every post the mock holds.
 - `POST /mock/reset` clears tokens, codes, posts, uploads and rate counters.
 
-They have no authentication. Don't turn them on anywhere but your machine or CI. The Choreo descriptor deliberately
-has no field for this flag, so a deployed mock never serves them; only the local Compose stack sets it.
+Every call must carry the key in `X-Amplify-Internal-Key`, the same header amplify-jobs uses for its own
+endpoints; a missing or wrong key gets a `401`. With the flag on but no usable key, the endpoints are not
+attached at all, so a missing secret can never leave them open. Don't turn them on anywhere but your
+machine or CI: the Choreo descriptor has no field for the flag, so a deployed mock never serves them.
 
 ## Limits
 

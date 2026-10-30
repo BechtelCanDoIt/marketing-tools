@@ -18,6 +18,13 @@ redirectUris = ["http://localhost:3000/auth/linkedin/callback"]
 # Exposes GET /mock/posts and POST /mock/reset on the API port. Local use only.
 enableMockAdmin = true
 
+# Key those endpoints require, sent as X-Amplify-Internal-Key. At least 32 characters, and required
+# whenever enableMockAdmin is true: without it the endpoints are not attached at all. Made-up value.
+mockAdminKey = "<local-only-admin-key-at-least-32-chars>"
+
+# Largest image body PUT /dms-uploads accepts, in bytes.
+# maxUploadBytes = 10485760
+
 # memberDailyLimit = 150
 # appDailyLimit = 100000
 

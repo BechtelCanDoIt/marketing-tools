@@ -205,6 +205,11 @@ isolated function forbidden(string message) returns ErrorForbidden =>
 isolated function notFound(string message) returns ErrorNotFound =>
     {body: {status: http:STATUS_NOT_FOUND, message}};
 
+isolated function payloadTooLarge() returns ErrorPayloadTooLarge {
+    string message = string `Request body is larger than the ${maxUploadBytes} bytes this mock accepts`;
+    return {body: {status: http:STATUS_PAYLOAD_TOO_LARGE, message}};
+}
+
 isolated function unprocessable(string message) returns ErrorUnprocessableEntity =>
     {body: {status: http:STATUS_UNPROCESSABLE_ENTITY, message}};
 
