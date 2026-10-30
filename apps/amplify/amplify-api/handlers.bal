@@ -59,10 +59,7 @@ isolated function linkOrigins(string raw) returns string[] & readonly {
 isolated function actorOf(auth:Principal p, string? correlationId) returns store:Actor =>
     {actorId: p.employeeId, roles: p.roles, correlationId};
 
-isolated function isEditor(auth:Principal p) returns boolean =>
-    p.roles.indexOf(auth:ROLE_PO) !is () || p.roles.indexOf(auth:ROLE_MARKETING) !is ();
-
-isolated function isPo(auth:Principal p) returns boolean => p.roles.indexOf(auth:ROLE_PO) !is ();
+isolated function can(auth:Principal p, auth:Access grant) returns boolean => p.grants.indexOf(grant) !is ();
 
 // ---- S1 Campaign ------------------------------------------------------------------------------------
 
@@ -411,7 +408,7 @@ isolated function requestShare(auth:Principal p, string? correlationId, string i
         time:Utc now = time:utcNow();
         store:Actor actor = actorOf(p, correlationId);
         campaign:Campaign? c = check (check campaignRepository(actor)).findById(campaignId);
-        if c is () || (c.archivedAt !is () && !isEditor(p)) {
+        if c is () || (c.archivedAt !is () && !can(p, auth:CAN_CAMPAIGN)) {
             return notFound("Campaign not found", correlationId);
         }
         connection:LinkedInConnection? linked = check (check connectionRepository(actor)).findByEmployee(p.employeeId,

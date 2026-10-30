@@ -107,34 +107,34 @@ function testActivityMatrixSample() returns error? {
     // [method, path, groups, expected]. 0 = passed the interceptor (any status but 401/403).
     [string, string, string[], int][] cases = [
         ["GET", "/me", [], 200],
-        ["GET", "/me", [auth:ROLE_SLT], 200],
+        ["GET", "/me", [SLT_GROUP], 200],
         ["GET", "/leaderboard", [], 0],
         ["GET", "/po/dashboard", [], 403],
-        ["GET", "/po/dashboard", [auth:ROLE_MARKETING], 403],
-        ["GET", "/po/dashboard", [auth:ROLE_PO], 0],
+        ["GET", "/po/dashboard", [MARKETING_GROUP], 403],
+        ["GET", "/po/dashboard", [PO_GROUP], 0],
         ["POST", "/campaigns", [], 403],
-        ["POST", "/campaigns", [auth:ROLE_SLT], 403],
-        ["POST", "/campaigns", [auth:ROLE_MARKETING], 0],
-        ["POST", "/campaigns", [auth:ROLE_PO], 0],
-        ["DELETE", "/campaigns/c-1", [auth:ROLE_ADMIN], 403],
-        // New Post / Current Posts writes: PO and Marketing only (CAMPAIGN_EDITORS).
+        ["POST", "/campaigns", [SLT_GROUP], 403],
+        ["POST", "/campaigns", [MARKETING_GROUP], 0],
+        ["POST", "/campaigns", [PO_GROUP], 0],
+        ["DELETE", "/campaigns/c-1", [ADMIN_GROUP], 403],
+        // New Post / Current Posts writes: PO and Marketing only (CAN_CAMPAIGN).
         ["PATCH", "/campaigns/c-1", [], 403],
-        ["PATCH", "/campaigns/c-1", [auth:ROLE_SLT], 403],
-        ["PATCH", "/campaigns/c-1", [auth:ROLE_PO], 0],
-        ["PATCH", "/campaigns/c-1", [auth:ROLE_MARKETING], 0],
+        ["PATCH", "/campaigns/c-1", [SLT_GROUP], 403],
+        ["PATCH", "/campaigns/c-1", [PO_GROUP], 0],
+        ["PATCH", "/campaigns/c-1", [MARKETING_GROUP], 0],
         ["DELETE", "/campaigns/c-1", [], 403],
-        ["DELETE", "/campaigns/c-1", [auth:ROLE_SLT], 403],
-        ["DELETE", "/campaigns/c-1", [auth:ROLE_PO], 0],
-        ["DELETE", "/campaigns/c-1", [auth:ROLE_MARKETING], 0],
-        ["POST", "/po/external-shares/x-1/approve", [auth:ROLE_MARKETING], 403],
-        ["POST", "/po/external-shares/x-1/approve", [auth:ROLE_PO], 0],
-        ["POST", "/po/points/adjustments", [auth:ROLE_ADMIN], 403],
-        ["PUT", "/admin/settings", [auth:ROLE_PO], 403],
-        ["PUT", "/admin/settings", [auth:ROLE_ADMIN], 0],
-        ["GET", "/reports/participation", [auth:ROLE_ADMIN], 403],
-        ["GET", "/reports/participation", [auth:ROLE_SLT], 0],
+        ["DELETE", "/campaigns/c-1", [SLT_GROUP], 403],
+        ["DELETE", "/campaigns/c-1", [PO_GROUP], 0],
+        ["DELETE", "/campaigns/c-1", [MARKETING_GROUP], 0],
+        ["POST", "/po/external-shares/x-1/approve", [MARKETING_GROUP], 403],
+        ["POST", "/po/external-shares/x-1/approve", [PO_GROUP], 0],
+        ["POST", "/po/points/adjustments", [ADMIN_GROUP], 403],
+        ["PUT", "/admin/settings", [PO_GROUP], 403],
+        ["PUT", "/admin/settings", [ADMIN_GROUP], 0],
+        ["GET", "/reports/participation", [ADMIN_GROUP], 403],
+        ["GET", "/reports/participation", [SLT_GROUP], 0],
         ["GET", "/team/emp-9/history", [], 0],
-        ["GET", "/not-in-matrix", [auth:ROLE_ADMIN, auth:ROLE_PO], 403],
+        ["GET", "/not-in-matrix", [ADMIN_GROUP, PO_GROUP], 403],
         ["GET", "/po/dashboard", ["amplify_po_typo", "Admins"], 403]
     ];
     _ = takeDenials();
@@ -172,34 +172,59 @@ function testMissingGroupsClaimIsPlainEmployee() returns error? {
 
 @test:Config
 function testMatrixHelpers() {
-    test:assertEquals(auth:knownRoles("amplify_po, amplify_admin amplify_po"), [auth:ROLE_PO, auth:ROLE_ADMIN]);
-    test:assertEquals(auth:knownRoles(["amplify_slt", 42, "other"]), [auth:ROLE_SLT]);
-    test:assertEquals(auth:knownRoles(()), []);
-    string[] po = auth:capabilities([auth:ROLE_PO]);
+    auth:AccessGroups access = {canCampaign: [PO_GROUP, MARKETING_GROUP], canAdjustPoints: [PO_GROUP],
+        canAdmin: [ADMIN_GROUP], canReports: [SLT_GROUP]};
+    test:assertEquals(auth:knownGroups("amplify_po, amplify_admin amplify_po", access), [PO_GROUP, ADMIN_GROUP]);
+    test:assertEquals(auth:knownGroups(["amplify_slt", 42, "other"], access), [SLT_GROUP]);
+    test:assertEquals(auth:knownGroups((), access), []);
+    test:assertEquals(auth:knownGroups([PO_GROUP], {}), [], "no configuration names no group");
+    test:assertEquals(auth:groupList(" amplify_po, amplify_marketing,,amplify_slt "),
+            [PO_GROUP, MARKETING_GROUP, SLT_GROUP]);
+    test:assertEquals(auth:groupList(""), []);
+    // Any one group grants; a blank configured entry never matches a blank caller group (fail closed).
+    test:assertEquals(auth:grantsOf([MARKETING_GROUP], access), [auth:EMPLOYEE, auth:CAN_CAMPAIGN]);
+    test:assertEquals(auth:grantsOf([""], {canAdmin: [""]}), [auth:EMPLOYEE]);
+    test:assertEquals(auth:grantsOf([], access), [auth:EMPLOYEE]);
+    string[] po = auth:capabilities(auth:grantsOf([PO_GROUP], access));
     test:assertTrue(po.indexOf("team.history.read_any") !is ());
     test:assertTrue(po.indexOf("campaigns.read_any_status") !is ());
     test:assertTrue(po.indexOf("admin.settings") is ());
-    string[] emp = auth:capabilities([]);
+    string[] emp = auth:capabilities([auth:EMPLOYEE]);
     test:assertTrue(emp.indexOf("shares.create") !is ());
     test:assertTrue(emp.indexOf("campaigns.manage") is ());
-    test:assertTrue(auth:capabilities([auth:ROLE_MARKETING]).indexOf("campaigns.manage") !is ());
+    test:assertTrue(auth:capabilities([auth:EMPLOYEE, auth:CAN_CAMPAIGN]).indexOf("campaigns.manage") !is ());
     // Every route row names a capability and a known method.
     foreach auth:Rule rule in auth:ACTIVITY_MATRIX {
         test:assertTrue(["GET", "POST", "PATCH", "PUT", "DELETE"].indexOf(rule.method) !is (), rule.path);
-        test:assertTrue(rule.allowed.length() > 0 && rule.capability.length() > 0, rule.path);
+        test:assertTrue(rule.capability.length() > 0, rule.path);
     }
+}
+
+@test:Config
+function testSecondConfiguredGroupSharesACapability() returns error? {
+    string token = check mint({sub: "cmp-0001", email: "cmp@wso2.com", groups: [CAMPAIGN_ONLY_GROUP]});
+    http:Response me = check call("GET", "/me", token);
+    test:assertEquals(me.statusCode, 200);
+    json body = check me.getJsonPayload();
+    test:assertEquals(check body.roles, [CAMPAIGN_ONLY_GROUP]);
+    test:assertEquals(check body.grants, [auth:EMPLOYEE, auth:CAN_CAMPAIGN]);
+    // Past the interceptor on the campaign routes, refused everywhere PO-only.
+    test:assertNotEquals((check call("POST", "/campaigns", token)).statusCode, 403);
+    test:assertEquals((check call("GET", "/po/dashboard", token)).statusCode, 403);
+    test:assertEquals((check call("GET", "/dashboards/glance", token)).statusCode, 403);
 }
 
 // ---- GET /me --------------------------------------------------------------------------------------
 
 @test:Config
 function testMeUpsertsEmployeeAndReportsCapabilities() returns error? {
-    http:Response res = check call("GET", "/me", check mint(groupsClaim(auth:ROLE_MARKETING)));
+    http:Response res = check call("GET", "/me", check mint(groupsClaim(MARKETING_GROUP)));
     test:assertEquals(res.statusCode, 200);
     json body = check res.getJsonPayload();
     test:assertEquals(check body.employee.email, "ada.lovelace@wso2.com");
     test:assertEquals(check body.employee.display_name, "Ada Lovelace");
-    test:assertEquals(check body.roles, [auth:ROLE_MARKETING]);
+    test:assertEquals(check body.roles, [MARKETING_GROUP]);
+    test:assertEquals(check body.grants, [auth:EMPLOYEE, auth:CAN_CAMPAIGN, auth:CAN_DASHBOARD, auth:CAN_EXPORT]);
     json[] caps = check (check body.capabilities).ensureType();
     test:assertTrue(caps.indexOf("campaigns.manage") !is ());
     test:assertTrue(caps.indexOf("po.dashboard") is ());

@@ -16,7 +16,7 @@
 
 
 // Read use cases behind the resources (S1 lists, S4 leaderboards.md views, the PO dashboard of
-// po-dashboard.md, S5 settings). Visibility is decided here from the caller's roles and the server-side
+// po-dashboard.md, S5 settings). Visibility is decided here from the caller's grants and the server-side
 // roster, never from request data.
 
 import amplify_api.auth;
@@ -46,7 +46,7 @@ isolated function listCampaigns(auth:Principal p, string? correlationId, string 
         }
         check maxLen(tag, 50, "tag");
         string wanted = status.toLowerAscii();
-        if !isEditor(p) && wanted != "open" {
+        if !can(p, auth:CAN_CAMPAIGN) && wanted != "open" {
             return badRequest("Only open campaigns can be listed", correlationId);
         }
         campaign:CampaignStatus[] statuses = [];
@@ -101,7 +101,7 @@ isolated function getCampaign(auth:Principal p, string? correlationId, string id
     do {
         campaign:Campaign? c = check (check campaignRepository(actorOf(p, correlationId))).findById(check uuidOf(id, "id"));
         time:Utc now = time:utcNow();
-        if c is () || (!isEditor(p) && !campaign:isOpen(c, now)) {
+        if c is () || (!can(p, auth:CAN_CAMPAIGN) && !campaign:isOpen(c, now)) {
             return notFound("Campaign not found", correlationId);
         }
         return campaignDto(c, now);
@@ -277,7 +277,7 @@ isolated function teamView(auth:Principal p, string? correlationId, string perio
             return badRequest("sort must be rank, points or name", correlationId);
         }
         Settings settings = check loadSettings();
-        boolean company = isPo(p) || settings.teamVisibility == "COMPANY";
+        boolean company = can(p, auth:CAN_ADJUST_POINTS) || settings.teamVisibility == "COMPANY";
         TeamStatus teamStatus = "OK";
         string[]? emails = ();
         int? headcount = ();
@@ -290,7 +290,7 @@ isolated function teamView(auth:Principal p, string? correlationId, string perio
         }
         string? search = q is string && q.trim().length() > 0 ? q.trim() : ();
         recognition:TeamPage result = check teamPageOf(period, emails, search, orderBy, page, size);
-        boolean po = isPo(p);
+        boolean adjuster = can(p, auth:CAN_ADJUST_POINTS);
         return {
             period,
             scope: <TeamScope>(company ? "COMPANY" : "TEAM"),
@@ -309,7 +309,7 @@ isolated function teamView(auth:Principal p, string? correlationId, string perio
                     teamRank: e.teamRank,
                     previousRank: e.standing.previousRank,
                     lastActivityAt: tsOpt(e.standing.lastActivityAt),
-                    actions: {canAdjust: po, canReverse: po}
+                    actions: {canAdjust: adjuster, canReverse: adjuster}
                 }
         };
     } on fail error e {
@@ -328,7 +328,7 @@ isolated function history(auth:Principal p, string? correlationId, string employ
         if page < 0 || page > 10000 || size < 1 || size > 100 {
             return badRequest("page must be 0-10000 and size 1-100", correlationId);
         }
-        if target != p.employeeId && !isPo(p) {
+        if target != p.employeeId && !can(p, auth:CAN_ADJUST_POINTS) {
             Settings settings = check loadSettings();
             boolean allowed = settings.teamVisibility == "COMPANY";
             if !allowed {
@@ -341,9 +341,9 @@ isolated function history(auth:Principal p, string? correlationId, string employ
             }
         }
         scoring:LedgerPage result = check ledgerHistory(target, page, size);
-        boolean po = isPo(p);
+        boolean adjuster = can(p, auth:CAN_ADJUST_POINTS);
         return {employeeId: target, page, size, total: result.total,
-            items: from types:LedgerEntry e in result.items select po ? ledgerDto(e).toJson() : ledgerDtoForTeammate(e)};
+            items: from types:LedgerEntry e in result.items select adjuster ? ledgerDto(e).toJson() : ledgerDtoForTeammate(e)};
     } on fail error e {
         return failure(e, correlationId, "Points history");
     }

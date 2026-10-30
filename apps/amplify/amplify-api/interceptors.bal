@@ -50,7 +50,7 @@ isolated service class AuthInterceptor {
                     correlationId);
             return forbidden(ROUTE_NOT_PERMITTED, correlationId);
         }
-        if !auth:isAllowed(rule, principal.roles) {
+        if !auth:isAllowed(rule, principal.grants) {
             deny(principal.employeeId, principal.roles, routeOf(req.method, path, rule), ROLE_NOT_PERMITTED,
                     correlationId);
             return forbidden(ROLE_NOT_PERMITTED, correlationId);

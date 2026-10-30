@@ -63,8 +63,10 @@ public type Principal record {|
     string email;
     # Display name (claim), if present
     string? displayName;
-    # Known `amplify_*` roles from the roles claim
+    # Groups from the roles claim that the access configuration names (others are dropped)
     string[] roles;
+    # Grants those groups give (`EMPLOYEE` always)
+    Access[] grants;
     # Issuer the token was verified against
     string issuer;
 |};
@@ -83,6 +85,8 @@ public type VerifierConfig record {|
     string emailClaim = "email";
     # Display name claim
     string nameClaim = "name";
+    # Groups granted each capability
+    AccessGroups access = {};
 |};
 
 # Dev-only trust for locally signed tokens (ADR-023). Its issuer must differ from the gateway's.
@@ -197,16 +201,18 @@ public isolated class TokenVerifier {
         if name is string {
             displayName = types:trimToNil(name);
         }
-        return {employeeId, email, displayName, roles: knownRoles(rolesValue), issuer: trustedIssuer};
+        string[] roles = knownGroups(rolesValue, self.config.access);
+        return {employeeId, email, displayName, roles, grants: grantsOf(roles, self.config.access), issuer: trustedIssuer};
     }
 }
 
-# `amplify_*` roles from the roles claim. A missing claim means a plain employee (no extra role);
-# unknown groups are dropped.
+# Groups from the roles claim that the access configuration names. A missing claim means a plain employee
+# (no extra grant); other groups are dropped.
 #
 # + claim - Claim value: array of strings, or a comma/space separated string
-# + return - Known roles, no duplicates
-public isolated function knownRoles(anydata claim) returns string[] {
+# + access - Configured groups
+# + return - Known groups, no duplicates
+public isolated function knownGroups(anydata claim, AccessGroups access) returns string[] {
     string[] raw = [];
     if claim is string {
         raw = re `[,\s]+`.split(claim);
@@ -217,7 +223,7 @@ public isolated function knownRoles(anydata claim) returns string[] {
             }
         }
     }
-    string[] known = [ROLE_PO, ROLE_MARKETING, ROLE_SLT, ROLE_ADMIN];
+    string[] known = configuredGroups(access);
     string[] result = [];
     foreach string role in raw {
         string r = role.trim();
