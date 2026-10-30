@@ -97,14 +97,18 @@ function testResealStaleTokensAgainstTheDatabase() returns error? {
     crypto:TokenCipher oldCipher = check new ([{keyId: oldId, key: keyBytes(5)}], oldId);
     crypto:TokenCipher ring = check new ([{keyId: oldId, key: keyBytes(5)}, {keyId: newId, key: keyBytes(77)}], newId);
     connection:PgTokenRepository tokens = new (db);
+    // Only a sign-in creates a token row, so the fixtures go in through the API role: amplify_jobs has no INSERT.
+    postgresql:Client seedDb = check api();
+    connection:PgTokenRepository seeder = new (seedDb);
     time:Utc now = time:utcNow();
     connection:StoredToken[] mine = [];
     foreach int i in 0 ..< 3 {
         connection:StoredToken t = check connection:sealToken(oldCipher, string `bearer-rot-${i}`,
                 "emp-rot-" + uniq(), time:utcAddSeconds(now, 3600), now);
-        check tokens.insert(t);
+        check seeder.insert(t);
         mine.push(t);
     }
+    check seedDb.close();
     connection:ResealReport report = check connection:resealStaleTokens(ring, tokens, batchSize = 2);
     test:assertTrue(report.resealed >= 3, string `re-sealed ${report.resealed}`);
     foreach int i in 0 ..< mine.length() {
