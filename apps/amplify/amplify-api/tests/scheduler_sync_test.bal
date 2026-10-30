@@ -19,7 +19,6 @@
 // `scheduler-it`, `AMPLIFY_IT=true`, run by scripts/it-scheduler.sh) does the same against the real
 // akorn/scheduler image and a stub amplify-jobs.
 
-import amplify_api.auth;
 import amplify_api.scheduler;
 import amplify_common.resilience;
 import amplify_domain.store;
@@ -192,7 +191,7 @@ function resetSync() {
     _ = takeEvents();
 }
 
-function adminToken() returns string|error => mint({sub: "adm-0001", email: "adm@wso2.com", groups: [auth:ROLE_ADMIN]});
+function adminToken() returns string|error => mint({sub: "adm-0001", email: "adm@wso2.com", groups: [ADMIN_GROUP]});
 
 function putSetting(string key, json value) returns http:Response|error =>
     send("PUT", "/admin/settings", {changes: [{key, value, version: 1}]}, check adminToken());
