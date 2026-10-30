@@ -153,13 +153,15 @@ function testTokenDayDropRuleAndAudit() returns error? {
         return;
     }
     postgresql:Client jobs = check jobsClient();
+    // The fixture rows are seeded as the admin: since V017 amplify_jobs no longer inserts tokens.
+    postgresql:Client admin = check adminClient(itDbName);
     // Three past days: expired beyond grace, still valid (long-lived token), and empty.
     foreach int offset in [-70, -10, -20] {
         _ = check jobs->queryRow(`SELECT connection.create_token_partitions(0, CAST(${utcDay(offset)} AS date))`, int);
     }
     string expiredDay = utcDay(-70);
     string validDay = utcDay(-10);
-    _ = check jobs->execute(`
+    _ = check admin->execute(`
         INSERT INTO connection.provider_token (issued_on, owner_type, owner_id, provider, token_kind, ciphertext, nonce,
                                                key_id, expires_at)
         VALUES (CAST(${expiredDay} AS date), 'MEMBER', 'emp-old', 'linkedin', 'ACCESS', '\x00'::bytea,
@@ -177,6 +179,7 @@ function testTokenDayDropRuleAndAudit() returns error? {
         SELECT count(*)::int FROM audit.audit_log
         WHERE action = 'PARTITION_DROPPED' AND entity_type = 'connection.provider_token'`);
     test:assertEquals(audited, 2, "every drop is audited");
+    check admin.close();
     check jobs.close();
 }
 
@@ -186,8 +189,9 @@ function testMissingTokenMeansNeedsReconnect() returns error? {
         return;
     }
     postgresql:Client jobs = check jobsClient();
+    postgresql:Client admin = check adminClient(itDbName);
     string today = utcDay(0);
-    string tokenId = check jobs->queryRow(`
+    string tokenId = check admin->queryRow(`
         INSERT INTO connection.provider_token (issued_on, owner_type, owner_id, provider, token_kind, ciphertext, nonce,
                                                key_id, expires_at)
         VALUES (CAST(${today} AS date), 'MEMBER', 'emp-view', 'linkedin', 'ACCESS', '\x00'::bytea,
@@ -208,6 +212,7 @@ function testMissingTokenMeansNeedsReconnect() returns error? {
                              access_expires_at = now() + interval '3 days' WHERE employee_id = 'emp-view'`);
     status = check jobs->queryRow(`SELECT status FROM connection.member_connection_v WHERE employee_id = 'emp-view'`);
     test:assertEquals(status, "NEEDS_RECONNECT", "no token pointer is reconnect even before expiry");
+    check admin.close();
     check jobs.close();
 }
 
