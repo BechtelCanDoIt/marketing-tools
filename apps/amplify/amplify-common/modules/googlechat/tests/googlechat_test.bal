@@ -281,6 +281,8 @@ function cardImageRejectsTrailingDotAndNumericHosts() {
         test:assertFalse(isPublicHttpsUrl(url), url);
     }
     test:assertTrue(isPublicHttpsUrl("https://cdn.wso2.com./logo.png"), "a fully qualified public name is fine");
+    // A numeric *first* label is a name, not an IP literal: the old private-range regex dropped it.
+    test:assertTrue(isPublicHttpsUrl("https://10.cdn.example.com/logo.png"));
 }
 
 @test:Config
