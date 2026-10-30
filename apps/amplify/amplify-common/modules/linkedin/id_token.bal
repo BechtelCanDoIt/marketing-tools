@@ -151,7 +151,9 @@ public isolated class IdTokenValidator {
             boolean empty = self.keys.length() == 0;
             boolean stale = self.fetchedAt < 0d || now - self.fetchedAt >= self.config.jwksRefreshSeconds;
             boolean unknownKid = kid is string && keysMatching(self.keys, kid).length() == 0;
-            boolean gated = !empty && self.lastAttemptAt >= 0d
+            // The gate holds on a cold cache too, so a burst of validations during a cold start or a LinkedIn
+            // JWKS outage makes one fetch per interval, not one per call.
+            boolean gated = self.lastAttemptAt >= 0d
                 && now - self.lastAttemptAt < self.config.jwksMinRefreshIntervalSeconds;
             refresh = (empty || stale || unknownKid) && !gated;
             if refresh {
@@ -204,9 +206,10 @@ isolated function checkClaims(jwt:Payload payload, IdTokenConfig config, string?
     if auds.indexOf(config.clientId) is () {
         return invalidIdToken("audience is not this client");
     }
-    // OIDC Core 3.1.3.7: with several audiences, `azp` must name this client.
+    // OIDC Core 3.1.3.7: with several audiences `azp` must be present, and whenever it is present it must name
+    // this client.
     anydata azp = payload["azp"];
-    if auds.length() > 1 && azp != config.clientId {
+    if (auds.length() > 1 || azp !is ()) && azp != config.clientId {
         return invalidIdToken("authorized party is not this client");
     }
     int? exp = payload.exp;

@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// A stub LinkedIn on a local port, shaped like projects/linkedin/apps/mock_linkedin, so the adapter's
+// A stub LinkedIn on a local port, shaped like apps/amplify/linkedin/apps/mock_linkedin, so the adapter's
 // wire contract (paths, headers, form body, x-restli-id) is checked without a network.
 
 import amplify_common.types;

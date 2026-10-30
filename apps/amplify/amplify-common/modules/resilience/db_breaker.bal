@@ -96,7 +96,10 @@ public isolated class DbBreaker {
         }
     }
 
-    # Records a failed call. Non-transient errors are ignored; a failed trial re-opens the breaker.
+    # Records a failed call. Non-transient errors are ignored. A failed half-open trial is reported with
+    # `onTrialFailure`, not here: a failure arriving while half-open comes from a call admitted before the
+    # breaker opened, says nothing about the trial, and must not re-open the breaker or discard a trial that
+    # then succeeds.
     #
     # + err - The error
     # + return - True when the failure was counted
@@ -106,11 +109,7 @@ public isolated class DbBreaker {
         }
         decimal now = self.clock();
         lock {
-            if self.current == "HALF_OPEN" {
-                self.trip(now);
-                return true;
-            }
-            if self.current == "OPEN" {
+            if self.current == "HALF_OPEN" || self.current == "OPEN" {
                 return true;
             }
             decimal[] recent = from decimal t in self.failures where now - t < self.config.windowSeconds select t;

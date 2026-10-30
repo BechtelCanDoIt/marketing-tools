@@ -78,7 +78,11 @@ public isolated class WebhookClient {
         }
         int schemeEnd = webhookUrl.indexOf("://") ?: 0;
         int pathStart = webhookUrl.indexOf("/", schemeEnd + 3) ?: webhookUrl.length();
-        self.httpClient = check new (webhookUrl.substring(0, pathStart),
+        // The client gets scheme and host only: anything before `@` in the authority (`user@host`) is dropped.
+        string authority = webhookUrl.substring(schemeEnd + 3, pathStart);
+        int at = authority.lastIndexOf("@") ?: -1;
+        string host = at >= 0 ? authority.substring(at + 1) : authority;
+        self.httpClient = check new (webhookUrl.substring(0, schemeEnd + 3) + host,
                 resilience:clientConfig(config.resilience, config.timeoutSeconds));
         string path = webhookUrl.substring(pathStart);
         self.path = path.length() == 0 ? "/" : path;
@@ -98,6 +102,14 @@ public isolated class WebhookClient {
         }
         string separator = self.path.includes("?") ? "&" : "?";
         string target = string `${self.path}${separator}threadKey=${encodedKey}&messageReplyOption=${REPLY_OPTION}`;
+        // Accepted risk (review of PR #232): `target` carries the webhook key and token, and with tracing on
+        // the HTTP client stamps it on the client span as `http.url`. Ballerina 2201.x has no per-client
+        // observability switch, and the client span is finished before this call returns
+        // (`ObserveUtils.stopObservation` closes it, then restores the parent context), so a
+        // `observe:addTagToSpan` here would tag the caller's span, not that one. Exposure is limited to
+        // whoever can read amplify-jobs traces; the token reaches one Chat space and can be rotated. The way
+        // out is the Chat API with a bearer credential (`spaces.messages.create`), which keeps the secret out
+        // of the URL.
         http:Response|http:ClientError response = self.httpClient->post(target, message,
                 resilience:correlationHeaders(correlationId));
         if response is http:ClientError {

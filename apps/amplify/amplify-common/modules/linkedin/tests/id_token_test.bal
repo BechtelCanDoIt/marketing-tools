@@ -39,11 +39,15 @@ json[] liJwk = [];
 json[] rotatedJwk = [];
 
 isolated json jwksDoc = {keys: []};
+isolated int jwksHits = 0;
 
 listener http:Listener jwksStub = new (JWKS_STUB_PORT);
 
 service /oauth/openid on jwksStub {
     isolated resource function get jwks() returns json {
+        lock {
+            jwksHits += 1;
+        }
         lock {
             return jwksDoc.clone();
         }
@@ -156,6 +160,8 @@ function badIdTokens() returns map<[map<json>, map<json>, boolean, string?]> => 
     "wrongIssuer": [{iss: "https://www.linkedin.com"}, {}, false, ()],
     "wrongAudience": [{aud: "someone-else"}, {}, false, ()],
     "manyAudiencesNoAzp": [{aud: [OIDC_CLIENT, "other"]}, {}, false, ()],
+    // OIDC Core 3.1.3.7: a present `azp` must name this client even with a single audience.
+    "singleAudienceForeignAzp": [{aud: OIDC_CLIENT, azp: "some-other-app"}, {}, false, ()],
     "expired": [{exp: time:utcNow()[0] - 120}, {}, false, ()],
     "noExpiry": [{exp: ()}, {}, false, ()],
     "issuedInTheFuture": [{iat: time:utcNow()[0] + 600}, {}, false, ()],
@@ -234,6 +240,28 @@ function idTokenKeysUnavailableIsRetryable() returns error? {
     test:assertEquals(rejectedWith(result, token), UNAVAILABLE);
     if result is ProviderError {
         test:assertTrue(result.detail().retryable);
+    }
+}
+
+@test:Config
+function idTokenColdCacheIsFetchedOncePerInterval() returns error? {
+    // The JWKS answers but holds no keys, so the cache stays cold. With a 30 s gate a burst of validations
+    // makes one fetch; the rest are refused by the gate instead of each calling LinkedIn.
+    setJwks([]);
+    IdTokenValidator v = check validator(30);
+    string token = check mintIdToken();
+    int before = jwksFetches();
+    foreach int i in 0 ..< 5 {
+        test:assertEquals(rejectedWith(v.validate(token), token), UNAVAILABLE);
+    }
+    int fetches = jwksFetches() - before;
+    setJwks(liJwk);
+    test:assertEquals(fetches, 1, "a cold cache is gated like a warm one");
+}
+
+function jwksFetches() returns int {
+    lock {
+        return jwksHits;
     }
 }
 

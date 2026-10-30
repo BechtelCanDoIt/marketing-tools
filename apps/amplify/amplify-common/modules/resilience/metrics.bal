@@ -67,3 +67,68 @@ public isolated function exportedBreakerValue(string component, string dependenc
     observe:Counter|observe:Gauge? g = observe:lookupMetric(BREAKER_METRIC, {component, dependency});
     return g is observe:Gauge ? g.getValue() : ();
 }
+
+# Outbox backlog gauges: `amplify_outbox_pending`, `amplify_outbox_failed` and `amplify_outbox_oldest_pending_seconds`
+# (-1 when nothing is pending). Alert on the oldest age: a row that sits pending for an hour means Novera, Chat or
+# LinkedIn is unconfigured or down, and nothing else says so.
+
+# Gauge names.
+public const string OUTBOX_PENDING_METRIC = "amplify_outbox_pending";
+public const string OUTBOX_FAILED_METRIC = "amplify_outbox_failed";
+public const string OUTBOX_OLDEST_METRIC = "amplify_outbox_oldest_pending_seconds";
+
+# Sets the outbox backlog gauges (registers each on first use). Never fails the caller.
+#
+# + component - `amplify-jobs`
+# + pending - Rows waiting (including deferred ones)
+# + failed - Rows that used every attempt
+# + oldestPendingSeconds - Age of the oldest pending row, `()` when none is pending
+public isolated function exportOutboxBacklog(string component, int pending, int failed, int? oldestPendingSeconds) {
+    setGauge(OUTBOX_PENDING_METRIC, "Outbox rows waiting to be delivered", component, <float>pending);
+    setGauge(OUTBOX_FAILED_METRIC, "Outbox rows that failed every attempt", component, <float>failed);
+    setGauge(OUTBOX_OLDEST_METRIC, "Age in seconds of the oldest pending outbox row, -1 when none",
+            component, oldestPendingSeconds is int ? <float>oldestPendingSeconds : -1.0);
+}
+
+isolated function setGauge(string name, string description, string component, float value) {
+    map<string> tags = {component};
+    observe:Counter|observe:Gauge? existing = observe:lookupMetric(name, tags);
+    observe:Gauge gauge;
+    if existing is observe:Gauge {
+        gauge = existing;
+    } else {
+        gauge = new (name, description, tags);
+        error? registered = gauge.register();
+        if registered is error {
+            observe:Counter|observe:Gauge? again = observe:lookupMetric(name, tags);
+            if again is observe:Gauge {
+                gauge = again;
+            }
+        }
+    }
+    gauge.setValue(value);
+}
+
+# Current value of an outbox gauge, or `()` when not exported yet.
+#
+# + name - One of the `OUTBOX_*_METRIC` names
+# + component - Component
+# + return - The value or `()`
+public isolated function exportedOutboxValue(string name, string component) returns float? {
+    observe:Counter|observe:Gauge? g = observe:lookupMetric(name, {component});
+    return g is observe:Gauge ? g.getValue() : ();
+}
+
+# Token partition runway: `amplify_token_partition_days_ahead` is how many days past today (UTC) have a
+# `connection.provider_token` partition. A connect fails on a day with none, and the daily maintenance run is the only
+# thing that creates them, so alert when this falls below 3 (the run has been down for most of the runway).
+public const string TOKEN_PARTITION_METRIC = "amplify_token_partition_days_ahead";
+
+# Sets the runway gauge (registers it on first use). Never fails the caller.
+#
+# + component - `amplify-jobs`
+# + daysAhead - Days ahead with a partition; -1 when it could not be read or there is no partition
+public isolated function exportTokenPartitionDaysAhead(string component, int daysAhead) {
+    setGauge(TOKEN_PARTITION_METRIC, "Days ahead of today that have a token partition, -1 unknown", component,
+            <float>daysAhead);
+}
