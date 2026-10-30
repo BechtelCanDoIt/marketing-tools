@@ -212,3 +212,20 @@ function testSettingsValidation() returns error? {
             admin);
     test:assertEquals(check codeIn(bad), "INVALID_SETTING");
 }
+
+@test:Config
+function testOversizedBodyIsProblemDetailsBeforeBinding() returns error? {
+    // HTTP/1.1 with chunking off, so the request declares its `Content-Length`: the API answers it before the
+    // payload is read (and hashed for idempotency), as problem details.
+    http:Client h1 = check new (string `http://localhost:${port}`,
+            {httpVersion: http:HTTP_1_1, http1Settings: {chunking: http:CHUNKING_NEVER}, cache: {enabled: false}});
+    http:Response res = check h1->post("/campaigns", {summary: "a".padEnd(70000, "a")},
+            {"x-jwt-assertion": check po()});
+    test:assertEquals(res.statusCode, 413);
+    test:assertEquals(res.getContentType(), "application/problem+json");
+    json body = check res.getJsonPayload();
+    test:assertEquals(check body.status, 413);
+    test:assertEquals(check body.code, "VALIDATION_FAILED");
+    test:assertTrue((check body.detail).toString().includes("65536"), "the detail names the limit");
+    test:assertTrue(res.getHeader("X-Correlation-ID") is string, "the security interceptor still runs");
+}
