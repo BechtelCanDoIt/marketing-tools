@@ -224,10 +224,9 @@ function testGrantsDenyPerRole() returns error? {
     assertDenied(selectFailure(ro, `SELECT count(*)::int FROM config.app_setting`), "readonly config");
     assertDenied(failure(ro, `INSERT INTO identity.employee (employee_id, email, display_name)
             VALUES ('ro', 'ro@wso2.com', 'ro')`), "readonly insert");
-    int visible = check ro->queryRow(`SELECT count(*)::int FROM sharing.share_request_v`);
-    test:assertTrue(visible >= 0, "readonly reads the view without commentary");
-    int standings = check ro->queryRow(`SELECT count(*)::int FROM recognition.standing`);
-    test:assertTrue(standings >= 0);
+    // The reads succeeding is the check here (the grant exists); how many rows the fixture holds is not.
+    int _ = check ro->queryRow(`SELECT count(*)::int FROM sharing.share_request_v`);
+    int _ = check ro->queryRow(`SELECT count(*)::int FROM recognition.standing`);
 
     // amplify_api: no upkeep, no rebuild, no campaign delete, no ledger rewrite, no announcement writes.
     assertDenied(selectFailure(api, `SELECT 1 FROM (SELECT messaging.run_partition_maintenance()) m`), "api upkeep");

@@ -1,11 +1,11 @@
 # amplify-database
 
-Amplify DB Migrate: the Choreo Manual Task (and Compose one-shot) that builds the Amplify PostgreSQL 18 database. It applies `migrations/` (`V###__name.sql`), then `seed/` (`S###__name.sql`), in order, one transaction per script, and records each in `public.schema_version` with a checksum. It also sets the app role passwords from secrets, then exits. A rerun is a no-op, a changed applied script stops the run (forward-only), and `dryRun = true` only lists what would run.
+Amplify DB Migrate: the Choreo Manual Task (and Compose one-shot) that builds the Amplify PostgreSQL 18 database. It applies `migrations/` (`V###__name.sql`), then `seed/` (`S###__name.sql`), in order, one transaction per script, and records each in `public.schema_version` with a checksum. It also sets the app role passwords from secrets, then exits. A rerun is a no-op, a changed applied script stops the run (forward-only), and `dryRun = true` only lists the scripts shipped in the image (it never connects, so it can't say which are pending).
 
 | Folder | What |
 | --- | --- |
 | `main.bal` | The runner |
-| `migrations/` | Forward-only schema scripts, `V001` to `V013` so far |
+| `migrations/` | Forward-only schema scripts, `V001` to `V016` so far |
 | `seed/` | Idempotent seed data (`ON CONFLICT DO NOTHING`): point rules, categories, app settings, scheduler settings (see `seed/README.md`) |
 | `checks/` | One-off checks such as `d2_extensions.sql` (run on each new server, plan D2) |
 | `tests/` | Unit tests plus the `integration` group (needs a migrated PostgreSQL 18, see `docs/migrations/README.md`) |
@@ -772,6 +772,8 @@ The stored `messaging.outbox.idempotency_key` is `<event_type>:` + the key parts
 The migration user owns every object; app users never own tables, so they can't `ALTER` or `DROP` (partition DDL is granted narrowly through `SECURITY DEFINER` maintenance functions owned by `amplify_migrate`).
 
 **As built (M3, V001–V010; later scripts below):** roles are created `NOLOGIN` with no password; the migrate runner (connected as the bootstrap admin) runs every script after V001 as `SET LOCAL ROLE amplify_migrate` and then sets the app role passwords from secrets. Enums are `text` + `CHECK`. `*_v` views are `security_invoker`, so the grants above apply through them; `sharing.share_request_v` leaves out `commentary`, and `amplify_readonly` gets a column grant on `share_request` without it. `amplify_api` and `amplify_jobs` get `INSERT/SELECT` plus `UPDATE (status, status_changed_at, paid_at, coin_reference)` on the ledger, and only `amplify_jobs` can run the partition functions and `recognition.rebuild`.
+
+**Bootstrap login.** V001 grants `amplify_migrate` to the login that first ran it (`WITH SET TRUE`, PostgreSQL 16+), and every later script switches to that role. Rotating `dbUser` afterwards leaves the new login unable to `SET ROLE amplify_migrate`, and V001 is already recorded so it never grants again. The runner checks for this before any script (and that the server is PostgreSQL 18 or later) and stops with the reason; fix it with `GRANT amplify_migrate TO <new login> WITH SET TRUE` or run as the original login.
 
 **As built after M3 (V011–V013):**
 
