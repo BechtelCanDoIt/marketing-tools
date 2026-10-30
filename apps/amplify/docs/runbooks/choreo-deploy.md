@@ -4,6 +4,21 @@ Console steps that config-as-code can't do. The repo side is done: Dockerfiles, 
 
 Owner: a WSO2 Digital org admin in Choreo. Order matters: database first, then Jobs and Scheduler, then Backend (its connections point at them), then the API Proxy.
 
+## Deploy order across repos
+
+Four repos ship for phase 1. Each step needs the ones above it.
+
+| # | Repo | What | Why it goes here |
+|---|---|---|---|
+| 1 | people-ops-suite | `people-app`: service-client access to `GET /employees/basic-info`, client id in `directoryClientIds` | Backend team rosters read it (C7). Without it My Team answers `UNAVAILABLE` and the rest works |
+| 1 | wso2-digital-agents | `po-agent` (Novera): optional `imageUrl` and button on `POST /internal/notifications` | Amplify's Novera client-credentials application must be subscribed to its API, and the rich card needs the change live |
+| 2 | marketing-tools | `apps/amplify`: sections B to E below | Needs 1 for rosters and Novera cards |
+| 3 | one-wso2 | Amplify UI (`webapp/src/features/amplify`) | Calls the API proxy from step 2 and hosts the LinkedIn callback page |
+
+The two repos in step 1 don't depend on each other; ship them in parallel. Settle the One WSO2 callback URL early, since Backend and the LinkedIn Mock config both need it before the UI ships.
+
+Inside marketing-tools the order is: databases, DB Migrate, Jobs, Scheduler, Backend, API Proxy. LinkedIn Mock is dev only and goes up with Jobs and Backend.
+
 ## A. Org, repo, project
 
 1. **A1 Bring Your Own Repository.** Choreo console > Organization settings > GitHub: authorize the Choreo GitHub app on the WSO2-managed org and grant it the **marketing-tools** repo only (not "all repositories"). Amplify lives there at `apps/amplify` (ADR-033), so every build path in the table below is relative to the marketing-tools repo root.
