@@ -1437,7 +1437,6 @@ components:
           required: [teamName, headcount, activeCount, entries]
           properties:
             teamName: {type: string}
-            houseName: {type: string, nullable: true, description: "The viewer's house from the people directory"}
             headcount: {type: integer}
             activeCount: {type: integer}
             entries:
@@ -1452,6 +1451,7 @@ components:
                   points: {type: integer}
                   teamRank: {type: integer}
                   companyRank: {type: integer}
+                  houseName: {type: string, nullable: true, description: "The member's house from the people directory"}
                   isMe: {type: boolean}
         teamStatus: {type: string, enum: [OK, NO_TEAM, UNAVAILABLE]}
     PersonalStanding:
