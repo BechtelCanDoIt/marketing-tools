@@ -475,10 +475,13 @@ isolated function exportCsv(reporting:ExportRow[] rows) returns string {
     foreach reporting:ExportRow r in rows {
         boolean? priority = r.isPriority;
         int? points = r.points;
-        string[] cells = [r.recordType, r.occurredAt, r.campaignId ?: "", r.campaignTitle ?: "", r.category ?: "",
-            priority is boolean ? priority.toString() : "", r.employeeId ?: "", r.employeeName ?: "",
-            r.employeeEmail ?: "", r.action ?: "", r.status ?: "", points is int ? points.toString() : "", r.detail ?: ""];
-        lines.push(string:'join(",", ...cells.map(csvCell)));
+        // Text columns go through `csvCell` (quoting, formula guard). Points are a number: a negative one
+        // (a reversal) must stay a number, or a spreadsheet reads `'-10` as text and drops it from a sum.
+        string[] cells = [csvCell(r.recordType), csvCell(r.occurredAt), csvCell(r.campaignId), csvCell(r.campaignTitle),
+            csvCell(r.category), priority is boolean ? priority.toString() : "", csvCell(r.employeeId),
+            csvCell(r.employeeName), csvCell(r.employeeEmail), csvCell(r.action), csvCell(r.status),
+            points is int ? points.toString() : "", csvCell(r.detail)];
+        lines.push(string:'join(",", ...cells));
     }
     return string:'join("\r\n", ...lines) + "\r\n";
 }

@@ -57,6 +57,8 @@ isolated function problem(int status, string title, string code, string? detail,
 
 isolated function unauthorized(string code, string? detail, string? correlationId) returns http:Unauthorized => {
     mediaType: PROBLEM_JSON,
+    // RFC 9110 section 11.6.1: a 401 names the scheme it expects.
+    headers: {"WWW-Authenticate": "Bearer realm=\"amplify\""},
     body: problem(401, "Unauthorized", code, detail, correlationId)
 };
 
