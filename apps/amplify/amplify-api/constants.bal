@@ -21,6 +21,8 @@ const string COMPONENT = "amplify-api";
 const string PRINCIPAL_KEY = "amplify.principal";
 # Correlation header.
 const string CORRELATION_HEADER = "X-Correlation-ID";
+// Header amplify-jobs requires on every call except its probes (security review, back-office components).
+const string INTERNAL_KEY_HEADER = "X-Amplify-Internal-Key";
 # Problem details media type.
 const string PROBLEM_JSON = "application/problem+json";
 # Problem `type` prefix.
