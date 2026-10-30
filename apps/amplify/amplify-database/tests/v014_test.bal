@@ -18,6 +18,7 @@
 // V014 and S006: every action of the pilot points table can be priced and recorded, and each one has a rule in
 // force from the pilot date, so no value waits on a later phase to be remembered.
 
+import ballerina/sql;
 import ballerina/test;
 import ballerinax/postgresql;
 
@@ -44,7 +45,7 @@ function testEveryPointActionHasARuleInForce() returns error? {
         test:assertEquals(constraints, 1, tbl);
     }
     postgresql:Client api = check apiClient();
-    var bogus = api->execute(`INSERT INTO scoring.point_rule (action, points, effective_from, created_by)
+    sql:ExecutionResult|sql:Error bogus = api->execute(`INSERT INTO scoring.point_rule (action, points, effective_from, created_by)
                               VALUES ('BOGUS', 1, now(), 'it')`);
     test:assertTrue(bogus is error, "an unpriced action is refused");
     check api.close();
