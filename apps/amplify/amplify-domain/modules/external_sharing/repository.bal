@@ -116,7 +116,13 @@ public isolated class PgExternalShareRepository {
             scoring:LedgerAppend award) returns error? {
         transaction {
             check self.updateRow(claim, expectedVersion, outbox);
-            _ = check scoring:appendInTransaction(self.db, self.actor, award, self.topN);
+            boolean awarded = check scoring:appendInTransaction(self.db, self.actor, award, self.topN);
+            if !awarded {
+                // The ledger reference already exists (ADR-029: a hash of provider, URL, employee and action).
+                // Committing would record the decision with no ledger row, no PointsAwarded event and no
+                // re-rank, and report success; roll the decision back instead.
+                fail types:domainError(types:ERR_EVIDENCE_ALREADY_CLAIMED, "These points were already awarded for this post");
+            }
             check commit;
         }
     }
