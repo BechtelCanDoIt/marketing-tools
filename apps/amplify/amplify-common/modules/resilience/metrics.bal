@@ -118,3 +118,17 @@ public isolated function exportedOutboxValue(string name, string component) retu
     observe:Counter|observe:Gauge? g = observe:lookupMetric(name, {component});
     return g is observe:Gauge ? g.getValue() : ();
 }
+
+# Token partition runway: `amplify_token_partition_days_ahead` is how many days past today (UTC) have a
+# `connection.provider_token` partition. A connect fails on a day with none, and the daily maintenance run is the only
+# thing that creates them, so alert when this falls below 3 (the run has been down for most of the runway).
+public const string TOKEN_PARTITION_METRIC = "amplify_token_partition_days_ahead";
+
+# Sets the runway gauge (registers it on first use). Never fails the caller.
+#
+# + component - `amplify-jobs`
+# + daysAhead - Days ahead with a partition; -1 when it could not be read or there is no partition
+public isolated function exportTokenPartitionDaysAhead(string component, int daysAhead) {
+    setGauge(TOKEN_PARTITION_METRIC, "Days ahead of today that have a token partition, -1 unknown", component,
+            <float>daysAhead);
+}

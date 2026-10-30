@@ -104,6 +104,14 @@ function breakerStateValues() {
 }
 
 @test:Config
+function tokenPartitionGauge() {
+    exportTokenPartitionDaysAhead("test-component", 14);
+    float? days = exportedOutboxValue(TOKEN_PARTITION_METRIC, "test-component");
+    // No metrics reporter in tests: the registry is a no-op (0.0). Either way export never fails the caller.
+    test:assertTrue(days is () || days == 14.0 || days == 0.0);
+}
+
+@test:Config
 function outboxBacklogGauges() {
     // Tests run without a metrics reporter, so the registry is a no-op (0.0); with a reporter (Choreo, Prometheus)
     // the gauges hold the latest value. Either way export never fails the caller.
