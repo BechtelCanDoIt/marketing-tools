@@ -16,7 +16,7 @@
 
 
 // Contract tests from openapi.yaml (plan M5): every operation in the spec reaches a resource, its
-// `x-roles` match the activity matrix, every matrix route is in the spec, and the main responses
+// `x-access` matches the activity matrix, every matrix route is in the spec, and the main responses
 // validate against their schemas (a small validator: required, type, nullable, enum, $ref, items).
 
 import amplify_api.auth;
@@ -151,7 +151,7 @@ function segments(string path) returns string[] => re `/`.split(path.substring(1
 
 @test:Config
 function testEveryOperationInTheSpecHasAResource() returns error? {
-    string token = check mint(groupsClaim(auth:ROLE_PO, auth:ROLE_MARKETING, auth:ROLE_SLT, auth:ROLE_ADMIN));
+    string token = check mint(groupsClaim(PO_GROUP, MARKETING_GROUP, SLT_GROUP, ADMIN_GROUP));
     [string, string, map<json>][] ops = check operations();
     test:assertTrue(ops.length() >= 34, "the contract lists every M5 operation");
     foreach [string, string, map<json>] [method, path, _] in ops {
@@ -168,14 +168,13 @@ function testEveryOperationInTheSpecHasAResource() returns error? {
 }
 
 @test:Config
-function testSpecRolesMatchTheActivityMatrix() returns error? {
-    map<string> roleOf = {EMP: "EMP", PO: "PO", MKT: "MKT", SLT: "SLT", ADM: "ADM"};
+function testSpecAccessMatchesTheActivityMatrix() returns error? {
     [string, string, map<json>][] ops = check operations();
     string[] specRoutes = [];
     foreach [string, string, map<json>] [method, path, op] in ops {
         specRoutes.push(method + " " + path);
-        string[] roles = check op["x-roles"].cloneWithType();
-        if roles == ["PUBLIC"] {
+        string access = check op["x-access"].ensureType();
+        if access == "PUBLIC" {
             test:assertTrue(auth:isPublic(segments(path)), path + " is public in the spec only");
             continue;
         }
@@ -183,12 +182,7 @@ function testSpecRolesMatchTheActivityMatrix() returns error? {
         if rule is () {
             test:assertFail(string `${method} ${path} is missing from the activity matrix`);
         }
-        string[] allowed = from auth:Audience a in rule.allowed select roleOf[a] ?: "";
-        string[] declared = roles;
-        if roles.indexOf("EMP") !is () {
-            declared = ["EMP", "PO", "MKT", "SLT", "ADM"];
-        }
-        test:assertEquals(declared.sort(), allowed.sort(), string `${method} ${path} x-roles`);
+        test:assertEquals(access, rule.requires, string `${method} ${path} x-access`);
     }
     foreach auth:Rule rule in auth:ACTIVITY_MATRIX {
         if rule.path.startsWith("/reports/") {

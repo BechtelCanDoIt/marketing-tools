@@ -186,7 +186,7 @@ Which tests reach which LinkedIn stand-in:
 ## Rules that keep the bricks fitting
 
 - **Build order:** `amplify_common`, then `amplify_domain`, then api and jobs. Bump the version when a shared lib's public API changes, and update the `[[dependency]]` in each consumer.
-- **Each brick owns its seams:** a new api route needs `openapi.yaml` (`x-roles`), a matrix row and the resource. `tests/contract_test.bal` and `tests/contract_drift_test.bal` fail otherwise.
+- **Each brick owns its seams:** a new api route needs `openapi.yaml` (`x-access`), a matrix row and the resource. `tests/contract_test.bal` and `tests/contract_drift_test.bal` fail otherwise.
 - **Schema changes are new migrations only** (`V014__…`), with a dated note in `docs/migrations/`.
 - **Every `transaction {}` block goes through `store:inTransaction`** until the Ballerina 2201.14 upgrade (R-13, ADR-032). `make check` enforces it.
 - **`make check`** also keeps the Choreo descriptors, `workload.yaml`, Dockerfiles and Compose in sync, and scans log calls for PII.

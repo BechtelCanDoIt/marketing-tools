@@ -18,7 +18,6 @@
 // The five boards (ADR-036): who may read them, what each returns for a known snapshot, the scorecard against
 // its targets, validation, the 60 s snapshot cache and degradation without the employee count.
 
-import amplify_api.auth;
 
 import ballerina/http;
 import ballerina/test;
@@ -58,7 +57,7 @@ function testPlainEmployeesNeverSeeTheBoards() returns error? {
 function testEveryAmplifyRoleReadsEveryBoard() returns error? {
     setSnapshot();
     setDirectory("ok");
-    foreach string role in [auth:ROLE_PO, auth:ROLE_MARKETING, auth:ROLE_SLT, auth:ROLE_ADMIN] {
+    foreach string role in [PO_GROUP, MARKETING_GROUP, SLT_GROUP, ADMIN_GROUP] {
         string token = check boardToken(role);
         foreach int i in 0 ..< BOARDS.length() {
             http:Response res = check send("GET", "/dashboards/" + BOARDS[i], (), token);
@@ -73,7 +72,7 @@ function testEveryAmplifyRoleReadsEveryBoard() returns error? {
 function testOperationsBoardNumbers() returns error? {
     setSnapshot();
     setDirectory("ok");
-    json body = check (check send("GET", "/dashboards/operations", (), check boardToken(auth:ROLE_PO))).getJsonPayload();
+    json body = check (check send("GET", "/dashboards/operations", (), check boardToken(PO_GROUP))).getJsonPayload();
     test:assertEquals(check body.headcount, 4);
     test:assertEquals(check body.kpis.campaignsLive, 2);
     test:assertEquals(check body.kpis.campaignsLivePriority, 1);
@@ -96,7 +95,7 @@ function testOperationsBoardNumbers() returns error? {
 
     // Without the directory the board still renders, with no headcount and no never-connected figure.
     setDirectory("down");
-    json bare = check (check send("GET", "/dashboards/operations", (), check boardToken(auth:ROLE_PO))).getJsonPayload();
+    json bare = check (check send("GET", "/dashboards/operations", (), check boardToken(PO_GROUP))).getJsonPayload();
     test:assertEquals(check bare.headcount, ());
     test:assertEquals(check bare.connections.neverConnected, ());
     setDirectory("ok");
@@ -105,7 +104,7 @@ function testOperationsBoardNumbers() returns error? {
 @test:Config {groups: ["dashboards"]}
 function testPostPerformanceBoardSelectsAndFilters() returns error? {
     setSnapshot();
-    string token = check boardToken(auth:ROLE_MARKETING);
+    string token = check boardToken(MARKETING_GROUP);
     json body = check (check send("GET", "/dashboards/campaigns", (), token)).getJsonPayload();
     test:assertEquals(check body.windowDays, 30);
     json[] campaigns = <json[]>check body.campaigns;
@@ -149,7 +148,7 @@ function testPostPerformanceBoardSelectsAndFilters() returns error? {
 function testParticipationAndGlanceBoards() returns error? {
     setSnapshot();
     setDirectory("ok");
-    string token = check boardToken(auth:ROLE_SLT);
+    string token = check boardToken(SLT_GROUP);
     json funnel = check (check send("GET", "/dashboards/participation", (), token)).getJsonPayload();
     test:assertEquals(check funnel.funnel, {employees: 4, connected: 2, reposted: 30, active30Days: 25, expired: 1});
 
@@ -168,7 +167,7 @@ function testScorecardStatusesAgainstTargets() returns error? {
     clearSettings();
     setSnapshot();
     setDirectory("ok");
-    json body = check (check send("GET", "/dashboards/scorecard", (), check boardToken(auth:ROLE_SLT))).getJsonPayload();
+    json body = check (check send("GET", "/dashboards/scorecard", (), check boardToken(SLT_GROUP))).getJsonPayload();
     json[] measures = <json[]>check body.measures;
     test:assertEquals(measures.map(m => checkpanic m.key), ["connected", "expired", "shareSuccess", "chatCards",
         "priorityReach", "active30Days", "repostsPerMonth"]);
@@ -205,7 +204,7 @@ function testScorecardStatusesAgainstTargets() returns error? {
     quiet.cards = {total: 0, sent: 0, queued: 0, failed: 0, retrying: 0};
     setSnapshot(quiet);
     setDirectory("down");
-    json empty = check (check send("GET", "/dashboards/scorecard", (), check boardToken(auth:ROLE_SLT))).getJsonPayload();
+    json empty = check (check send("GET", "/dashboards/scorecard", (), check boardToken(SLT_GROUP))).getJsonPayload();
     json noShares = check measureOf(empty, "shareSuccess");
     test:assertEquals(check noShares.status, "ON_TRACK");
     test:assertEquals(check noShares.note, "No shares this month");
@@ -221,7 +220,7 @@ function testScorecardStatusesAgainstTargets() returns error? {
 function testSnapshotIsReusedForSixtySeconds() returns error? {
     setSnapshot();
     setDirectory("ok");
-    string token = check boardToken(auth:ROLE_PO);
+    string token = check boardToken(PO_GROUP);
     _ = takeSnapshotLoads();
     foreach string board in BOARDS {
         _ = check send("GET", "/dashboards/" + board, (), token);
@@ -232,7 +231,7 @@ function testSnapshotIsReusedForSixtySeconds() returns error? {
 
 @test:Config {groups: ["dashboards"]}
 function testExportIsAnEscapedCsvForDashboardReadersOnly() returns error? {
-    string token = check boardToken(auth:ROLE_MARKETING);
+    string token = check boardToken(MARKETING_GROUP);
     http:Response res = check send("GET", "/dashboards/export?from=2025-10-01&to=2025-10-31", (), token);
     test:assertEquals(res.statusCode, 200);
     test:assertTrue((header(res, "Content-Type") ?: "").startsWith("text/csv"));
@@ -254,7 +253,7 @@ function testExportIsAnEscapedCsvForDashboardReadersOnly() returns error? {
 
 @test:Config {groups: ["dashboards"]}
 function testPersonBoardCountsOnePersonsPosts() returns error? {
-    string token = check boardToken(auth:ROLE_SLT);
+    string token = check boardToken(SLT_GROUP);
     json body = check (check send("GET", "/dashboards/people/e1", (), token)).getJsonPayload();
     test:assertEquals(check body.displayName, "Ada Lovelace");
     test:assertEquals(check body.email, "ada@example.com");
