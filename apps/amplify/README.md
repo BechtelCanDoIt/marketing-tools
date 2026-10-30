@@ -55,6 +55,14 @@ make e2e     # scripts/e2e-local.sh: campaign -> scheduler Run -> Chat card -> m
 make seed    # rerun Amplify DB Migrate (migrations + seeds; idempotent)
 make logs    # follow all logs; `docker compose --env-file local/.env logs -f chat-stub` for cards
 make check   # descriptor drift check (Choreo component.yaml vs workload.yaml vs Dockerfile vs compose) + log hygiene (scripts/check-logs-pii.sh)
+```
+
+The gates under `scripts/` are the only thing between a drift and a release, so each one carries its own
+fixtures: `scripts/check-descriptors.sh --self-test`, `scripts/check-logs-pii.sh --self-test` and
+`scripts/lint-openapi-names.sh --self-test`, plus `scripts/check-transaction-gate.sh --self-test`. Run them
+after changing a gate; each one exercises the bypasses a reviewer has found in it.
+
+```sh
 make load-test  # k6 (Docker image) against the running stack: 1k employees / 50k ledger rows, p95 < 50 ms (docs/testing/load-test-2026-10.md)
 make down    # stop and REMOVE volumes
 ```
@@ -63,9 +71,9 @@ make down    # stop and REMOVE volumes
 
 | Service | Host port | Notes |
 |---|---|---|
-| amplify-api | `127.0.0.1:9090` | Published directly (no gateway). Call it with a dev JWT: `curl -H "x-jwt-assertion: $(local/dev-jwt/mint-dev-jwt.sh token emp-1 ada@wso2.com amplify_po)" localhost:9090/me` (ADR-023, `environment=local` only) |
+| amplify-api | `127.0.0.1:9090` | Published directly (no gateway). Call it with a dev JWT: `curl -H "x-jwt-assertion: $(local/dev-jwt/mint-dev-jwt.sh token emp-1 ada@example.com amplify_po)" localhost:9090/me` (ADR-023, `environment=local` only) |
 | mock-linkedin | `127.0.0.1:19091` (www/OAuth only) | The browser follows the authorization redirect here; api port 9090 stays internal. One mock member signs in every time |
-| people-stub | `127.0.0.1:19092` | people-app directory stub (`GET /employees/basic-info`) for team rosters and One WSO2 photos/names. First run `cp local/people-stub/directory.json.example local/people-stub/directory.json` (the real file is gitignored, so it never gets committed), then edit `directory.json`; ThunderID users are keyed `<sub>@wso2.com` (the dev proxy's fallback when the token has no email) |
+| people-stub | `127.0.0.1:19092` | people-app directory stub (`GET /employees/basic-info`) for team rosters and One WSO2 photos/names. `make env` (and so `make up`) creates `local/people-stub/directory.json` from the example the first time (the real file is gitignored, so it never gets committed); edit it to add yourself. ThunderID users are keyed `<sub>@example.com` (the dev proxy's fallback when the token has no email) |
 | postgres, amplify-db-migrate, amplify-jobs, scheduler, scheduler-db, chat-stub | none | Compose network only. Scheduler UI: `docker compose --env-file local/.env exec amplify-api wget -qO- http://scheduler:8080/jobs` |
 | apim (`make up PROFILE=apim`) | `127.0.0.1:9443`, `8243` | Optional WSO2 API Manager 4.7.0. **Pending the non-prod Asgardeo org** (key manager); steps in `compose.yaml`. Until then the default profile is the supported one |
 
@@ -108,7 +116,7 @@ Every setting is a Ballerina `configurable`, set through `BAL_CONFIG_VAR_<NAME>`
 | `NOVERANOTIFYURL`, `NOVERATOKENURL`, `NOVERACLIENTID`, `NOVERASCOPES` | | ✓ | | | empty (Novera's `POST /internal/notifications` through its Choreo gateway, the token endpoint, the subscribed application, optional scopes) |
 | `NOVERACLIENTSECRET` | | ✓ | | ✓ | empty (that application's secret) |
 
-Scheduler: `DSN` (secret, its own database/user). Mock LinkedIn: `LISTENERHOST=0.0.0.0`, `WWWBASEURL`, `CLIENTID`, `CLIENTSECRET` (secret), `ENABLEMOCKADMIN`, and `BAL_CONFIG_DATA` for `redirectUris`. Tuning knobs with safe defaults (run batch sizes, timeouts, breakers, LinkedIn ceilings) are in each component's `config.bal`; set them the same way when needed.
+Scheduler: `DSN` (secret, its own database/user). Mock LinkedIn: `LISTENERHOST=0.0.0.0`, `WWWBASEURL`, `CLIENTID`, `CLIENTSECRET` (secret), and `BAL_CONFIG_DATA` for `redirectUris`. Tuning knobs with safe defaults (run batch sizes, timeouts, breakers, LinkedIn ceilings) are in each component's `config.bal`; set them the same way when needed.
 
 Deploying to Choreo: [docs/runbooks/choreo-deploy.md](docs/runbooks/choreo-deploy.md).
 
