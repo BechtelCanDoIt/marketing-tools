@@ -41,8 +41,11 @@ $fn$;
 
 -- ---- tokens: create ahead, drop by expiry --------------------------------------------------------
 
--- Creates daily partitions from p_from (default: today, UTC) through p_from + p_days_ahead.
-CREATE FUNCTION connection.create_token_partitions(p_days_ahead int DEFAULT 7, p_from date DEFAULT NULL)
+-- Creates daily partitions from p_from (default: today, UTC) through p_from + p_days_ahead. Two weeks ahead by default:
+-- a token insert into a day with no partition fails, and the only creator is the daily maintenance run, so the runway
+-- is how long that run can be down before connects start failing. amplify-jobs also creates them at start-up and
+-- reports the days left on /ready (`amplify_token_partition_days_ahead`), so a stopped job is seen well before then.
+CREATE FUNCTION connection.create_token_partitions(p_days_ahead int DEFAULT 14, p_from date DEFAULT NULL)
     RETURNS int
     LANGUAGE plpgsql
     SECURITY DEFINER
@@ -237,7 +240,7 @@ DECLARE
 BEGIN
     v_result := jsonb_build_object(
         'audit_partitions_created', audit.create_audit_partitions(3),
-        'token_partitions_created', connection.create_token_partitions(7),
+        'token_partitions_created', connection.create_token_partitions(14),
         'token_partitions_dropped',
             connection.drop_expired_token_partitions(config.int_setting('connection.token_grace_days', 5)),
         'audit_partitions_dropped',
@@ -262,6 +265,6 @@ GRANT EXECUTE ON FUNCTION connection.create_token_partitions(int, date), connect
     audit.create_audit_partitions(int, date), audit.drop_old_audit_partitions(int), messaging.purge_done_outbox(int),
     connection.sweep_oauth_state(), messaging.run_partition_maintenance() TO amplify_jobs;
 
--- Partitions exist from the first deploy: this month + 3, today + 7.
+-- Partitions exist from the first deploy: this month + 3, today + 14.
 SELECT audit.create_audit_partitions(3);
-SELECT connection.create_token_partitions(7);
+SELECT connection.create_token_partitions(14);
