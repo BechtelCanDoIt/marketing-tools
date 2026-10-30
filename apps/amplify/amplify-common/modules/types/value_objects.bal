@@ -144,3 +144,14 @@ public isolated function resourceTypeOf(PostUrn urn) returns ResourceType {
 public isolated function isHttpsUrl(string url) returns boolean =>
     url.toLowerAscii().startsWith("https://") && url.length() <= EVIDENCE_URL_MAX_LENGTH
         && re `\S+`.isFullMatch(url) && url.length() > 8;
+
+# Whether a host is an IP literal in any numeric form: dotted, decimal (`2130706433`), hex
+# (`0x7f000001`) or octal (`0177.0.0.1`). Every such form ends in an all-numeric label, which a DNS
+# name never does. Shared so evidence URLs and card image hosts reject the same set (one regex, no drift).
+#
+# + host - Lowercased host, without user info, port or trailing dot
+# + return - True when the host is an IP literal
+public isolated function isIpLiteralHost(string host) returns boolean {
+    string[] labels = re `\.`.split(host);
+    return re `[0-9]+|0x[0-9a-f]+`.isFullMatch(labels[labels.length() - 1]);
+}

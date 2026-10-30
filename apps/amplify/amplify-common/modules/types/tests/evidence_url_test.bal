@@ -65,6 +65,37 @@ function sameLinkTypedTwoWaysNormalizesToOneKey() returns error? {
     test:assertEquals(a.normalized, b.normalized);
 }
 
+// ADR-017 one claim per post: LinkedIn serves a post at both URL forms, so the claim key must be the
+// post URN's canonical feed URL, not the normalized URL as typed. Otherwise two people (or one person
+// twice) claim the same post under its two URLs and both get paid.
+@test:Config
+function onePostHasOneClaimKeyAcrossLinkedInUrlForms() returns error? {
+    string expected = "https://www.linkedin.com/feed/update/urn:li:activity:7123456789";
+    foreach string raw in [
+        "https://www.linkedin.com/feed/update/urn:li:activity:7123456789/",
+        "https://www.linkedin.com/feed/update/urn%3Ali%3Aactivity%3A7123456789",
+        "https://www.linkedin.com/posts/avery_wso2-activity-7123456789-AbCd",
+        "https://www.linkedin.com/posts/avery_wso2-activity-7123456789-AbCd/?utm_source=share&trk=public_post",
+        "https://de.linkedin.com/posts/avery_wso2-activity-7123456789-AbCd"
+    ] {
+        EvidenceUrl url = check parseEvidenceUrl(raw);
+        test:assertEquals(url.normalized, expected, raw);
+        test:assertEquals(url.resourceUrn, "urn:li:activity:7123456789", raw);
+        test:assertEquals(url.submitted, raw, raw);
+    }
+}
+
+// A LinkedIn URL that names no post URN is not a post claim: it keeps the ordinary URL normalization.
+@test:Config
+function linkedInUrlsWithoutAPostUrnKeepUrlNormalization() returns error? {
+    EvidenceUrl company = check parseEvidenceUrl("https://www.linkedin.com/company/wso2/?utm_source=x");
+    test:assertEquals(company.normalized, "https://www.linkedin.com/company/wso2");
+    test:assertEquals(company.resourceUrn, ());
+    EvidenceUrl shortLink = check parseEvidenceUrl("https://lnkd.in/eAbCdEf");
+    test:assertEquals(shortLink.normalized, "https://lnkd.in/eAbCdEf");
+    test:assertEquals(shortLink.provider, EVIDENCE_PROVIDER_LINKEDIN);
+}
+
 function rejectedUrls() returns map<[string, string]> => {
     "http": ["http://example.com/p", ERR_EVIDENCE_URL_NOT_HTTPS],
     "ftp": ["ftp://example.com/p", ERR_EVIDENCE_URL_NOT_HTTPS],
