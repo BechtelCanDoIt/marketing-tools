@@ -177,7 +177,7 @@ function testAuditBeforeAfterAndVersionConflictRollsBack() returns error? {
 
     // Campaign edit, share and connection updates record before too.
     campaign:Campaign c = check registerCampaign(db, po);
-    _ = check campaign:updateCampaign(new campaign:PgCampaignRepository(db, poActor(po)), c.id, {title: "After"},
+    _ = check campaign:updateCampaign(new campaign:PgCampaignRepository(db, poActor(po)), c.id, 1, {title: "After"},
             time:utcNow());
     string cb = check db->queryRow(`SELECT before::text FROM audit.audit_log
                                     WHERE entity_id = ${c.id} AND action = 'CampaignUpdated'`);
