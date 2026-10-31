@@ -461,12 +461,13 @@ modules = [
 [[package]]
 org = "wso2"
 name = "amplify_domain"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
 	{org = "ballerina", name = "file"},
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "lang.runtime"},
+	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "os"},
 	{org = "ballerina", name = "sql"},
 	{org = "ballerina", name = "time"},

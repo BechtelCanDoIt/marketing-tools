@@ -129,7 +129,7 @@ function testCampaignRoundTripOutboxAndAudit() returns error? {
     assertCode(again, types:ERR_CAMPAIGN_ALREADY_REGISTERED);
 
     // Optimistic lock: a stale version is refused.
-    campaign:Campaign edited = check campaign:updateCampaign(repo, c.id, {title: "Edited", tags: ["x"]}, time:utcNow());
+    campaign:Campaign edited = check campaign:updateCampaign(repo, c.id, 1, {title: "Edited", tags: ["x"]}, time:utcNow());
     test:assertEquals(edited.version, 2);
     error? stale = repo.update(edited, 1);
     assertCode(stale, types:ERR_VERSION_CONFLICT);
