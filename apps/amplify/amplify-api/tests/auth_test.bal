@@ -22,6 +22,7 @@ import ballerina/http;
 import ballerina/lang.runtime;
 import ballerina/test;
 import ballerina/time;
+import ballerinax/postgresql;
 
 // No client cache: `/leaderboard` is `private, max-age=30`, and a cached 200 would answer the anonymous and
 // breaker-open calls of later tests without reaching the server.
@@ -263,14 +264,60 @@ function testMeReportsLinkedInStatus() returns error? {
 
 // ---- Dev-only local signing (ADR-023) ------------------------------------------------------------
 
+const string LOCAL_JWKS = "http://localhost:1/unset";
+
 @test:Config
 function testDevSwitchIsRefusedOutsideLocal() {
-    test:assertTrue(checkDevSwitch("prod", true, "amplify-local-dev", TEST_ISSUER) is error);
-    test:assertTrue(checkDevSwitch("dev", true, "amplify-local-dev", TEST_ISSUER) is error);
-    test:assertTrue(checkDevSwitch("local", true, TEST_ISSUER, TEST_ISSUER) is error);
-    test:assertTrue(checkDevSwitch("local", true, " ", TEST_ISSUER) is error);
-    test:assertTrue(checkDevSwitch("local", true, "amplify-local-dev", TEST_ISSUER) is ());
-    test:assertTrue(checkDevSwitch("prod", false, "", TEST_ISSUER) is ());
+    postgresql:SSLMode off = postgresql:DISABLE;
+    test:assertTrue(checkDevSwitch("prod", true, "amplify-local-dev", TEST_ISSUER, off, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("dev", true, "amplify-local-dev", TEST_ISSUER, off, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("local", true, TEST_ISSUER, TEST_ISSUER, off, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("local", true, " ", TEST_ISSUER, off, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("prod", false, "", TEST_ISSUER, postgresql:VERIFY_FULL, "https://idp.example/jwks")
+            is ());
+}
+
+// Each of the three signs of a local stack is enough, on its own, to refuse the switch.
+@test:Config
+function testDevSwitchNeedsAllThreeLocalSigns() {
+    string issuer = "amplify-local-dev";
+    // The allowed local stack.
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:DISABLE, LOCAL_JWKS) is ());
+    // environment is not local.
+    error? wrongEnv = checkDevSwitch("dev", true, issuer, TEST_ISSUER, postgresql:DISABLE, LOCAL_JWKS);
+    test:assertTrue(wrongEnv is error);
+    if wrongEnv is error {
+        test:assertTrue(wrongEnv.message().includes("outside a local stack"));
+    }
+    // The database is verified or encrypted (a real database).
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:VERIFY_FULL, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:REQUIRE, LOCAL_JWKS) is error);
+    // The gateway JWKS is a real endpoint, not a local one.
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:DISABLE,
+            "https://api.asgardeo.io/t/org/oauth2/jwks") is error);
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:DISABLE,
+            "http://127.0.0.1:1/unset") is error);
+    // Switched off, the three checks do not apply.
+    test:assertTrue(checkDevSwitch("prod", false, issuer, TEST_ISSUER, postgresql:VERIFY_FULL, "https://x/jwks") is ());
+}
+
+@test:Config
+function testReportsRowsAreNotAdvertisedUntilBuilt() {
+    auth:AccessGroups access = {canReports: [SLT_GROUP], canDashboard: [SLT_GROUP]};
+    auth:Access[] slt = auth:grantsOf([SLT_GROUP], access);
+    test:assertTrue(slt.some(g => g == auth:CAN_REPORTS), "the grant itself still exists");
+    string[] caps = auth:capabilities(slt);
+    test:assertTrue(caps.indexOf("reports.read") is (), "GET /me must not advertise unbuilt /reports/*");
+    test:assertTrue(caps.indexOf("dashboards.operations.read") !is ());
+    // The matrix keeps the rows, so the route still answers 403 / authorised-404 as before.
+    int unbuilt = 0;
+    foreach auth:Rule rule in auth:ACTIVITY_MATRIX {
+        if !rule.built {
+            unbuilt += 1;
+            test:assertTrue(rule.path.startsWith("/reports/"), rule.path);
+        }
+    }
+    test:assertEquals(unbuilt, 2);
 }
 
 @test:Config
