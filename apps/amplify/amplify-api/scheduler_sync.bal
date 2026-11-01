@@ -130,7 +130,7 @@ isolated function desiredJobs(Settings s) returns scheduler:JobSpec[] {
             retryCount: 1,
             retryIntervalSeconds: 30,
             deadlineSeconds: runDeadlineSeconds,
-            headers: internalKeyHeaders()
+            headers: schedulerKeyHeaders()
         },
         {
             id: JOB_MAINTENANCE,
@@ -140,7 +140,7 @@ isolated function desiredJobs(Settings s) returns scheduler:JobSpec[] {
             retryCount: 2,
             retryIntervalSeconds: 60,
             deadlineSeconds: maintenanceDeadlineSeconds,
-            headers: internalKeyHeaders()
+            headers: schedulerKeyHeaders()
         }
     ];
 }
