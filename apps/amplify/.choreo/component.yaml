@@ -46,7 +46,12 @@ configurations:
     - name: BAL_CONFIG_VAR_INTERNALAPIKEY
       valueFrom:
         configForm:
-          displayName: Internal API key shared with amplify-jobs (secret, at least 32 characters; the same value on both components)
+          displayName: Internal API key, full access to amplify-jobs (secret, at least 32 characters; the same value on both components)
+          type: secret
+    - name: BAL_CONFIG_VAR_SCHEDULERAPIKEY
+      valueFrom:
+        configForm:
+          displayName: Scheduler API key: amplify-jobs accepts it only for POST /runs and POST /maintenance/partitions; amplify-api sets it on the scheduler jobs. Must differ from the internal key (secret, at least 32 characters; the same value on both components)
           type: secret
     - name: BAL_CONFIG_VAR_DBHOST
       valueFrom:

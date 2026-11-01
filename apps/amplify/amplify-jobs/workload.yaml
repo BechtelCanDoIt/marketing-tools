@@ -41,6 +41,11 @@ configurations:
         secretRef:
           name: amplify-jobs-secrets
           key: BAL_CONFIG_VAR_INTERNALAPIKEY
+    - name: BAL_CONFIG_VAR_SCHEDULERAPIKEY
+      valueFrom:
+        secretRef:
+          name: amplify-jobs-secrets
+          key: BAL_CONFIG_VAR_SCHEDULERAPIKEY
     - name: BAL_CONFIG_VAR_LEAVERSWEEPMODE
       value: "OFF"
     - name: BAL_CONFIG_VAR_PEOPLEDIRECTORYURL
