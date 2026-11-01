@@ -71,8 +71,9 @@ BEGIN
     SET rank                = r.new_rank,
         previous_rank       = CASE WHEN s.rank IS DISTINCT FROM r.new_rank THEN s.rank ELSE s.previous_rank END,
         points_to_next_rank = COALESCE(st.next_better_points - r.total_points, 0),
+        -- Dense ranks: tying the lowest score inside the top N is enough, so no extra point.
         points_to_top_n     = CASE WHEN r.new_rank <= p_top_n THEN 0
-                                   ELSE (SELECT top_n_floor FROM floor_n) - r.total_points + 1 END,
+                                   ELSE (SELECT top_n_floor FROM floor_n) - r.total_points END,
         updated_at          = now()
     FROM ranked r
     JOIN stepped st ON st.new_rank = r.new_rank
@@ -81,7 +82,7 @@ BEGIN
       AND (s.rank IS DISTINCT FROM r.new_rank
            OR s.points_to_next_rank IS DISTINCT FROM COALESCE(st.next_better_points - r.total_points, 0)
            OR s.points_to_top_n IS DISTINCT FROM CASE WHEN r.new_rank <= p_top_n THEN 0
-                                                      ELSE (SELECT top_n_floor FROM floor_n) - r.total_points + 1 END);
+                                                      ELSE (SELECT top_n_floor FROM floor_n) - r.total_points END);
 
     INSERT INTO recognition.standing_version AS v (period_key, version, refreshed_at)
     VALUES (p_period_key, 1, now())

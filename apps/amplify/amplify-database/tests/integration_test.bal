@@ -32,15 +32,30 @@ configurable string itDbName = "amplify_it";
 # Admin database used to drop and create `itDbName`.
 configurable string itAdminDb = "postgres";
 
-const string IT_JOBS_PASSWORD = "it-jobs-password-0001";
-const string IT_API_PASSWORD = "it-api-password-00001";
+# Login password the tests give `amplify_jobs`. Roles live on the server, not the database, so this only ever
+# runs against a local throwaway server (see the guard in `testFreshRunThenIdempotentRerun`).
+configurable string itJobsPassword = "it-jobs-password-0001";
+# Login password the tests give `amplify_api`.
+configurable string itApiPassword = "it-api-password-00001";
+
+# Says so in the test output when the integration tests are off, so a green run isn't mistaken for a real one.
+#
+# + testName - Test that would have run
+# + return - True when the test must return without running
+function itSkipped(string testName) returns boolean {
+    if itEnabled {
+        return false;
+    }
+    io:println(string `SKIPPED (itEnabled=false): ${testName}`);
+    return true;
+}
 
 function adminClient(string database) returns postgresql:Client|error =>
     new (host = dbHost, username = dbUser, password = dbPassword, database = database, port = dbPort,
         options = {ssl: {mode: dbSslMode}}, connectionPool = {maxOpenConnections: 2, minIdleConnections: 0});
 
 function jobsClient() returns postgresql:Client|error =>
-    new (host = dbHost, username = "amplify_jobs", password = IT_JOBS_PASSWORD, database = itDbName, port = dbPort,
+    new (host = dbHost, username = "amplify_jobs", password = itJobsPassword, database = itDbName, port = dbPort,
         options = {ssl: {mode: dbSslMode}}, connectionPool = {maxOpenConnections: 2, minIdleConnections: 0});
 
 function utcDay(int offsetDays) returns string =>
@@ -56,8 +71,13 @@ function partitionExists(postgresql:Client db, string schema, string name) retur
 
 @test:Config {groups: ["integration"]}
 function testFreshRunThenIdempotentRerun() returns error? {
-    if !itEnabled {
+    if itSkipped("testFreshRunThenIdempotentRerun") {
         return;
+    }
+    // The tests reset cluster-wide role passwords (amplify_api, amplify_jobs, amplify_readonly), so they must
+    // never touch a shared or managed server.
+    if !isLocalHost(dbHost) {
+        return error(string `integration tests reset cluster-wide role passwords; refusing to run against ${dbHost}`);
     }
     postgresql:Client admin = check adminClient(itAdminDb);
     // Constant identifiers only; nothing user-supplied reaches this DDL.
@@ -101,13 +121,13 @@ function testFreshRunThenIdempotentRerun() returns error? {
           AND tableowner <> 'amplify_migrate'`);
     test:assertEquals(notMigrateOwned, 0);
 
-    check setRolePasswords(db, {amplify_jobs: IT_JOBS_PASSWORD, amplify_api: IT_API_PASSWORD});
+    check setRolePasswords(db, {amplify_jobs: itJobsPassword, amplify_api: itApiPassword});
     check db.close();
 }
 
 @test:Config {groups: ["integration"], dependsOn: [testFreshRunThenIdempotentRerun]}
 function testChangedAppliedScriptStopsTheRun() returns error? {
-    if !itEnabled {
+    if itSkipped("testChangedAppliedScriptStopsTheRun") {
         return;
     }
     postgresql:Client db = check adminClient(itDbName);
@@ -128,7 +148,7 @@ function testChangedAppliedScriptStopsTheRun() returns error? {
 
 @test:Config {groups: ["integration"], dependsOn: [testFreshRunThenIdempotentRerun]}
 function testPartitionsCreatedAhead() returns error? {
-    if !itEnabled {
+    if itSkipped("testPartitionsCreatedAhead") {
         return;
     }
     postgresql:Client jobs = check jobsClient();
@@ -149,7 +169,7 @@ function testPartitionsCreatedAhead() returns error? {
 
 @test:Config {groups: ["integration"], dependsOn: [testPartitionsCreatedAhead]}
 function testTokenDayDropRuleAndAudit() returns error? {
-    if !itEnabled {
+    if itSkipped("testTokenDayDropRuleAndAudit") {
         return;
     }
     postgresql:Client jobs = check jobsClient();
@@ -185,7 +205,7 @@ function testTokenDayDropRuleAndAudit() returns error? {
 
 @test:Config {groups: ["integration"], dependsOn: [testPartitionsCreatedAhead]}
 function testMissingTokenMeansNeedsReconnect() returns error? {
-    if !itEnabled {
+    if itSkipped("testMissingTokenMeansNeedsReconnect") {
         return;
     }
     postgresql:Client jobs = check jobsClient();
@@ -218,7 +238,7 @@ function testMissingTokenMeansNeedsReconnect() returns error? {
 
 @test:Config {groups: ["integration"], dependsOn: [testPartitionsCreatedAhead]}
 function testAuditRetentionAndOutboxPurge() returns error? {
-    if !itEnabled {
+    if itSkipped("testAuditRetentionAndOutboxPurge") {
         return;
     }
     postgresql:Client jobs = check jobsClient();
@@ -250,7 +270,7 @@ function testAuditRetentionAndOutboxPurge() returns error? {
 
 @test:Config {groups: ["integration"], dependsOn: [testFreshRunThenIdempotentRerun]}
 function testAppRolesCannotRunDdlOrOtherUpkeep() returns error? {
-    if !itEnabled {
+    if itSkipped("testAppRolesCannotRunDdlOrOtherUpkeep") {
         return;
     }
     postgresql:Client jobs = check jobsClient();
