@@ -20,6 +20,7 @@
 import amplify_common.types;
 
 import ballerina/http;
+import ballerina/lang.runtime;
 import ballerina/test;
 
 const int STUB_PORT = 18210;
@@ -83,7 +84,7 @@ service / on stubListener {
 
     resource function post rest/posts(@http:Header string Authorization, @http:Header string LinkedIn\-Version,
             @http:Header string X\-Restli\-Protocol\-Version, @http:Payload json body)
-            returns http:Created|http:Unauthorized|http:BadRequest|http:TooManyRequests|http:InternalServerError {
+            returns http:Created|http:Unauthorized|http:BadRequest|http:TooManyRequests|http:InternalServerError|http:BadGateway|http:GatewayTimeout {
         if Authorization == "Bearer expired" {
             return <http:Unauthorized>{body: {status: 401, serviceErrorCode: 65601, message: "Invalid token"}};
         }
@@ -92,6 +93,16 @@ service / on stubListener {
         }
         if Authorization == "Bearer down" {
             return <http:InternalServerError>{};
+        }
+        if Authorization == "Bearer badgateway" {
+            return <http:BadGateway>{};
+        }
+        if Authorization == "Bearer gatewaytimeout" {
+            return <http:GatewayTimeout>{};
+        }
+        if Authorization == "Bearer slow" {
+            runtime:sleep(3);
+            return <http:Created>{headers: {"x-restli-id": "urn:li:share:7000000000000000002"}};
         }
         if Authorization == "Bearer noid" {
             return <http:Created>{};
@@ -201,7 +212,10 @@ function publishRepostSendsHeadersAndReadsRestliId() returns error? {
 function publishFailures() returns map<[string, string, boolean]> => {
     "expired": ["expired", UNAUTHORIZED, false],
     "rateLimited": ["busy", RATE_LIMITED, true],
-    "serverError": ["down", UNAVAILABLE, true]
+    "serverError": ["down", UNAVAILABLE, true],
+    // The gateway may have forwarded the create, so the post may be live: never retry
+    "badGateway": ["badgateway", OUTCOME_UNKNOWN, false],
+    "gatewayTimeout": ["gatewaytimeout", OUTCOME_UNKNOWN, false]
 };
 
 @test:Config {dataProvider: publishFailures}
@@ -213,6 +227,30 @@ function publishFailuresAreClassified(string token, string code, boolean retryab
         test:assertEquals(result.detail().retryable, retryable);
         test:assertFalse(result.message().includes(token), "never echo the token");
     }
+}
+
+// The per-call timeout on `POST /rest/posts`: LinkedIn may have created the post, so a retry would post twice.
+@test:Config
+function publishTimeoutIsOutcomeUnknownAndNotRetryable() returns error? {
+    LinkedInAdapter slowApi = check new ({apiBaseUrl: string `http://localhost:${STUB_PORT}`,
+        authBaseUrl: string `http://localhost:${STUB_PORT}`, clientId: "cid", clientSecret: "secret",
+        redirectUri: "https://one.wso2.com/cb", timeoutSeconds: 1});
+    types:PostUrn|ProviderError result = slowApi.publishShare("slow", {
+        authorUrn: "urn:li:person:782bbtaQ", kind: types:REPOST, targetUrn: "urn:li:share:6999"});
+    test:assertEquals(providerCode(result), OUTCOME_UNKNOWN);
+    if result is ProviderError {
+        test:assertFalse(result.detail().retryable);
+        test:assertEquals(result.detail().httpStatus, ());
+    }
+}
+
+// Reads keep treating a timeout as retryable: repeating a GET is harmless.
+@test:Config
+function userInfoTimeoutStaysRetryable() returns error? {
+    LinkedInAdapter slowAuth = check new ({apiBaseUrl: "http://10.255.255.1:9", authBaseUrl: "http://10.255.255.1:9",
+        clientId: "c", clientSecret: "s", redirectUri: "https://x.com/cb", timeoutSeconds: 1});
+    ProviderError|MemberProfile result = slowAuth.userInfo(GOOD_TOKEN);
+    test:assertTrue(result is ProviderError && result.detail().retryable);
 }
 
 @test:Config

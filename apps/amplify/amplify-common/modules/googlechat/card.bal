@@ -162,15 +162,11 @@ public isolated function isPublicHttpsUrl(string url) returns boolean {
         host = host.substring(0, host.length() - 1);
     }
     // Any IP literal form (dotted, decimal, hex, octal) ends in a numeric label; Chat CDNs use names.
-    string[] labels = re `\.`.split(host);
-    if re `[0-9]+|0x[0-9a-f]*`.isFullMatch(labels[labels.length() - 1]) {
+    if types:isIpLiteralHost(host) {
         return false;
     }
-    if host == "" || host == "localhost" || host.endsWith(".localhost") || host.endsWith(".local")
-            || host.endsWith(".internal") || !host.includes(".") {
-        return false;
-    }
-    return !re `(127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.).*`.isFullMatch(host);
+    return host != "" && host != "localhost" && !host.endsWith(".localhost") && !host.endsWith(".local")
+        && !host.endsWith(".internal") && host.includes(".");
 }
 
 # Escapes the characters Chat's text widgets read as HTML.

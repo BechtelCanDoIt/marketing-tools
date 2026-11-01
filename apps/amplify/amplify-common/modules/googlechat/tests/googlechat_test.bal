@@ -22,6 +22,8 @@ import ballerina/test;
 const int CHAT_STUB_PORT = 18211;
 
 isolated string lastQuery = "";
+// Raw request target of the last call, to prove the key and token reach Chat unchanged
+isolated string lastTarget = "";
 
 listener http:Listener chatListener = new (CHAT_STUB_PORT);
 
@@ -29,6 +31,9 @@ service /v1/spaces on chatListener {
     resource function post [string space]/messages(http:Request req, @http:Payload json body)
             returns http:Ok|http:BadRequest|http:TooManyRequests|http:ServiceUnavailable {
         map<string[]> params = req.getQueryParams();
+        lock {
+            lastTarget = req.rawPath;
+        }
         lock {
             lastQuery = string `${params["key"].toString()}|${params["threadKey"].toString()}|${
                 params["messageReplyOption"].toString()}`;
@@ -281,6 +286,8 @@ function cardImageRejectsTrailingDotAndNumericHosts() {
         test:assertFalse(isPublicHttpsUrl(url), url);
     }
     test:assertTrue(isPublicHttpsUrl("https://cdn.wso2.com./logo.png"), "a fully qualified public name is fine");
+    // A numeric *first* label is a name, not an IP literal: the old private-range regex dropped it.
+    test:assertTrue(isPublicHttpsUrl("https://10.cdn.example.com/logo.png"));
 }
 
 @test:Config
@@ -338,4 +345,62 @@ function cardLeavesImageOutWhenTheDefaultIsUnusable() returns error? {
     json card = check buildCampaignCard({campaignId: "c1", title: "T", sharePageUrl: "https://a.com/s",
         defaultImageUrl: "http://localhost/default.png"});
     test:assertFalse(card.toJsonString().includes("\"image\""));
+}
+
+// The transport is the JDK client (transport.bal), so the key and token must still arrive in the query,
+// intact, next to the thread parameters.
+@test:Config
+function webhookKeyAndTokenReachChatUnchanged() returns error? {
+    WebhookClient chat = check new ({
+        webhookUrl: string `http://localhost:${CHAT_STUB_PORT}/v1/spaces/club/messages?key=TESTKEY456&token=TESTTOKEN123`
+    });
+    ChatMessage|ChatError result = chat.post({cardsV2: []}, "campaign-c1", "corr-1");
+    test:assertTrue(result is ChatMessage, "post should succeed");
+    string target;
+    lock {
+        target = lastTarget;
+    }
+    test:assertTrue(target.includes("key=TESTKEY456&token=TESTTOKEN123"), "key and token sent as given");
+    test:assertTrue(target.includes("threadKey=campaign-c1"));
+}
+
+// Guard against the leak that came with `ballerina/http`: its client spans carry the request URL as
+// `http.url`. The webhook client must hold no `http:Client`, and the sending code must stay in
+// transport.bal (scripts/check-chat-transport.sh enforces the same on the sources).
+@test:Config
+function webhookFailureTextsAreFixedStrings() returns error? {
+    string[] urls = [
+        "http://localhost:1/v1/spaces/x/messages?key=TESTKEY456&token=TESTTOKEN123",
+        string `http://localhost:${CHAT_STUB_PORT}/v1/spaces/busy/messages?key=TESTKEY456&token=TESTTOKEN123`
+    ];
+    foreach string url in urls {
+        WebhookClient chat = check new ({webhookUrl: url, timeoutSeconds: 2});
+        ChatMessage|ChatError result = chat.post({cardsV2: []}, "t");
+        if result !is ChatError {
+            test:assertFail("expected an error");
+        }
+        // stack trace frames and causes count too
+        string seen = result.toString() + result.stackTrace().toString() + (result.cause() is error ? (<error>result.cause()).toString() : "none");
+        foreach string secret in ["TESTKEY456", "TESTTOKEN123", "token=", "key="] {
+            test:assertFalse(seen.includes(secret), string `error leaks ${secret}`);
+        }
+    }
+}
+
+// The breaker went with the `ballerina/http` client: refused calls open it, then it refuses without calling.
+@test:Config
+function webhookBreakerOpensAfterRepeatedFailures() returns error? {
+    WebhookClient chat = check new ({
+        webhookUrl: "http://localhost:1/v1/spaces/x/messages?key=TESTKEY456&token=TESTTOKEN123",
+        timeoutSeconds: 2,
+        resilience: {requestVolumeThreshold: 2, failureThreshold: 0.5, resetTimeSeconds: 30}
+    });
+    test:assertEquals(chat.breaker(), "CLOSED");
+    foreach int _ in 0 ..< 2 {
+        ChatMessage|ChatError r = chat.post({cardsV2: []}, "t");
+        test:assertTrue(r is ChatError && r.message() == "Chat webhook call failed: no response");
+    }
+    test:assertEquals(chat.breaker(), "OPEN");
+    ChatMessage|ChatError open = chat.post({cardsV2: []}, "t");
+    test:assertTrue(open is ChatError && open.message() == "Chat webhook breaker is open" && open.detail().retryable);
 }

@@ -119,13 +119,18 @@ public const FORBIDDEN = "FORBIDDEN";
 public const RATE_LIMITED = "RATE_LIMITED";
 # Request refused (400, 404, 409, 422).
 public const REJECTED = "REJECTED";
-# Network failure, timeout or 5xx.
+# Nothing was sent, or LinkedIn refused to take it: connection refused, open breaker, 5xx other than 502/504.
+# A later retry is safe.
 public const UNAVAILABLE = "UNAVAILABLE";
+# A create call was sent but its result is unknown: timeout, dropped connection, 502/504. The post may be
+# live, so never `retryable`; the caller must not publish again without checking the member's posts.
+public const OUTCOME_UNKNOWN = "OUTCOME_UNKNOWN";
 # Response was not what the contract says.
 public const BAD_RESPONSE = "BAD_RESPONSE";
 
 # Category of a provider failure.
-public type ProviderErrorCode UNAUTHORIZED|FORBIDDEN|RATE_LIMITED|REJECTED|UNAVAILABLE|BAD_RESPONSE;
+public type ProviderErrorCode UNAUTHORIZED|FORBIDDEN|RATE_LIMITED|REJECTED|UNAVAILABLE|OUTCOME_UNKNOWN|
+        BAD_RESPONSE;
 
 # Detail of a provider error. Never holds tokens or request bodies.
 public type ProviderErrorDetail record {|
@@ -135,7 +140,7 @@ public type ProviderErrorDetail record {|
     int? httpStatus;
     # LinkedIn `serviceErrorCode`, when present
     int? serviceErrorCode;
-    # Whether a later retry may succeed
+    # Whether repeating the same call is safe and may succeed. Always `false` for `OUTCOME_UNKNOWN`
     boolean retryable;
 |};
 
@@ -173,6 +178,7 @@ public type ProviderAdapter isolated object {
     #
     # + accessToken - Bearer token
     # + command - What to share
-    # + return - URN of the new post (`x-restli-id`), or a provider error
+    # + return - URN of the new post (`x-restli-id`), or a provider error. `OUTCOME_UNKNOWN` (not retryable)
+    # means the post may be live
     public isolated function publishShare(string accessToken, ShareCommand command) returns types:PostUrn|ProviderError;
 };

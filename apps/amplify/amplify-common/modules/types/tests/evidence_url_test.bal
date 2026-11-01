@@ -38,11 +38,62 @@ function evidenceUrlIsNormalized(string raw, string expected) returns error? {
     test:assertEquals(url.submitted, raw.trim());
 }
 
+// Regression (PR #102 review): one LinkedIn post has several URLs, and the key must not depend on which one was typed.
+@test:Config
+function linkedInPostUrlFormsShareOneKey() returns error? {
+    string[] forms = [
+        "https://www.linkedin.com/posts/avery_wso2-activity-7123456789-AbCd",
+        "https://linkedin.com/posts/avery_wso2-activity-7123456789-AbCd",
+        "https://www.linkedin.com/posts/avery_wso2-activity-7123456789-AbCd?x=1",
+        "https://www.linkedin.com/feed/update/urn:li:activity:7123456789",
+        "https://linkedin.com/feed/update/urn:li:activity:7123456789/?x=1",
+        "https://www.linkedin.com/feed/update/urn%3Ali%3Aactivity%3A7123456789"
+    ];
+    foreach string form in forms {
+        EvidenceUrl url = check parseEvidenceUrl(form);
+        test:assertEquals(url.normalized, "https://www.linkedin.com/feed/update/urn:li:activity:7123456789", form);
+        test:assertEquals(url.submitted, form);
+    }
+    EvidenceUrl other = check parseEvidenceUrl("https://www.linkedin.com/posts/avery_wso2-activity-7123456790-AbCd");
+    test:assertNotEquals(other.normalized, "https://www.linkedin.com/feed/update/urn:li:activity:7123456789");
+}
+
 @test:Config
 function sameLinkTypedTwoWaysNormalizesToOneKey() returns error? {
     EvidenceUrl a = check parseEvidenceUrl("https://www.LinkedIn.com/posts/avery_wso2-activity-7123456789-AbCd/?utm_source=share&utm_medium=member_desktop");
     EvidenceUrl b = check parseEvidenceUrl("https://www.linkedin.com/posts/avery_wso2-activity-7123456789-AbCd");
     test:assertEquals(a.normalized, b.normalized);
+}
+
+// ADR-017 one claim per post: LinkedIn serves a post at both URL forms, so the claim key must be the
+// post URN's canonical feed URL, not the normalized URL as typed. Otherwise two people (or one person
+// twice) claim the same post under its two URLs and both get paid.
+@test:Config
+function onePostHasOneClaimKeyAcrossLinkedInUrlForms() returns error? {
+    string expected = "https://www.linkedin.com/feed/update/urn:li:activity:7123456789";
+    foreach string raw in [
+        "https://www.linkedin.com/feed/update/urn:li:activity:7123456789/",
+        "https://www.linkedin.com/feed/update/urn%3Ali%3Aactivity%3A7123456789",
+        "https://www.linkedin.com/posts/avery_wso2-activity-7123456789-AbCd",
+        "https://www.linkedin.com/posts/avery_wso2-activity-7123456789-AbCd/?utm_source=share&trk=public_post",
+        "https://de.linkedin.com/posts/avery_wso2-activity-7123456789-AbCd"
+    ] {
+        EvidenceUrl url = check parseEvidenceUrl(raw);
+        test:assertEquals(url.normalized, expected, raw);
+        test:assertEquals(url.resourceUrn, "urn:li:activity:7123456789", raw);
+        test:assertEquals(url.submitted, raw, raw);
+    }
+}
+
+// A LinkedIn URL that names no post URN is not a post claim: it keeps the ordinary URL normalization.
+@test:Config
+function linkedInUrlsWithoutAPostUrnKeepUrlNormalization() returns error? {
+    EvidenceUrl company = check parseEvidenceUrl("https://www.linkedin.com/company/wso2/?utm_source=x");
+    test:assertEquals(company.normalized, "https://www.linkedin.com/company/wso2");
+    test:assertEquals(company.resourceUrn, ());
+    EvidenceUrl shortLink = check parseEvidenceUrl("https://lnkd.in/eAbCdEf");
+    test:assertEquals(shortLink.normalized, "https://lnkd.in/eAbCdEf");
+    test:assertEquals(shortLink.provider, EVIDENCE_PROVIDER_LINKEDIN);
 }
 
 function rejectedUrls() returns map<[string, string]> => {
@@ -107,6 +158,11 @@ function httpsUrlCheck() {
     test:assertFalse(isHttpsUrl("http://wso2.com/x.png"));
     test:assertFalse(isHttpsUrl("https://"));
     test:assertFalse(isHttpsUrl("https://a b"));
+    // Regression (PR #102 review): `.` does not match a line break, so CR and LF used to slip through.
+    test:assertFalse(isHttpsUrl("https://wso2.com/x.png\r\nSet-Cookie: a=b"));
+    test:assertFalse(isHttpsUrl("https://wso2.com/a\n\nb"));
+    test:assertFalse(isHttpsUrl("https://wso2.com/x.png\n"));
+    test:assertFalse(isHttpsUrl("https://wso2.com/a\tb"));
 }
 
 // Regression (deep review RC-02): the `/posts/...-activity-N` branch built a PostUrn without
