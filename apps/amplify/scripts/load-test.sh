@@ -34,7 +34,9 @@ echo "== seed 1,000 employees + 50,000 ledger rows"
 "${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -q -U postgres -d amplify < scripts/load/seed-load.sql
 
 echo "== rebuild recognition (amplify-jobs)"
-"${COMPOSE[@]}" exec -T amplify-api wget -qO- --post-data '' http://amplify-jobs:9091/maintenance/rebuild-recognition
+# The internal key (full access) is already in amplify-api's environment; the scheduler key would get a 403 here.
+"${COMPOSE[@]}" exec -T amplify-api sh -c \
+  'wget -qO- --header "X-Amplify-Internal-Key: $BAL_CONFIG_VAR_INTERNALAPIKEY" --post-data "" http://amplify-jobs:9091/maintenance/rebuild-recognition' 
 echo
 
 echo "== mint dev JWTs (1 PO + 200 employees)"
