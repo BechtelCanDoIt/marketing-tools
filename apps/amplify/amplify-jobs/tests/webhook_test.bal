@@ -172,5 +172,11 @@ function webhook5xxRetriesThenFailsAfterMaxAttempts() returns error? {
     test:assertEquals(stub().hits, before + TEST_CONFIG.maxAttempts, "one call per attempt");
     var a = check w.mem.announcement(cid);
     test:assertTrue(a !is () && a.failedAt !is () && (a.lastError ?: "").includes("UNAVAILABLE"));
+    // Stored texts (outbox `last_error` and announcement) never carry the webhook key, token or path.
+    foreach string stored in [(a is () ? "" : a.lastError ?: ""), w.queue.statusOf(id)[2] ?: ""] {
+        foreach string secret in ["SECRET-TOKEN", "token=", "key=", "/v1/spaces/"] {
+            test:assertFalse(stored.includes(secret), string `stored error text leaks ${secret}`);
+        }
+    }
     setStubStatus(200);
 }
