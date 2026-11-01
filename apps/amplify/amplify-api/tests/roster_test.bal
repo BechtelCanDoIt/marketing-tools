@@ -39,13 +39,13 @@ final DirectoryRecord[] & readonly DIRECTORY = [
 @test:Config
 function testRosterGroupsBySubTeam() {
     Roster? roster = rosterFrom(indexDirectory(DIRECTORY), "grace@wso2.com");
-    test:assertEquals(roster, {teamName: "Forward Deployed Engineering", emails: ["ada@wso2.com", "grace@wso2.com"], houses: {}});
+    test:assertEquals(roster, {teamName: "Forward Deployed Engineering", emails: ["ada@wso2.com", "grace@wso2.com"], houses: {}, names: {}});
 }
 
 @test:Config
 function testRosterFallsBackToTeam() {
     Roster? roster = rosterFrom(indexDirectory(DIRECTORY), "ken@wso2.com");
-    test:assertEquals(roster, {teamName: "Marketing", emails: ["ken@wso2.com", "dennis@wso2.com"], houses: {}});
+    test:assertEquals(roster, {teamName: "Marketing", emails: ["ken@wso2.com", "dennis@wso2.com"], houses: {}, names: {}});
 }
 
 @test:Config
@@ -199,4 +199,30 @@ function testGroupSortReordersButKeepsThePointsRank() returns error? {
     test:assertEquals(rankGroups(rows, "participants", "desc").map(r => checkpanic r.key), ["b", "c", "a"]);
     test:assertEquals(rankGroups(rows, "points", "asc").map(r => checkpanic r.key), ["b", "c", "a"]);
     test:assertEquals(rankGroups(rows, "rank", "desc").map(r => checkpanic r.key), ["b", "c", "a"]);
+}
+
+@test:Config
+function testRosterCarriesDirectoryNames() {
+    DirectoryRecord[] rows = [
+        {workEmail: "a@wso2.com", firstName: " Ada ", lastName: "Lovelace", team: "Marketing"},
+        {workEmail: "b@wso2.com", firstName: "Grace", team: "Marketing"},
+        {workEmail: "c@wso2.com", team: "Marketing"},
+        {workEmail: "d@wso2.com", firstName: "Dee", lastName: "Outsider", team: ()}
+    ];
+    DirectoryIndex index = indexDirectory(rows);
+    Roster roster = <Roster>rosterFrom(index, "a@wso2.com");
+    test:assertEquals(roster.names, {"a@wso2.com": "Ada Lovelace", "b@wso2.com": "Grace"},
+            "a member with no name is left out, so the standing's name or the email fills in");
+    recognition:RosterMember[] team = membersOf(roster);
+    test:assertEquals(team, [{email: "a@wso2.com", name: "Ada Lovelace"}, {email: "b@wso2.com", name: "Grace"},
+        {email: "c@wso2.com", name: ""}]);
+    recognition:RosterMember[] company = everyoneIn(index);
+    test:assertEquals(company.length(), 4, "the company roster includes people with no team");
+    test:assertEquals(company[3], {email: "d@wso2.com", name: "Dee Outsider"});
+}
+
+@test:Config
+function testDirectoryCacheDefaultsToTwentyFourHours() {
+    test:assertEquals(rosterCacheSeconds, 86400d, "teams and names are reused for 24 hours");
+    test:assertEquals(headcountCacheSeconds, 86400d, "the same directory read, the same TTL");
 }
