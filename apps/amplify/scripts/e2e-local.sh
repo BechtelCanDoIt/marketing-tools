@@ -34,6 +34,12 @@ case "$(sed -n 's/^AMPLIFY_ON_WEBHOOK=//p' local/.env | tail -1 | tr '[:upper:]'
   true | 1 | yes) ;;
   *) echo "e2e needs the webhook path: set AMPLIFY_ON_WEBHOOK=true in local/.env and restart the stack" >&2; exit 1 ;;
 esac
+# ... and only while the webhook URL is the stub. A real webhook (`GOOGLE_CHAT_WEBHOOK_URL` = the dev test space)
+# takes every card out of the stack, so the card check would wait out its timeout with the posts already sent.
+case "$(sed -n 's/^GOOGLE_CHAT_WEBHOOK_URL=//p' local/.env | tail -1)" in
+  ''|*chat-stub*|*localhost:9095*|*127.0.0.1:9095*) ;;
+  *) echo "e2e reads the chat-stub: unset GOOGLE_CHAT_WEBHOOK_URL in local/.env (or point it at chat-stub) and restart the stack" >&2; exit 1 ;;
+esac
 # Posts must belong to the page amplify-api is configured with (local/.env, default WSO2's page).
 ORG_URN=$(sed -n 's/^WSO2_ORGANIZATION_URN=//p' local/.env | tail -1)
 ORG_URN=${ORG_URN:-urn:li:organization:1477}
@@ -116,7 +122,12 @@ redirect=$(curl -sS -o /dev/null -w '%{redirect_url}' "$AUTH_URL")
 CODE=$(sed -n 's/.*[?&]code=\([^&]*\).*/\1/p' <<<"$redirect")
 STATE=$(sed -n 's/.*[?&]state=\([^&]*\).*/\1/p' <<<"$redirect")
 [[ -n "$CODE" && -n "$STATE" ]] || fail "mock OAuth did not redirect with code+state: $redirect"
-call "$EMP_JWT" POST /connections/linkedin/complete "{\"code\":\"$CODE\",\"state\":\"$STATE\"}" >/dev/null
+# `complete` also takes the callback page the browser landed on, and refuses anything but the configured
+# redirect URI (open-redirect guard). Read it from local/.env rather than repeating it here.
+REDIRECT_URI=$(sed -n 's/^LINKEDIN_REDIRECT_URI=//p' local/.env | tail -1)
+[[ -n "$REDIRECT_URI" ]] || fail "LINKEDIN_REDIRECT_URI is not set in local/.env"
+call "$EMP_JWT" POST /connections/linkedin/complete \
+  "{\"code\":\"$CODE\",\"state\":\"$STATE\",\"redirectUri\":\"$REDIRECT_URI\"}" >/dev/null
 call "$EMP_JWT" GET /me | jq -e '.linkedin.status == "ACTIVE"' >/dev/null || fail "connection not ACTIVE"
 echo "ok: LinkedIn ACTIVE"
 

@@ -152,4 +152,4 @@ http
     });
     req.pipe(up);
   })
-  .listen(PORT, "127.0.0.1", () => console.log(`amplify dev proxy on http://localhost:${PORT} -> :9090 (role: ${role()})`));
+  .listen(PORT, "127.0.0.1", () => console.log(`amplify dev proxy on http://localhost:${PORT} -> ${TARGET.host}:${TARGET.port} (role: ${role()})`));
