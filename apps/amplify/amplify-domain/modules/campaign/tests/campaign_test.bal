@@ -28,6 +28,22 @@ isolated class InMemoryCampaigns {
     *CampaignRepository;
     private map<Campaign> rows = {};
     private events:OutboxEvent[] outbox = [];
+    private string[] active = [];
+
+    # Records "a share exists" for a campaign.
+    #
+    # + id - Campaign id
+    public isolated function markActive(string id) {
+        lock {
+            self.active.push(id);
+        }
+    }
+
+    public isolated function hasActivity(string id, string resourceUrn) returns boolean|error {
+        lock {
+            return self.active.indexOf(id) !is ();
+        }
+    }
 
     public isolated function findById(string id) returns Campaign|error? {
         lock {
@@ -271,4 +287,77 @@ function testFieldsAreCheckedAgainstWhatTheDatabaseAccepts() {
     test:assertTrue(normalizeTags(["café"]) is types:DomainError, "accented letters never reach the CHECK");
     test:assertTrue(normalizeTags(["ÄRGER"]) is types:DomainError, "an upper-case non-ASCII letter too");
     test:assertEquals(normalizeTags(["Ballerina", " it "]), ["ballerina", "it"]);
+}
+
+// ---- Editing the post link and id ------------------------------------------------------------------
+
+@test:Config
+function postIdChangesWhileThereIsNoActivity() returns error? {
+    InMemoryCampaigns repo = new;
+    Campaign c = check registerCampaign(repo, draft(), POLICY, "mkt-1", false, T0);
+    Campaign edited = check updateCampaign(repo, c.id, 1, {
+        resourceUrn: "urn:li:ugcPost:555",
+        resourceUrl: "https://www.linkedin.com/feed/update/urn:li:ugcPost:555"
+    }, T0);
+    test:assertEquals(edited.resourceUrn, "urn:li:ugcPost:555");
+    test:assertEquals(edited.resourceType, types:UGC_POST, "the type follows the id");
+    test:assertEquals(edited.resourceUrl, "https://www.linkedin.com/feed/update/urn:li:ugcPost:555");
+    test:assertEquals(edited.version, 2);
+    Campaign? stored = check repo.findById(c.id);
+    test:assertEquals((<Campaign>stored).resourceUrn, "urn:li:ugcPost:555");
+}
+
+@test:Config
+function postIdIsFrozenOnceThereIsActivity() returns error? {
+    InMemoryCampaigns repo = new;
+    Campaign c = check registerCampaign(repo, draft(), POLICY, "mkt-1", false, T0);
+    repo.markActive(c.id);
+    test:assertEquals(code(updateCampaign(repo, c.id, 1, {resourceUrn: "urn:li:share:999"}, T0)),
+            types:ERR_POST_HAS_ACTIVITY);
+    Campaign? stored = check repo.findById(c.id);
+    test:assertEquals((<Campaign>stored).resourceUrn, c.resourceUrn, "nothing changed");
+    test:assertEquals((<Campaign>stored).version, 1);
+}
+
+@test:Config
+function linkAloneChangesEvenWithActivity() returns error? {
+    InMemoryCampaigns repo = new;
+    Campaign c = check registerCampaign(repo, draft(), POLICY, "mkt-1", false, T0);
+    repo.markActive(c.id);
+    string link = "https://www.linkedin.com/posts/wso2_new-link";
+    Campaign edited = check updateCampaign(repo, c.id, 1, {resourceUrl: link, title: "Retitled"}, T0);
+    test:assertEquals(edited.resourceUrl, link);
+    test:assertEquals(edited.resourceUrn, c.resourceUrn);
+    // Resending the stored id is not a change.
+    Campaign same = check updateCampaign(repo, c.id, 2, {resourceUrn: c.resourceUrn, resourceUrl: link}, T0);
+    test:assertEquals(same.version, 3);
+}
+
+@test:Config
+function postIdOfAnotherCampaignIsTheRegistrationConflict() returns error? {
+    InMemoryCampaigns repo = new;
+    Campaign a = check registerCampaign(repo, draft(), POLICY, "mkt-1", false, T0);
+    CampaignDraft other = draft();
+    other.resourceUrn = "urn:li:share:8888";
+    Campaign b = check registerCampaign(repo, other, POLICY, "mkt-1", false, T0);
+    test:assertEquals(code(updateCampaign(repo, b.id, 1, {resourceUrn: a.resourceUrn}, T0)),
+            types:ERR_CAMPAIGN_ALREADY_REGISTERED);
+}
+
+@test:Config
+function postIdAndLinkGetTheRegistrationChecks() returns error? {
+    InMemoryCampaigns repo = new;
+    Campaign c = check registerCampaign(repo, draft(), POLICY, "mkt-1", false, T0);
+    test:assertEquals(code(updateCampaign(repo, c.id, 1, {resourceUrn: "urn:li:person:abc"}, T0)), types:ERR_INVALID_POST_URN);
+    test:assertEquals(code(updateCampaign(repo, c.id, 1, {resourceUrn: ""}, T0)), types:ERR_INVALID_POST_URN);
+    test:assertEquals(code(updateCampaign(repo, c.id, 1, {resourceUrl: "https://evil.example/x"}, T0)), types:ERR_INVALID_CAMPAIGN);
+    test:assertEquals(code(updateCampaign(repo, c.id, 1, {resourceUrl: "https://user@www.linkedin.com/x"}, T0)),
+            types:ERR_INVALID_CAMPAIGN);
+    test:assertEquals(code(updateCampaign(repo, c.id, 1, {resourceUrl: "https://www.linkedin.com/" + "a".padEnd(3000, "a")}, T0)),
+            types:ERR_INVALID_CAMPAIGN);
+    // The configured origins apply to the edit too.
+    test:assertEquals(code(updateCampaign(repo, c.id, 1, {resourceUrl: "http://localhost:19091/p"}, T0)), types:ERR_INVALID_CAMPAIGN);
+    Campaign ok = check updateCampaign(repo, c.id, 1, {resourceUrl: "http://localhost:19091/p"}, T0,
+            [...DEFAULT_POST_LINK_ORIGINS, "http://localhost:19091"]);
+    test:assertEquals(ok.resourceUrl, "http://localhost:19091/p");
 }

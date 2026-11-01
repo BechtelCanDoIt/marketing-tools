@@ -47,6 +47,8 @@ type CampaignDraftBody record {|
 # `PATCH /campaigns/{id}` body.
 type CampaignPatchBody record {|
     int version;
+    string? resourceUrn = ();
+    string? resourceUrl = ();
     string? title = ();
     string? summary = ();
     string? imageUrl = ();
