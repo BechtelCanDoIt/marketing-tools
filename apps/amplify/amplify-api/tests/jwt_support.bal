@@ -52,15 +52,31 @@ auth:Jwk? rogueJwk = ();
 
 isolated json jwksBody = {keys: []};
 isolated boolean jwksDown = false;
+// Serve a 200 with no usable keys (parseJwks fails, the breaker stays closed): lets a test count fetches
+// without the breaker short-circuiting them.
+isolated boolean jwksEmptyBody = false;
+isolated int jwksHits = 0;
 
 listener http:Listener jwksListener = new (9591);
 
 service /jwks on jwksListener {
     isolated resource function get .() returns json|http:ServiceUnavailable {
         lock {
-            if jwksDown {
-                return http:SERVICE_UNAVAILABLE;
-            }
+            jwksHits += 1;
+        }
+        boolean down;
+        lock {
+            down = jwksDown;
+        }
+        boolean empty;
+        lock {
+            empty = jwksEmptyBody;
+        }
+        if down {
+            return http:SERVICE_UNAVAILABLE;
+        }
+        if empty {
+            return {keys: []};
         }
         lock {
             return jwksBody.clone();
@@ -106,6 +122,24 @@ function run(string[] args) returns string|error {
 function setJwksDown(boolean down) {
     lock {
         jwksDown = down;
+    }
+}
+
+function setJwksEmptyBody(boolean empty) {
+    lock {
+        jwksEmptyBody = empty;
+    }
+}
+
+function resetJwksHits() {
+    lock {
+        jwksHits = 0;
+    }
+}
+
+function jwksHitCount() returns int {
+    lock {
+        return jwksHits;
     }
 }
 

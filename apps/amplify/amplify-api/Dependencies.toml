@@ -489,8 +489,7 @@ dependencies = [
 modules = [
 	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api"},
 	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api.auth"},
-	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api.scheduler"},
-	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api.utils"}
+	{org = "wso2", packageName = "amplify_api", moduleName = "amplify_api.scheduler"}
 ]
 
 [[package]]
@@ -506,6 +505,7 @@ dependencies = [
 	{org = "ballerina", name = "lang.array"},
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "lang.runtime"},
+	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "log"},
 	{org = "ballerina", name = "mime"},
 	{org = "ballerina", name = "observe"},
@@ -529,12 +529,13 @@ modules = [
 [[package]]
 org = "wso2"
 name = "amplify_domain"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
 	{org = "ballerina", name = "file"},
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "lang.runtime"},
+	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "os"},
 	{org = "ballerina", name = "sql"},
 	{org = "ballerina", name = "time"},
