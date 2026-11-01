@@ -428,14 +428,35 @@ isolated function requestShare(auth:Principal p, string? correlationId, string i
 
 // ---- S3 External Sharing ------------------------------------------------------------------------------
 
+# The evidence URL a claim body names: the URL as sent, or the canonical LinkedIn post URL built from a post
+# number. Exactly one of the two.
+#
+# + body - Claim body
+# + return - The URL to validate and store, or a domain error
+isolated function evidenceUrlOf(ExternalShareBody body) returns string|types:DomainError {
+    string? url = body.evidenceUrl;
+    string? number = body.postNumber;
+    if url is string && number is string {
+        return types:domainError(VALIDATION_FAILED, "Send evidenceUrl or postNumber, not both");
+    }
+    if number is string {
+        return types:linkedInPostEvidenceUrl(number);
+    }
+    if url is string {
+        return url;
+    }
+    return types:domainError(VALIDATION_FAILED, "Send evidenceUrl or postNumber");
+}
+
 isolated function claimExternalShare(auth:Principal p, string? correlationId, ExternalShareBody body)
         returns http:StatusCodeResponse {
     do {
         string? campaignId = body.campaignId;
+        string evidenceUrl = check evidenceUrlOf(body);
         external_sharing:ExternalShare claim = check external_sharing:submitExternalShare(
                 check externalShareRepository(actorOf(p, correlationId), 3), {
             employeeId: p.employeeId,
-            evidenceUrl: body.evidenceUrl,
+            evidenceUrl,
             certified: body.certified,
             campaignId: campaignId is string ? check uuidOf(campaignId, "campaignId") : ()
         }, time:utcNow());
