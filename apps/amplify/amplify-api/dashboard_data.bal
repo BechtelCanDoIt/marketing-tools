@@ -60,7 +60,8 @@ isolated function snapshotCacheSize() returns int {
 }
 
 # Reads the snapshot from the database (a test seam): one repeatable-read, read-only transaction in
-# `reporting:loadSnapshot`.
+# `reporting:loadSnapshot`. Not wrapped in the transient retry the per-request reads use: it runs a
+# `transaction`, and ADR-032 keeps a transaction out of a `retry` (a retried block races the one gate).
 #
 # + now - Current time
 # + return - The snapshot, or an error

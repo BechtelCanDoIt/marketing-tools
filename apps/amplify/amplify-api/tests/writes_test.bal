@@ -287,3 +287,60 @@ function testSettingsReadBeforeASaveIsNotCached() returns error? {
     forgetSettings();
     runtime:sleep(0.01);
 }
+
+// ---- PATCH /campaigns/{id}: post link and id ------------------------------------------------------------
+
+@test:Config {groups: ["writes"]}
+function testPatchPostLinkAndIdValidation() returns error? {
+    string token = check po();
+    string id = check registered("urn:li:share:9201", token);
+    string longLink = "https://www.linkedin.com/" + "a".padEnd(2100, "a");
+    [json, int, string][] cases = [
+        [{version: 1, resourceUrn: "urn:li:person:abc"}, 422, "INVALID_POST_URN"],
+        [{version: 1, resourceUrn: "https://www.linkedin.com/feed/update/urn:li:share:1"}, 422, "INVALID_POST_URN"],
+        [{version: 1, resourceUrn: "urn:li:share:" + "1".padEnd(300, "1")}, 400, "VALIDATION_FAILED"],
+        [{version: 1, resourceUrl: "https://evil.example/post"}, 422, "INVALID_CAMPAIGN"],
+        [{version: 1, resourceUrl: longLink}, 400, "VALIDATION_FAILED"],
+        [{version: 1, resourceUrl: 5}, 400, "VALIDATION_FAILED"]
+    ];
+    foreach [json, int, string] [body, status, code] in cases {
+        http:Response res = check send("PATCH", "/campaigns/" + id, body, token);
+        string label = body.toJsonString().substring(0, int:min(80, body.toJsonString().length()));
+        test:assertEquals(res.statusCode, status, label);
+        test:assertEquals(check codeIn(res), code, label);
+    }
+}
+
+@test:Config {groups: ["writes"]}
+function testPatchPostIdFrozenByActivityLinkStillEditable() returns error? {
+    string token = check po();
+    string id = check registered("urn:li:share:9202", token);
+    string other = check registered("urn:li:share:9203", token);
+
+    // No activity: both change, the version moves once.
+    http:Response ok = check send("PATCH", "/campaigns/" + id, {version: 1, resourceUrn: "urn:li:ugcPost:9300",
+            resourceUrl: "https://www.linkedin.com/feed/update/urn:li:ugcPost:9300"}, token);
+    test:assertEquals(ok.statusCode, 200);
+    check assertShape(ok, "Campaign");
+    json body = check ok.getJsonPayload();
+    test:assertEquals(check body.resourceUrn, "urn:li:ugcPost:9300");
+    test:assertEquals(check body.resourceUrl, "https://www.linkedin.com/feed/update/urn:li:ugcPost:9300");
+    test:assertEquals(check body.version, 2);
+
+    // Another campaign's post id: the registration conflict, and it doesn't name the campaign.
+    http:Response clash = check send("PATCH", "/campaigns/" + id, {version: 2, resourceUrn: "urn:li:share:9203"}, token);
+    test:assertEquals(clash.statusCode, 409);
+    test:assertEquals(check codeIn(clash), "CAMPAIGN_ALREADY_REGISTERED");
+    test:assertFalse((check clash.getTextPayload()).includes(other));
+
+    // With a share recorded: the id is frozen, the link is not.
+    fakeCampaigns.markActive(id);
+    http:Response frozen = check send("PATCH", "/campaigns/" + id, {version: 2, resourceUrn: "urn:li:share:9400"}, token);
+    test:assertEquals(frozen.statusCode, 409);
+    test:assertEquals(check codeIn(frozen), "POST_HAS_ACTIVITY");
+    http:Response linkOnly = check send("PATCH", "/campaigns/" + id,
+            {version: 2, resourceUrl: "https://www.linkedin.com/posts/wso2_edited"}, token);
+    test:assertEquals(linkOnly.statusCode, 200);
+    test:assertEquals(check (check linkOnly.getJsonPayload()).resourceUrn, "urn:li:ugcPost:9300");
+    test:assertEquals(check (check linkOnly.getJsonPayload()).version, 3);
+}
