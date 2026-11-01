@@ -45,6 +45,7 @@ final string itDbName = envOr("AMPLIFY_IT_DB_NAME", "amplify_it");
 final string itApiPassword = envOr("AMPLIFY_IT_API_PASSWORD", "it-api-password-00001");
 final string itJobsPassword = envOr("AMPLIFY_IT_JOBS_PASSWORD", "it-jobs-password-0001");
 final string mockApiUrl = envOr("AMPLIFY_IT_LINKEDIN_API", "http://localhost:19190");
+final string mockAdminKey = envOr("AMPLIFY_IT_MOCK_ADMIN_KEY", "it-mock-admin-key-0123456789abcdef0123");
 final string mockWwwUrl = envOr("AMPLIFY_IT_LINKEDIN_WWW", "http://localhost:19191");
 final string mockClientId = envOr("AMPLIFY_IT_LINKEDIN_CLIENT_ID", "it-client");
 final string mockClientSecret = envOr("AMPLIFY_IT_LINKEDIN_CLIENT_SECRET", "it-secret");
@@ -98,7 +99,7 @@ function itCount(postgresql:Client db, sql:ParameterizedQuery query) returns int
 
 function mockPostCount() returns int|error {
     http:Client c = check new (mockApiUrl);
-    json[] posts = check c->get("/mock/posts");
+    json[] posts = check c->get("/mock/posts", {"X-Amplify-Internal-Key": mockAdminKey});
     return posts.length();
 }
 
