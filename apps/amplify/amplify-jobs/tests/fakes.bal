@@ -594,6 +594,14 @@ isolated class FakeLinkedIn {
                 "422" => {
                     return providerError(linkedin:REJECTED, 422, false);
                 }
+                "503" => {
+                    return providerError(linkedin:UNAVAILABLE, 503, true);
+                }
+                "timeout-after-post" => {
+                    // LinkedIn took the post but the answer never came back (the adapter's OUTCOME_UNKNOWN).
+                    self.posts += 1;
+                    return providerError(linkedin:OUTCOME_UNKNOWN, 0, false);
+                }
             }
             self.posts += 1;
             return string `urn:li:share:70000000000000000${self.posts}`;
