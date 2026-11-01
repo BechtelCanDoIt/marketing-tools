@@ -1303,10 +1303,10 @@ components:
       type: object
       additionalProperties: false
       required: [certified]
-      description: "Send exactly one of `evidenceUrl` and `postNumber` (both or neither is a `VALIDATION_FAILED` 400)."
+      description: "Send exactly one of `evidenceUrl` and `activityId` (both or neither is a `VALIDATION_FAILED` 400)."
       properties:
         evidenceUrl: {type: string, minLength: 1, maxLength: 2048, description: "Any public HTTPS URL; never fetched. `lnkd.in` short links are refused (`INVALID_EVIDENCE_URL`): one post could otherwise be claimed twice"}
-        postNumber: {type: string, minLength: 1, maxLength: 100, pattern: "^[0-9]+$", description: "A LinkedIn post number (the activity id: the digits in `urn:li:activity:<number>` or `...-activity-<number>-...`). Amplify builds the canonical post URL from it, stores that as `evidenceUrl`, and so it collides with any other form of the same post (`EVIDENCE_ALREADY_CLAIMED`)"}
+        activityId: {type: string, minLength: 1, maxLength: 100, pattern: "^[0-9]+$", description: "A LinkedIn post number (the activity id: the digits in `urn:li:activity:<number>` or `...-activity-<number>-...`). Amplify builds the canonical post URL from it, stores that as `evidenceUrl`, and so it collides with any other form of the same post (`EVIDENCE_ALREADY_CLAIMED`)"}
         certified: {type: boolean, description: "\"I certify this is related to WSO2\" (must be true)"}
         campaignId: {type: string, format: uuid}
     ExternalShare:

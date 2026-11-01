@@ -435,9 +435,9 @@ isolated function requestShare(auth:Principal p, string? correlationId, string i
 # + return - The URL to validate and store, or a domain error
 isolated function evidenceUrlOf(ExternalShareBody body) returns string|types:DomainError {
     string? url = body.evidenceUrl;
-    string? number = body.postNumber;
+    string? number = body.activityId;
     if url is string && number is string {
-        return types:domainError(VALIDATION_FAILED, "Send evidenceUrl or postNumber, not both");
+        return types:domainError(VALIDATION_FAILED, "Send evidenceUrl or activityId, not both");
     }
     if number is string {
         return types:linkedInPostEvidenceUrl(number);
@@ -445,7 +445,7 @@ isolated function evidenceUrlOf(ExternalShareBody body) returns string|types:Dom
     if url is string {
         return url;
     }
-    return types:domainError(VALIDATION_FAILED, "Send evidenceUrl or postNumber");
+    return types:domainError(VALIDATION_FAILED, "Send evidenceUrl or activityId");
 }
 
 isolated function claimExternalShare(auth:Principal p, string? correlationId, ExternalShareBody body)
