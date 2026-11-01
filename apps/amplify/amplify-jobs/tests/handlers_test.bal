@@ -380,21 +380,40 @@ function aProviderServerErrorLeavesTheRowPendingAndTheRetryPostsOnce() returns e
     test:assertEquals(w.queue.statusOf(id)[0], "DONE");
 }
 
-// Current behaviour for an unknown outcome (timeout or dropped connection after the post was sent): the adapter
-// says `OUTCOME_UNKNOWN`, never retryable, so the share fails for the employee to re-request; the outbox does not
-// post it again. This is the safe side of the choice: a retry here could duplicate a live post.
+// Scott 2026-11-01: a timeout leaves the row pending and the outbox retries (ADR-025). The marker is cleared
+// (the call returned an error, no record write was lost), the retry posts, and the share ends published.
 @test:Config
-function anUnknownOutcomeIsNotRetriedSoAnAcceptedPostIsNeverDuplicated() returns error? {
-    [World, string, int] [w, cid, id] = check shareWorld("emp-timeout", "timeout-after-post");
-    foreach int i in 0 ... TEST_CONFIG.maxAttempts {
-        _ = check run(w);
-        w.queue.makeAllDue();
-    }
-    test:assertEquals(w.linkedIn.postCount(), 1, "no second post after a lost answer");
+function aTimeoutLeavesTheRowPendingAndTheRetryPostsOnce() returns error? {
+    [World, string, int] [w, cid, id] = check shareWorld("emp-timeout", "timeout");
+    _ = check run(w);
+    test:assertEquals(w.queue.statusOf(id)[0], "PENDING", "not failed: the outbox retries");
+    sharing:ShareRequest? queued = check w.mem.share(cid, "emp-timeout");
+    test:assertTrue(queued is sharing:ShareRequest && queued.lastErrorCode == () && sharing:shareStatus(queued) == sharing:QUEUED);
+    w.linkedIn.setMode("ok");
+    w.queue.makeAllDue();
+    _ = check run(w);
+    _ = check run(w);
+    test:assertEquals(w.linkedIn.postCount(), 1);
     test:assertEquals(w.queue.statusOf(id)[0], "DONE");
-    sharing:ShareRequest? failedShare = check w.mem.share(cid, "emp-timeout");
-    test:assertTrue(failedShare is sharing:ShareRequest && sharing:shareStatus(failedShare) == sharing:FAILED
-            && failedShare.failureReason == types:PROVIDER_REJECTED, "the share failed with the provider reason");
+    sharing:ShareRequest? published = check w.mem.share(cid, "emp-timeout");
+    test:assertTrue(published is sharing:ShareRequest && sharing:shareStatus(published) == sharing:PUBLISHED);
+}
+
+// A lost answer after LinkedIn accepted the post is the window ADR-025 item 5 accepts: the row stays pending and is
+// retried, so a second post is possible. On the last attempt the share fails (RETRIES_EXHAUSTED) rather than loop.
+@test:Config
+function aLostAnswerKeepsRetryingUntilTheLastAttemptThenFailsTheShare() returns error? {
+    [World, string, int] [w, cid, id] = check shareWorld("emp-lost-answer", "timeout-after-post");
+    _ = check run(w);
+    test:assertEquals(w.queue.statusOf(id)[0], "PENDING");
+    foreach int i in 1 ..< TEST_CONFIG.maxAttempts {
+        w.queue.makeAllDue();
+        _ = check run(w);
+    }
+    sharing:ShareRequest? failedShare = check w.mem.share(cid, "emp-lost-answer");
+    test:assertTrue(failedShare is sharing:ShareRequest && failedShare.failureReason == types:RETRIES_EXHAUSTED,
+            "the share fails on the last attempt");
+    test:assertEquals(w.linkedIn.postCount(), TEST_CONFIG.maxAttempts, "the accepted window: one post per attempt, bounded by maxAttempts");
 }
 
 // LinkedIn answered with an error, so it did not post: the marker is cleared and the retry posts.
