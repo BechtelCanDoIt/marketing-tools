@@ -398,7 +398,7 @@ In `projects/one-wso2/webapp`. The left rail supports **one level of sub-menus**
   - [ ] **Amplify Jobs**: Service, Project visibility.
   - [ ] **Amplify Scheduler** (`amplify-scheduler`): **Service** component from the pinned container image (Dockerfile wrapper, UID 10014), endpoint port 8080 at **Project visibility only** (no API auth; never published, never behind the proxy). `DSN` secret → its own database + user. Connection from Amplify Backend (sets `schedulerUrl`); the scheduler reaches Amplify Jobs over the Project network (`schedulerJobsUrl`). Replaces the Scheduled Task (ADR-026).
   - [ ] **Amplify DB Migrate** (`amplify-database`): Manual Task.
-  - [ ] Docker context: Amplify Backend = `apps/amplify`, Amplify Jobs = `apps/amplify` (same context as the backend after the 2026-10-20 flatten; ADR-027 superseded "both = apps/amplify"); set in the console (runbook C table).
+  - [ ] Docker context: Amplify Backend = `apps/amplify`, Amplify Jobs = `apps` with Dockerfile `apps/amplify/amplify-jobs/Dockerfile` (its own ancestor context, descriptor `apps/.choreo/component.yaml`; ADR-027 amendment 2026-11-01); set in the console (runbook C table).
   - [ ] **LinkedIn Mock**: dev only, from `apps/amplify/linkedin/apps/mock_linkedin` (repo side done: Dockerfile, `.choreo/`, `workload.yaml`; runbook C6).
 - [ ] Component versioning: first version **v1.0.0 from `main`**; no extra deployment tracks unless needed. Build once, promote the same image dev → prod.
 - [ ] Choreo-managed PostgreSQL per environment (paid plan with backups), connected via Choreo database connections; separate users per component (M3).

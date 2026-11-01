@@ -6,10 +6,10 @@ Ballerina backend for WSO2 Amplify phase 1. Three Ballerina deployables, the sch
 ## Commands
 - Publish shared libs first, in order: `cd amplify-common && bal pack && bal push --repository=local`, then the same in `amplify-domain`
 - Per component: `bal build`, `bal test` (run inside `<component>`)
-- Images: one Docker context per component (ADR-027): api `-f amplify-api/Dockerfile .`, jobs `-f amplify-jobs/Dockerfile .`, database/scheduler their own folder. Shared packages are packed inside the build stage (clean checkout)
+- Images: one Docker context per component (ADR-027): api `-f amplify-api/Dockerfile .`, jobs `-f amplify-jobs/Dockerfile ..` (context `apps`, filtered by `apps/.dockerignore`), database/scheduler their own folder. Shared packages are packed inside the build stage (clean checkout)
 - Local stack: `make up`, `make e2e`, `make seed`, `make down` (removes volumes). Only amplify-api (:9090), the mock OAuth page (:19091) and people-stub (:19092, local One WSO2 photos) reach the host
 - Checks: `make check` = `scripts/check-descriptors.sh` + `scripts/check-logs-pii.sh` + `scripts/check-transaction-gate.sh` (R-13)
-- Descriptors: `scripts/check-descriptors.sh` (Choreo `.choreo/component.yaml` vs `workload.yaml` vs Dockerfile vs compose). api's descriptor is `./.choreo/`, jobs' is `amplify-jobs/.choreo/`
+- Descriptors: `scripts/check-descriptors.sh` (Choreo `.choreo/component.yaml` vs `workload.yaml` vs Dockerfile vs compose). api's descriptor is `./.choreo/`, jobs' is `../.choreo/component.yaml` (`apps/.choreo/`, the Docker context is `apps`)
 
 ## Architecture
 - `amplify-api`: published API, fronted by the Choreo API proxy at the cell edge (ADR-004). Only the proxy is published; the backend has Project visibility.

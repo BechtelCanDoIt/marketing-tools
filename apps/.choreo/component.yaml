@@ -1,9 +1,9 @@
 # Amplify Jobs (amplify-jobs). Choreo Service, Dockerfile buildpack. Never published.
-# Dockerfile: apps/amplify/amplify-jobs/Dockerfile, built from the apps/amplify context (shared packages).
-# Choreo reads the descriptor from <docker context>/.choreo/component.yaml. This file is only picked up when
-# the Choreo component is created on amplify-jobs/; created on apps/amplify it would read amplify-api's
-# descriptor instead (ADR-027 keeps one context per component, and api and jobs currently share one).
-# Keep endpoints and env names in sync with workload.yaml (scripts/check-descriptors.sh).
+# Docker context: apps  |  Dockerfile: apps/amplify/amplify-jobs/Dockerfile
+# Choreo reads the descriptor from <docker context>/.choreo/component.yaml. Jobs builds from `apps`, the parent of
+# apps/amplify, so it has its own descriptor (this file); amplify-api builds from apps/amplify and reads
+# apps/amplify/.choreo/component.yaml (ADR-027, amendment 2026-11-01). apps/.dockerignore keeps the other apps out.
+# Keep endpoints and env names in sync with amplify/amplify-jobs/workload.yaml (scripts/check-descriptors.sh).
 # Console steps (connections, secrets, visibility): docs/runbooks/choreo-deploy.md.
 schemaVersion: "1.2"
 endpoints:
@@ -15,7 +15,7 @@ endpoints:
     type: REST
     networkVisibilities:
       - Project
-    schemaFilePath: amplify-jobs/openapi.yaml
+    schemaFilePath: amplify/amplify-jobs/openapi.yaml
 configurations:
   env:
     - name: BAL_CONFIG_VAR_DBHOST

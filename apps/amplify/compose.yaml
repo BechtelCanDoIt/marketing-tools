@@ -143,8 +143,8 @@ services:
   # Worker: internal only, never published (cell rules). Healthy = `GET /ready` (the database answers).
   amplify-jobs:
     build:
-      context: .
-      dockerfile: amplify-jobs/Dockerfile
+      context: ..
+      dockerfile: amplify/amplify-jobs/Dockerfile
     environment:
       <<: *db-common
       BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_JOBS_DB_PASSWORD:?}
