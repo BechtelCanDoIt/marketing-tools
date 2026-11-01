@@ -18,6 +18,11 @@
 # Docker context: apps/amplify (shared with amplify-api, which needs the same shared packages).
 #   docker build -f amplify-jobs/Dockerfile -t amplify-jobs .
 # Clean checkout: shared packages are packed and pushed to the build stage's own local repository (ADR-020/021).
+#
+# Choreo reads the descriptor from <docker context>/.choreo/component.yaml, and with this shared context that
+# is amplify-api's descriptor (ADR-027). Until jobs gets a unique ancestor context again, the Choreo component
+# must be created on amplify-jobs/ (so Choreo reads amplify-jobs/.choreo/component.yaml) while this Docker
+# build is given the apps/amplify context; that split is what ADR-027 still has to settle.
 
 FROM ballerina/ballerina:2201.13.3@sha256:7cba1a3bcb3314e2444aa6823d332e79882437df512de71037c4b0607d39e019 AS build
 WORKDIR /home/ballerina

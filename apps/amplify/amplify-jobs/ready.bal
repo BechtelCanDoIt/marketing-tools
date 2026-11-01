@@ -65,6 +65,15 @@ isolated function readiness(boolean databaseUp, map<string> breakers, boolean ru
     return report;
 }
 
+# Whether `/ready` answers 200. Choreo stops routing on any non-2xx readiness response, so a database blip
+# that opens the breaker for a few seconds would turn every scheduler call into a network failure.
+# `POST /runs` already answers a clean 503 while the database is unavailable, and the scheduler retries a
+# 5xx, so only a missing database configuration (the worker can never do its work) keeps it unready.
+#
+# + databaseConfigured - `dbHost` is set
+# + return - True when the process should stay in rotation
+isolated function readyKeepsRouting(boolean databaseConfigured) returns boolean => databaseConfigured;
+
 # Whether a run is in progress on this replica.
 #
 # + return - The in-process flag

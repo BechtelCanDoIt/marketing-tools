@@ -51,6 +51,10 @@ configurable decimal dbBreakerWindowSeconds = 60;
 configurable decimal dbBreakerResetSeconds = 30;
 # `leaderboard.top_n` used by the recognition rebuild.
 configurable int leaderboardTopN = 3;
+# Longest wait for one partition-maintenance statement, seconds. Must stay below amplify-api's
+# `maintenanceDeadlineSeconds` (180) so the client gives up first and returns a clean 500; the scheduler's
+# retry then finds the maintenance lock still held and answers 202 SKIPPED instead of starting a second pass.
+configurable decimal dbMaintenanceSocketTimeoutSeconds = 150;
 
 isolated postgresql:Client? dbClient = ();
 
@@ -130,7 +134,8 @@ isolated function openDb() returns postgresql:Client|error {
 isolated postgresql:Client? lockClient = ();
 
 # Dedicated single-connection client for the run's session advisory lock (lock and unlock must share a
-# session, so it never shares the pool).
+# session, so it never shares the pool). The connection is never retired (`maxConnectionLifeTime = 0`): a
+# pooled connection retired mid-run would take the session lock with it.
 #
 # + return - The client, or an error when not configured or unreachable
 isolated function lockDb() returns postgresql:Client|error {
@@ -142,17 +147,44 @@ isolated function lockDb() returns postgresql:Client|error {
         if dbHost == "" {
             return error("Database is not configured");
         }
-        postgresql:Client created = check store:newClient(dbConfig(maxOpenConnections = 1));
+        postgresql:Client created = check store:newClient(dbConfig(maxOpenConnections = 1,
+            maxConnectionLifeTime = 0));
         lockClient = created;
         return created;
     }
 }
 
-# Connection settings from the configurables (both clients: the pool and the run-lock connection).
+isolated postgresql:Client? maintenanceClient = ();
+
+# Dedicated single-connection client for partition maintenance: one connection carries both the maintenance
+# session lock and the work, is never retired, and allows a longer statement than the run's pool.
+#
+# + return - The client, or an error when not configured
+isolated function maintenanceDb() returns postgresql:Client|error {
+    lock {
+        postgresql:Client? existing = maintenanceClient;
+        if existing is postgresql:Client {
+            return existing;
+        }
+        if dbHost == "" {
+            return error("Database is not configured");
+        }
+        postgresql:Client created = check store:newClient(dbConfig(maxOpenConnections = 1,
+            maxConnectionLifeTime = 0, socketTimeoutSeconds = dbMaintenanceSocketTimeoutSeconds));
+        maintenanceClient = created;
+        return created;
+    }
+}
+
+# Connection settings from the configurables (the pool, the run-lock and the maintenance clients).
 #
 # + maxOpenConnections - Pool size
+# + maxConnectionLifeTime - Idle connection lifetime, seconds; 0 = never retire (a session advisory lock
+#   must outlive the run)
+# + socketTimeoutSeconds - Longest wait for one statement, seconds
 # + return - Settings, TLS included
-isolated function dbConfig(int maxOpenConnections = 10) returns store:DbConfig => {
+isolated function dbConfig(int maxOpenConnections = 10, decimal maxConnectionLifeTime = 1800,
+        decimal socketTimeoutSeconds = 30) returns store:DbConfig => {
     host: dbHost,
     port: dbPort,
     database: dbName,
@@ -161,6 +193,8 @@ isolated function dbConfig(int maxOpenConnections = 10) returns store:DbConfig =
     sslMode: dbSslMode,
     sslRootCert: dbSslRootCert,
     maxOpenConnections,
+    maxConnectionLifeTime,
+    socketTimeoutSeconds,
     minIdleConnections: 1,
     connectTimeoutSeconds: dbConnectTimeoutSeconds,
     loginTimeoutSeconds: dbConnectTimeoutSeconds,

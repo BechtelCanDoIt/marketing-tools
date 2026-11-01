@@ -212,6 +212,10 @@ function dbConfigVerifiesTheServerByDefault() {
     test:assertTrue(store:verifiesServer(cfg));
     test:assertEquals(cfg.sslRootCert, "");
     test:assertEquals(dbConfig(maxOpenConnections = 1).maxOpenConnections, 1, "the run-lock connection");
+    test:assertEquals(dbConfig(maxConnectionLifeTime = 0).maxConnectionLifeTime, 0d,
+            "the session advisory lock must outlive the run, so its connection is never retired");
+    test:assertTrue(dbMaintenanceSocketTimeoutSeconds < 180d,
+            "stay below amplify-api's 180 s maintenance deadline, so a slow pass answers 500 and its retry is skipped");
 }
 
 // Item 12.5: a pool with leaked connections answers "Connection is not available"; the breaker counts it as
@@ -316,7 +320,7 @@ function testShareArticleCarriesTheCampaignTitleToLinkedIn() returns error? {
             WHERE id = CAST(${share.id} AS uuid) AND status = 'PUBLISHED'`), 1,
             "published: the mock accepted the article (it refuses one without a title)");
     http:Client mock = check new (mockApiUrl);
-    json[] posts = check mock->get("/mock/posts");
+    json[] posts = check mock->get("/mock/posts", {"X-Amplify-Internal-Key": mockAdminKey});
     json[] mine = from json p in posts where (check p.commentary) == "Worth a read " + emp select p;
     test:assertEquals(mine.length(), 1);
     test:assertEquals(check mine[0].articleTitle, title, "the campaign title, not the generic default");

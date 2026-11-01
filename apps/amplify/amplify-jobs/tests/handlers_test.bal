@@ -22,6 +22,7 @@ import amplify_common.crypto;
 import amplify_common.events;
 import amplify_common.types;
 import amplify_domain.connection;
+import amplify_domain.sharing;
 import amplify_domain.store;
 
 import ballerina/test;
@@ -301,6 +302,60 @@ function retryableLinkedInErrorOnTheFinalAttemptFailsTheShare() returns error? {
     var failedShare = check w.mem.share(cid, "emp-429-final");
     test:assertTrue(failedShare !is () && failedShare.failureReason == types:RETRIES_EXHAUSTED,
             "B14: QUEUED until the last attempt, then FAILED");
+}
+
+// A previous attempt wrote the in-flight marker and never cleared it: LinkedIn may already have the post.
+@test:Config
+function aShareCarryingTheInFlightMarkerIsFailedWithoutCallingLinkedIn() returns error? {
+    World w = harness();
+    time:Utc now = time:utcNow();
+    string cid = types:newUuidV7();
+    w.mem.putCampaign(openCampaign(cid, now));
+    sharing:ShareRequest share = queuedShare(cid, "emp-inflight", now);
+    share.lastErrorCode = PUBLISH_IN_FLIGHT;
+    w.mem.putShare(share);
+    check connectedEmployee(w.mem, w.cipher, "emp-inflight", now);
+    int id = w.queue.enqueue(events:REPOST_REQUESTED, repostRequested(share.id, cid, "emp-inflight"));
+    _ = check run(w);
+    test:assertEquals(w.linkedIn.postCount(), 0, "never post what a previous attempt may already have posted");
+    [string, int, string?] [status, _, lastError] = w.queue.statusOf(id);
+    test:assertEquals(status, "FAILED", "failed for manual review, never retried");
+    test:assertTrue(lastError is string && lastError.startsWith("a previous publish attempt may already have posted"));
+}
+
+// The post is out but `recordPublish` hit a database blip: the marker stays, so a redelivery cannot post twice.
+@test:Config
+function aFailedRecordWriteAfterThePostLeavesTheMarkerAndNeverPostsTwice() returns error? {
+    [World, string, int] [w, cid, id] = check shareWorld("emp-lost-write");
+    w.mem.failNextPublishWrite();
+    _ = check run(w);
+    test:assertEquals(w.linkedIn.postCount(), 1);
+    test:assertEquals(w.queue.statusOf(id)[0], "FAILED", "failed for manual review, not retried");
+    sharing:ShareRequest? stuck = check w.mem.share(cid, "emp-lost-write");
+    test:assertTrue(stuck is sharing:ShareRequest && stuck.lastErrorCode == PUBLISH_IN_FLIGHT,
+            "the marker stays: the post may be out");
+    test:assertEquals(w.mem.engagementCount(), 0, "the engagement was not recorded");
+    // A duplicate delivery / admin retry of the same row must not post again.
+    w.queue.redeliver(id);
+    _ = check run(w);
+    test:assertEquals(w.linkedIn.postCount(), 1, "no second post");
+}
+
+// LinkedIn answered with an error, so it did not post: the marker is cleared and the retry posts.
+@test:Config
+function aLinkedInErrorClearsTheInFlightMarkerSoTheRetryCanPost() returns error? {
+    [World, string, int] [w, cid, id] = check shareWorld("emp-marker-clear", "429");
+    _ = check run(w);
+    sharing:ShareRequest? queued = check w.mem.share(cid, "emp-marker-clear");
+    test:assertTrue(queued is sharing:ShareRequest && queued.lastErrorCode == (),
+            "the marker is cleared: LinkedIn answered, so nothing was posted");
+    test:assertEquals(w.queue.statusOf(id)[0], "PENDING");
+    w.linkedIn.setMode("ok");
+    w.queue.makeAllDue();
+    _ = check run(w);
+    test:assertEquals(w.linkedIn.postCount(), 1, "the retry posts");
+    sharing:ShareRequest? published = check w.mem.share(cid, "emp-marker-clear");
+    test:assertTrue(published is sharing:ShareRequest && sharing:shareStatus(published) == sharing:PUBLISHED);
 }
 
 @test:Config
