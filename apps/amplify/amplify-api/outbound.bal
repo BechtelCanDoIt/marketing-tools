@@ -110,9 +110,16 @@ configurable string tokenCurrentKeyId = "";
 
 # Validate the OIDC ID token from the code exchange (common H1 / api H1): RS256 against LinkedIn's JWKS,
 # `iss`, `aud` = client id, `exp`/`iat`, and its `sub` must match userinfo. Off by default until a real
-# LinkedIn app has been seen to return the ID token for this flow. No nonce and no PKCE: PKCE is
-# native-client-only at LinkedIn and the nonce parameter is undocumented.
+# LinkedIn app has been seen to return the ID token for this flow. No PKCE: it is native-client-only at
+# LinkedIn. The nonce is `linkedinNonceMode`.
 configurable boolean linkedinIdTokenValidation = false;
+# OIDC `nonce` on connect, only with `linkedinIdTokenValidation` on (the nonce lives in the ID token).
+# `OFF` (default): none is sent. `SEND`: it is sent on the authorize request and, when the ID token carries a
+# `nonce`, it must match; a token with none is accepted and logged (`nonce not echoed`), so a staging run shows
+# whether LinkedIn echoes it. `REQUIRE`: the ID token must carry the same nonce, or the connect is refused.
+# LinkedIn's documentation lists neither a `nonce` request parameter nor a `nonce` claim (its discovery
+# document's `claims_supported` has none), so nothing may go past `SEND` until a real app is seen to echo it.
+configurable string linkedinNonceMode = "OFF";
 # LinkedIn's OIDC signing keys (mock_linkedin's JWKS locally).
 configurable string linkedinJwksUrl = linkedin:LINKEDIN_JWKS_URL;
 # Expected ID-token issuer.
@@ -223,6 +230,20 @@ isolated function linkedInProvider() returns linkedin:ProviderAdapter? => linked
 #
 # + return - The validator, or `()` when `linkedinIdTokenValidation` is off
 isolated function idTokens() returns linkedin:IdTokenValidator? => idTokenValidator;
+
+# How the nonce is used for this connect (test seam for the configured mode).
+#
+# + validator - The ID-token validator, `()` when validation is off
+# + return - `OFF` without a validator or when unset, else the configured `SEND` / `REQUIRE`
+isolated function nonceModeFor(linkedin:IdTokenValidator? validator) returns NonceMode {
+    if validator is () {
+        return "OFF";
+    }
+    return linkedinNonceMode == "SEND" ? "SEND" : linkedinNonceMode == "REQUIRE" ? "REQUIRE" : "OFF";
+}
+
+# `linkedinNonceMode`.
+type NonceMode "OFF"|"SEND"|"REQUIRE";
 
 # Test seam: the token cipher.
 #
