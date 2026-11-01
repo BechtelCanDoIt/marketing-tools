@@ -147,7 +147,7 @@ function testEmployeeListsAndSharesWithStableCodes() returns error? {
 function testExternalShareAcceptsJustThePostNumber() returns error? {
     string claimant = check employee("emp-ext-num-1");
     http:Response claimed = check send("POST", "/external-shares",
-            {postNumber: " 7123456789012340001 ", certified: true}, claimant);
+            {activityId: " 7123456789012340001 ", certified: true}, claimant);
     test:assertEquals(claimed.statusCode, 201);
     check assertShape(claimed, "ExternalShare");
     json body = check claimed.getJsonPayload();
@@ -163,7 +163,7 @@ function testExternalShareAcceptsJustThePostNumber() returns error? {
     test:assertEquals(check codeIn(sameByUrl), "EVIDENCE_ALREADY_CLAIMED");
     // And by the number again.
     http:Response sameByNumber = check send("POST", "/external-shares",
-            {postNumber: "7123456789012340001", certified: true}, check employee("emp-ext-num-3"));
+            {activityId: "7123456789012340001", certified: true}, check employee("emp-ext-num-3"));
     test:assertEquals(sameByNumber.statusCode, 409);
 
     // The full URL still works on its own; both or neither is a 400; a bad number is a 422.
@@ -171,12 +171,12 @@ function testExternalShareAcceptsJustThePostNumber() returns error? {
             {evidenceUrl: "https://medium.com/@emp/by-url-only", certified: true}, check employee("emp-ext-num-4"));
     test:assertEquals(urlOnly.statusCode, 201);
     http:Response both = check send("POST", "/external-shares",
-            {evidenceUrl: "https://medium.com/@emp/both", postNumber: "7123456789012340002", certified: true}, claimant);
+            {evidenceUrl: "https://medium.com/@emp/both", activityId: "7123456789012340002", certified: true}, claimant);
     test:assertEquals(both.statusCode, 400);
     test:assertEquals(check codeIn(both), "VALIDATION_FAILED");
     http:Response neither = check send("POST", "/external-shares", {certified: true}, claimant);
     test:assertEquals(neither.statusCode, 400);
-    http:Response letters = check send("POST", "/external-shares", {postNumber: "12ab", certified: true}, claimant);
+    http:Response letters = check send("POST", "/external-shares", {activityId: "12ab", certified: true}, claimant);
     test:assertEquals(letters.statusCode, 422);
     test:assertEquals(check codeIn(letters), "INVALID_EVIDENCE_URL");
 }

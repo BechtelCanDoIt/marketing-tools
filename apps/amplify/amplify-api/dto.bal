@@ -85,10 +85,10 @@ type ShareBody record {|
 
 # `POST /external-shares` body.
 type ExternalShareBody record {|
-    # Any public HTTPS URL. Send this or `postNumber`, not both.
+    # Any public HTTPS URL. Send this or `activityId`, not both.
     string? evidenceUrl = ();
     # A LinkedIn post number (digits). Amplify builds the canonical post URL from it.
-    string? postNumber = ();
+    string? activityId = ();
     boolean certified;
     string? campaignId = ();
 |};
