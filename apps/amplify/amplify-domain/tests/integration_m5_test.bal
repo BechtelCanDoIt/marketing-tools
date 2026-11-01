@@ -82,6 +82,7 @@ function testM5ApproveAndAmplifyAwardInTheSameTransaction() returns error? {
     string emp = check newEmployee(db, "m5ext");
     string po = check newEmployee(db, "m5extpo");
     external_sharing:PgExternalShareRepository repo = new (db, poActor(po), 3);
+    scoring:PgLedgerRepository ledger = new (db, poActor(po), 3);
     time:Utc now = time:utcNow();
     external_sharing:ExternalShare claim = check external_sharing:submitExternalShare(
             new external_sharing:PgExternalShareRepository(db, {actorId: emp}),
@@ -92,13 +93,13 @@ function testM5ApproveAndAmplifyAwardInTheSameTransaction() returns error? {
     int ownPost = (check scoring:ruleInForce(rules, types:OWN_POST, now)).points;
     int amplifiedTier = (check scoring:ruleInForce(rules, types:OWN_POST_AMPLIFIED, now)).points;
     test:assertEquals(afterApprove is recognition:Standing ? afterApprove.totalPoints : -1, ownPost);
-    _ = check external_sharing:amplifyWithPoints(repo, rules, claim.id, po, "it-amplify", time:utcNow());
+    _ = check external_sharing:amplifyWithPoints(repo, rules, claim.id, po, "it-amplify", time:utcNow(), ledger);
     recognition:Standing? afterAmplify = check recognition:standingOf(db, emp);
     test:assertEquals(afterAmplify is recognition:Standing ? afterAmplify.totalPoints : -1, amplifiedTier,
             "approve + top-up = the amplified tier");
     test:assertEquals(check count(db, `SELECT count(*)::int FROM scoring.points_ledger WHERE employee_id = ${emp}`), 2);
     // A failed award rolls back the decision: amplifying again is refused and writes nothing.
-    test:assertTrue(external_sharing:amplifyWithPoints(repo, rules, claim.id, po, (), time:utcNow()) is error);
+    test:assertTrue(external_sharing:amplifyWithPoints(repo, rules, claim.id, po, (), time:utcNow(), ledger) is error);
     test:assertEquals(check count(db, `SELECT count(*)::int FROM scoring.points_ledger WHERE employee_id = ${emp}`), 2);
 
     external_sharing:ReviewQueue queue = check external_sharing:reviewQueue(db, 48, time:utcNow());
@@ -111,9 +112,35 @@ function testM5ApproveAndAmplifyAwardInTheSameTransaction() returns error? {
     test:assertEquals((check external_sharing:claimsOf(db, emp)).length(), 1);
 }
 
+// Round 2: the amplified top-up is priced from the ledger, so reversing the OWN_POST award first means the
+// top-up pays the whole amplified tier instead of only the rule gap.
 @test:Config {groups: ["integration"], enable: itEnabled}
-function testM5AdjustReverseUpdatesStanding() returns error? {
+function testM5AmplifiedTopUpPricesAgainstTheLedger() returns error? {
     postgresql:Client db = check api();
+    string emp = check newEmployee(db, "m5topup");
+    string po = check newEmployee(db, "m5topuppo");
+    external_sharing:PgExternalShareRepository repo = new (db, poActor(po), 3);
+    scoring:PgLedgerRepository ledger = new (db, poActor(po), 3);
+    time:Utc now = time:utcNow();
+    external_sharing:ExternalShare claim = check external_sharing:submitExternalShare(
+            new external_sharing:PgExternalShareRepository(db, {actorId: emp}),
+            {employeeId: emp, evidenceUrl: "https://medium.com/@it/reversed-" + uniq(), certified: true}, now);
+    scoring:PointRule[] rules = check (new scoring:PgPointRuleRepository(db)).all();
+    _ = check external_sharing:approveWithPoints(repo, rules, claim.id, po, "it-topup-approve", now);
+    int amplifiedTier = (check scoring:ruleInForce(rules, types:OWN_POST_AMPLIFIED, now)).points;
+    types:LedgerReference ownPostReference = check types:awardReference(claim.evidence.provider,
+            claim.evidence.normalized, emp, types:OWN_POST);
+    _ = check scoring:reverseEntry(ledger, ownPostReference, "IT reassessing", po, "it-topup-rev", time:utcNow());
+    recognition:Standing? reversed = check recognition:standingOf(db, emp);
+    test:assertEquals(reversed is recognition:Standing ? reversed.totalPoints : -1, 0, "own post reversed to 0");
+    _ = check external_sharing:amplifyWithPoints(repo, rules, claim.id, po, "it-topup-amplify", time:utcNow(), ledger);
+    recognition:Standing? after = check recognition:standingOf(db, emp);
+    test:assertEquals(after is recognition:Standing ? after.totalPoints : -1, amplifiedTier,
+            "0 left on the ledger + the whole amplified tier as the top-up");
+}
+
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testM5AdjustReverseUpdatesStanding() returns error? {    postgresql:Client db = check api();
     string emp = check newEmployee(db, "m5adj");
     string po = check newEmployee(db, "m5adjpo");
     scoring:PgLedgerRepository ledger = new (db, poActor(po), 3);
@@ -123,6 +150,9 @@ function testM5AdjustReverseUpdatesStanding() returns error? {
     recognition:Standing? s1 = check recognition:standingOf(db, emp);
     test:assertEquals(s1 is recognition:Standing ? s1.totalPoints : -1, 40);
     test:assertTrue(check recognition:standingVersion(db) > versionBefore, "standing version bumped");
+    recognition:TeamPage found = check recognition:teamPage(db, recognition:PERIOD_ALL, (), "Name m5adj",
+            recognition:SORT_NAME, 0, 10);
+    test:assertTrue(found.total >= 1, "the board finds a person with points");
     _ = check scoring:reverseEntry(ledger, adj.reference, "IT reversal", po, "it-rev", time:utcNow());
     recognition:Standing? s2 = check recognition:standingOf(db, emp);
     test:assertEquals(s2 is recognition:Standing ? s2.totalPoints : -1, 0);
@@ -130,19 +160,23 @@ function testM5AdjustReverseUpdatesStanding() returns error? {
 
     scoring:LedgerPage history = check scoring:historyOf(db, emp, 0, 10);
     test:assertEquals(history.total, 2);
+    // Reversed back to 0: the row leaves the board (phase 1 lists only people with points), so it holds no
+    // rank slot and isn't counted in `total`.
     recognition:TeamPage team = check recognition:teamPage(db, recognition:PERIOD_ALL, [emp + "@wso2.com"], (),
             recognition:SORT_RANK, 0, 10);
-    test:assertEquals(team.total, 1);
-    test:assertEquals(team.items[0].teamRank, 1);
+    test:assertEquals(team.total, 0, "a fully reversed row drops off the team board");
+    test:assertEquals(team.items.length(), 0, "and comes back as no row");
     recognition:TeamPage search = check recognition:teamPage(db, recognition:PERIOD_ALL, (), "Name m5adj",
             recognition:SORT_NAME, 0, 10);
-    test:assertTrue(search.total >= 1);
+    test:assertFalse(search.items.some(i => i.standing.employeeId == emp),
+            "search doesn't surface the reversed row either");
     // Whole company (no roster, no search): ranks come from the stored company rank (M11 fast path) and
     // match the window-function result of a filtered page.
     recognition:TeamPage company = check recognition:teamPage(db, recognition:PERIOD_ALL, (), (),
             recognition:SORT_RANK, 0, 1000);
-    int standings = check db->queryRow(`SELECT count(*)::int FROM recognition.standing WHERE period_key = 'ALL'`);
-    test:assertEquals(company.total, standings);
+    int standings = check db->queryRow(`SELECT count(*)::int FROM recognition.standing
+                                        WHERE period_key = 'ALL' AND total_points > 0`);
+    test:assertEquals(company.total, standings, "the whole-company total counts people with points");
     int lastRank = 0;
     foreach recognition:TeamEntry e in company.items {
         test:assertEquals(e.teamRank, e.standing.rank);

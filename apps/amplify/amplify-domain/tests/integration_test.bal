@@ -90,6 +90,18 @@ function registerCampaign(postgresql:Client db, string actor) returns campaign:C
 
 // ---- campaign ------------------------------------------------------------------------------------
 
+// Token tables are partitioned by day and the migration only creates today..today+7, so on a later
+// day token inserts need upkeep to have run first. Do it once up front so no test depends on order.
+@test:BeforeSuite
+function ensureTokenPartitions() returns error? {
+    if !itEnabled {
+        return;
+    }
+    postgresql:Client db = check jobs();
+    store:MaintenanceResult _ = check store:runPartitionMaintenance(db);
+    check db.close();
+}
+
 @test:Config {groups: ["integration"], enable: itEnabled}
 function testCampaignRoundTripOutboxAndAudit() returns error? {
     postgresql:Client db = check api();
@@ -117,7 +129,7 @@ function testCampaignRoundTripOutboxAndAudit() returns error? {
     assertCode(again, types:ERR_CAMPAIGN_ALREADY_REGISTERED);
 
     // Optimistic lock: a stale version is refused.
-    campaign:Campaign edited = check campaign:updateCampaign(repo, c.id, {title: "Edited", tags: ["x"]}, time:utcNow());
+    campaign:Campaign edited = check campaign:updateCampaign(repo, c.id, 1, {title: "Edited", tags: ["x"]}, time:utcNow());
     test:assertEquals(edited.version, 2);
     error? stale = repo.update(edited, 1);
     assertCode(stale, types:ERR_VERSION_CONFLICT);
@@ -225,15 +237,28 @@ function testShareRequestRetryAndPublishByJobs() returns error? {
     sharing:ShareRequest|error dup = sharing:requestShare(apiRepo, snap, conn, {employeeId: emp, kind: types:REPOST},
             time:utcNow());
     assertCode(dup, types:ERR_SHARE_ALREADY_QUEUED);
+    // The insert path (the race `requestShare` reads first) reports the stored state too: a QUEUED row now,
+    // a PUBLISHED one after the publish below, never a blanket "already queued".
+    sharing:ShareRequest raced = check sharing:newShareRequest(snap, conn, {employeeId: emp, kind: types:REPOST},
+            types:newUuidV7(), time:utcNow());
+    assertCode(apiRepo.insert(raced, []), types:ERR_SHARE_ALREADY_QUEUED);
 
     // Jobs: fail, then the employee retries on the same row (ADR-015).
     sharing:PgShareRepository jobsRepo = new (jobsDb);
     sharing:ShareRequest failed = check sharing:markFailed(req, types:NEEDS_RECONNECT, (), time:utcNow());
     check jobsRepo.update(failed, req.version, [sharing:repostFailedEvent(failed)]);
+    // Backdate the first request as if it were 40 days old: the row can only be in this week's tile 7
+    // window because the retry below queued it again now, not because of `requested_at`.
+    _ = check apiDb->execute(`UPDATE sharing.share_request SET requested_at = now() - interval '40 days'
+                              WHERE id = CAST(${req.id} AS uuid)`);
+    time:Utc weekAgo = time:utcAddSeconds(time:utcNow(), -7d * 86400d);
+    sharing:ShareHealth beforeRetry = check sharing:shareHealth(apiDb, weekAgo);
     sharing:ShareRequest retried = check sharing:requestShare(apiRepo, snap, conn,
             {employeeId: emp, kind: types:REPOST}, time:utcNow());
     test:assertEquals(retried.id, req.id);
     test:assertEquals(retried.attempts, 2);
+    test:assertEquals((check sharing:shareHealth(apiDb, weekAgo)).queued, beforeRetry.queued + 1,
+            "tile 7 counts the retry when it happened, not the 40-day-old first request");
 
     // Jobs publishes: engagement + request + EngagementRecorded together; commentary cleared.
     sharing:PublishResult published = check sharing:markPublished(retried, "urn:li:share:" + uniq(), conn.memberUrn,
@@ -241,6 +266,9 @@ function testShareRequestRetryAndPublishByJobs() returns error? {
     check jobsRepo.recordPublish(published, retried.version);
     string status = check jobsDb->queryRow(`SELECT status FROM sharing.share_request_v WHERE id = CAST(${req.id} AS uuid)`);
     test:assertEquals(status, "PUBLISHED");
+    sharing:ShareRequest racedAfterPublish = check sharing:newShareRequest(snap, conn, {employeeId: emp, kind: types:REPOST},
+            types:newUuidV7(), time:utcNow());
+    assertCode(apiRepo.insert(racedAfterPublish, []), types:ERR_SHARE_ALREADY_PUBLISHED);
     test:assertEquals(check count(jobsDb, `SELECT count(*)::int FROM sharing.share_request
                                            WHERE id = CAST(${req.id} AS uuid) AND commentary IS NULL`), 1);
     string key = "EngagementRecorded:" + published.engagement.id;
@@ -336,6 +364,13 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
     types:LedgerEntry|error again = scoring:reverseEntry(apiLedger, award.entry.reference, "Again", po, "req-2",
             time:utcNow());
     assertCode(again, types:ERR_ALREADY_REVERSED);
+    // `append` tells an idempotent repeat from a real failure: a second reversal of the same row is stopped
+    // by `points_ledger_reverses_uk` and comes back false, not as an error.
+    types:LedgerEntry duplicateReversal = rev.clone();
+    duplicateReversal.reference = check types:reversalReference(types:newUuidV7());
+    test:assertFalse(check apiLedger.append({entry: duplicateReversal,
+            event: scoring:pointsChangedEvent(duplicateReversal)}),
+            "a second reversal of the same row is a no-op, not an error");
     recognition:Standing? afterRev = check recognition:standingOf(apiDb, a);
     test:assertEquals(afterRev is () ? -1 : afterRev.totalPoints, 0);
     test:assertTrue(check recognition:standingVersion(apiDb) > versionBefore, "standing_version bumped");
@@ -363,6 +398,9 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
 @test:Config {groups: ["integration"], enable: itEnabled}
 function testPartitionMaintenanceAsJobs() returns error? {
     postgresql:Client db = check jobs();
+    // The first run may create partitions (the migration only covered the day it ran); the second
+    // run, right after, must be a no-op.
+    store:MaintenanceResult _ = check store:runPartitionMaintenance(db);
     store:MaintenanceResult result = check store:runPartitionMaintenance(db);
     test:assertEquals(result.token_partitions_created, 0, "already 7 days ahead");
     postgresql:Client apiDb = check api();
@@ -381,4 +419,99 @@ function assertCode(any|error result, string code) {
         test:assertFail(string `expected ${code}, got ${result.message()}`);
     }
     test:assertFail(string `expected ${code}, got success`);
+}
+
+// ---- campaign: editing the post link and id ----------------------------------------------------------
+
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testPatchPostIdAndLinkInPostgres() returns error? {
+    postgresql:Client db = check api();
+    string po = check newEmployee(db, "patchpo");
+    campaign:PgCampaignRepository repo = new (db, poActor(po));
+    time:Utc now = time:utcNow();
+
+    // No activity: the id, type and link change, stored and audited, and the old id is free again.
+    campaign:Campaign c = check registerCampaign(db, po);
+    string oldUrn = c.resourceUrn;
+    string newUrn = "urn:li:ugcPost:" + uniq();
+    campaign:Campaign edited = check campaign:updateCampaign(repo, c.id, 1,
+            {resourceUrn: newUrn, resourceUrl: "https://www.linkedin.com/feed/update/" + newUrn}, now);
+    campaign:Campaign stored = <campaign:Campaign>(check repo.findById(c.id));
+    test:assertEquals(stored.resourceUrn, newUrn);
+    test:assertEquals(stored.resourceType, types:UGC_POST);
+    test:assertEquals(stored.resourceUrl, "https://www.linkedin.com/feed/update/" + newUrn);
+    test:assertEquals(stored.version, edited.version);
+    test:assertEquals(check count(db, `SELECT count(*)::int FROM audit.audit_log
+            WHERE entity_id = ${c.id} AND action = 'CampaignUpdated' AND before->>'resourceUrn' = ${oldUrn}
+              AND after->>'resourceUrn' = ${newUrn}`), 1);
+    test:assertEquals(check repo.hasActivity(c.id, newUrn), false);
+
+    // A post id another campaign has: the registration conflict, not a 500, and nothing changed.
+    campaign:Campaign other = check registerCampaign(db, po);
+    campaign:Campaign|error clash = campaign:updateCampaign(repo, other.id, 1, {resourceUrn: newUrn}, now);
+    assertCode(clash, types:ERR_CAMPAIGN_ALREADY_REGISTERED);
+    // The same through the table's unique key, past the domain's pre-check (the race between two editors).
+    campaign:Campaign raced = other.clone();
+    raced.resourceUrn = newUrn;
+    raced.version = 2;
+    assertCode(repo.update(raced, 1), types:ERR_CAMPAIGN_ALREADY_REGISTERED);
+    test:assertEquals((<campaign:Campaign>(check repo.findById(other.id))).resourceUrn, other.resourceUrn);
+    test:assertEquals((<campaign:Campaign>(check repo.findById(other.id))).version, 1);
+}
+
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testPatchPostIdFrozenByEachKindOfActivity() returns error? {
+    postgresql:Client db = check api();
+    string po = check newEmployee(db, "freezepo");
+    campaign:PgCampaignRepository repo = new (db, poActor(po));
+    time:Utc now = time:utcNow();
+
+    // 1. share request (matched by campaign id)
+    campaign:Campaign withShare = check registerCampaign(db, po);
+    string emp = check newEmployee(db, "freezeshare");
+    _ = check sharing:requestShare(new sharing:PgShareRepository(db, {actorId: emp}),
+            {id: withShare.id, provider: withShare.provider, resourceUrn: withShare.resourceUrn, open: true},
+            {memberUrn: "urn:li:person:" + uniq(), usable: true}, {employeeId: emp, kind: types:REPOST}, now);
+    test:assertTrue(check repo.hasActivity(withShare.id, withShare.resourceUrn));
+    assertCode(campaign:updateCampaign(repo, withShare.id, 1, {resourceUrn: "urn:li:share:" + uniq()}, now),
+            types:ERR_POST_HAS_ACTIVITY);
+    // the link alone still changes
+    campaign:Campaign linkOnly = check campaign:updateCampaign(repo, withShare.id, 1,
+            {resourceUrl: "https://www.linkedin.com/posts/wso2_it-" + uniq()}, now);
+    test:assertEquals(linkOnly.resourceUrn, withShare.resourceUrn);
+
+    // 2. engagement matched by the post id only (no campaign id on the row)
+    campaign:Campaign withEngagement = check registerCampaign(db, po);
+    string member = "urn:li:person:" + uniq();
+    _ = check db->execute(`INSERT INTO sharing.engagement (provider, provider_api, origin, target_resource_urn,
+            actor_member_urn, employee_id, action, occurred_at)
+            VALUES ('linkedin', 'WEBHOOK', 'WEBHOOK', ${withEngagement.resourceUrn}, ${member}, ${emp}, 'REPOST', now())`);
+    test:assertTrue(check repo.hasActivity(withEngagement.id, withEngagement.resourceUrn));
+    assertCode(campaign:updateCampaign(repo, withEngagement.id, 1, {resourceUrn: "urn:li:share:" + uniq()}, now),
+            types:ERR_POST_HAS_ACTIVITY);
+
+    // 3. external share matched by the post id only
+    campaign:Campaign withClaim = check registerCampaign(db, po);
+    _ = check db->execute(`INSERT INTO external_sharing.external_share (employee_id, action, evidence_url,
+            evidence_url_submitted, evidence_host, provider, resource_urn, certified_at)
+            VALUES (${emp}, 'OWN_POST', ${"https://medium.com/@it/" + uniq()}, 'https://medium.com/@it/x', 'medium.com',
+                    'linkedin', ${withClaim.resourceUrn}, now())`);
+    test:assertTrue(check repo.hasActivity(withClaim.id, withClaim.resourceUrn));
+    assertCode(campaign:updateCampaign(repo, withClaim.id, 1, {resourceUrn: "urn:li:share:" + uniq()}, now),
+            types:ERR_POST_HAS_ACTIVITY);
+
+    // The transaction re-checks: activity that lands after the caller's check still stops the change.
+    campaign:Campaign late = check registerCampaign(db, po);
+    campaign:Campaign wantsNew = late.clone();
+    wantsNew.resourceUrn = "urn:li:share:" + uniq();
+    wantsNew.version = 2;
+    _ = check db->execute(`INSERT INTO sharing.engagement (provider, provider_api, origin, target_resource_urn,
+            actor_member_urn, employee_id, action, occurred_at)
+            VALUES ('linkedin', 'WEBHOOK', 'WEBHOOK', ${late.resourceUrn}, ${member}, ${emp}, 'SHARE', now())`);
+    assertCode(repo.update(wantsNew, 1), types:ERR_POST_HAS_ACTIVITY);
+    test:assertEquals((<campaign:Campaign>(check repo.findById(late.id))).resourceUrn, late.resourceUrn);
+
+    // A campaign with nothing recorded is free to change.
+    campaign:Campaign quiet = check registerCampaign(db, po);
+    test:assertFalse(check repo.hasActivity(quiet.id, quiet.resourceUrn));
 }
