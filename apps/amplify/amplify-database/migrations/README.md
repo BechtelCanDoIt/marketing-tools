@@ -1,6 +1,6 @@
 # Migrations
 
-Forward-only, versioned: `V001__schemas_roles.sql` … `V016__token_grace_one_day.sql`. Lowercase snake_case
+Forward-only, versioned: `V001__schemas_roles.sql` … `V018__erase_employee_function.sql`. Lowercase snake_case
 after `__`. Never edit an applied script (the runner compares checksums and stops); add a new version.
 
 | Script | What |
@@ -18,11 +18,12 @@ after `__`. Never edit an applied script (the runner compares checksums and stop
 | V011 | `announcement.chat_thread_name` (thread Chat returned, M6a); `announcement_v` recreated |
 | V012 | Recognition writers serialized (advisory lock in `apply_ledger_entry`/`rerank`/`rebuild`); upkeep functions `lock_timeout = 5s` + one upkeep at a time ([doc](../../docs/migrations/2026-10-17-v012-recognition-lock-maintenance-timeout.md)) |
 | V013 | `idle_in_transaction_session_timeout = 30s` on `amplify_api`/`amplify_jobs` (ALTER ROLE as the bootstrap admin, before `SET LOCAL ROLE`); dashboard indexes `points_ledger (created_at)`, `share_request (failed_at)`; lock-order comments on the V012 recognition functions ([doc](../../docs/migrations/2026-10-17-v013-idle-timeout-dashboard-indexes.md)) |
-| V014 | Every action the points table prices (`REACTION`, `COMMENT`, `CHALLENGE_ENTRY`, `CHALLENGE_WINNER`) can have a rule and a ledger row; nothing awards them yet |
-| V015 | `connection.linkedin_consent`: the Link Me decision (consented, or declined with the profile URL the person typed) |
-| V016 | Token partition grace 1 day, not 5 (ADR-002); moves a database that still holds the old default |
+| V014 | the `scoring.point_rule` and `scoring.points_ledger` action checks accept every action the platform prices: adds `REACTION`, `COMMENT`, `CHALLENGE_ENTRY`, `CHALLENGE_WINNER` (nothing awards them yet; later phases need no schema change) |
 
 Rules: V001 runs as the bootstrap admin; every other script runs `SET LOCAL ROLE amplify_migrate` before its DDL (V013 first alters the app roles' settings as the bootstrap admin, which `amplify_migrate` can't).
 Enums are `text` + `CHECK`. No `?` anywhere in a script (the JDBC driver treats it as a bind marker).
 The runner stops on a `.sql` file whose name doesn't match `V###__snake_name.sql` and on two scripts with
 the same number, so a misnamed script can't be skipped without a word.
+
+Dry run (`dryRun=true`): connects, reads `public.schema_version` when it exists (it creates nothing; without it every script is pending),
+logs each script as `PENDING`, `APPLIED` or `CHANGED`, applies nothing, and fails when an applied script was changed.
