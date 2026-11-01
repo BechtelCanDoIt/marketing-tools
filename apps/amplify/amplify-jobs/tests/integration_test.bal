@@ -45,6 +45,7 @@ final string itDbName = envOr("AMPLIFY_IT_DB_NAME", "amplify_it");
 final string itApiPassword = envOr("AMPLIFY_IT_API_PASSWORD", "it-api-password-00001");
 final string itJobsPassword = envOr("AMPLIFY_IT_JOBS_PASSWORD", "it-jobs-password-0001");
 final string mockApiUrl = envOr("AMPLIFY_IT_LINKEDIN_API", "http://localhost:19190");
+final string mockAdminKey = envOr("AMPLIFY_IT_MOCK_ADMIN_KEY", "it-mock-admin-key-0123456789abcdef0123");
 final string mockWwwUrl = envOr("AMPLIFY_IT_LINKEDIN_WWW", "http://localhost:19191");
 final string mockClientId = envOr("AMPLIFY_IT_LINKEDIN_CLIENT_ID", "it-client");
 final string mockClientSecret = envOr("AMPLIFY_IT_LINKEDIN_CLIENT_SECRET", "it-secret");
@@ -98,7 +99,7 @@ function itCount(postgresql:Client db, sql:ParameterizedQuery query) returns int
 
 function mockPostCount() returns int|error {
     http:Client c = check new (mockApiUrl);
-    json[] posts = check c->get("/mock/posts");
+    json[] posts = check c->get("/mock/posts", {"X-Amplify-Internal-Key": mockAdminKey});
     return posts.length();
 }
 
@@ -272,4 +273,30 @@ function testM6OneRunAcrossReplicasStaleLocksAndPurge() returns error? {
     _ = check jobsDb->execute(`INSERT INTO messaging.idempotency_key (employee_id, key, request_hash, expires_at)
         VALUES ('it', ${key}, 'h', now() - interval '1 hour')`);
     test:assertTrue(check store:purgeExpiredIdempotencyKeys(jobsDb) >= 1);
+}
+
+// One partition maintenance pass at a time across replicas: a pass that outlives the scheduler's deadline is
+// not started again by its retry (no second reseal sweep, no second partition drop).
+@test:Config {groups: ["integration"]}
+function aSecondMaintenancePassIsSkippedWhileOneIsRunning() returns error? {
+    if !itEnabled {
+        return;
+    }
+    postgresql:Client first = check itConnect("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client second = check itConnect("amplify_jobs", itJobsPassword, 1);
+    PgRunLock held = new (first, MAINTENANCE_LOCK_KEY);
+    PgRunLock rival = new (second, MAINTENANCE_LOCK_KEY);
+    test:assertTrue(check held.tryAcquire());
+    test:assertFalse(check rival.tryAcquire(), "the retry answers 202 SKIPPED, not a second pass");
+    check held.release();
+    test:assertTrue(check rival.tryAcquire(), "once the pass is done the lock is free");
+    check rival.release();
+    check first.close();
+    check second.close();
+}
+
+// The maintenance pass and the run use different advisory keys, so neither blocks the other.
+@test:Config
+function theMaintenanceLockIsNotTheRunLock() {
+    test:assertNotEquals(MAINTENANCE_LOCK_KEY, RUN_LOCK_KEY);
 }

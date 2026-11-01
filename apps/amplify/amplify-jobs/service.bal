@@ -28,6 +28,14 @@ configurable int port = 9091;
 
 listener http:Listener jobsListener = new (port);
 
+# Returned when another partition maintenance pass holds the lock.
+type MaintenanceSkipped record {|
+    # `SKIPPED`
+    string status = "SKIPPED";
+    # `MAINTENANCE_IN_PROGRESS`
+    string reason = "MAINTENANCE_IN_PROGRESS";
+|};
+
 function init() returns error? {
     check checkInternalKey(internalApiKey);
     check validateSweepConfig(sweepConfig(), peopleDirectoryUrl.trim() != "");
@@ -59,7 +67,11 @@ service http:InterceptableService / on jobsListener {
     # token keys are reported but don't fail readiness (a run defers those rows, ADR-025). Each probe also
     # refreshes the `amplify_breaker_state` gauges (ADR-028).
     #
-    # + return - Readiness with the checks; 503 when the database is down
+    # A database blip (breaker open for a few seconds) keeps the worker in rotation: Choreo stops routing on
+    # any non-2xx readiness response, and `POST /runs` already answers a clean, scheduler-retryable 503 while
+    # the database is unavailable. Only a missing database configuration is 503.
+    #
+    # + return - Readiness with the checks; 503 only when the database isn't configured
     resource function get ready() returns http:Ok|http:ServiceUnavailable {
         boolean database = dbBreaker.state() != "OPEN" && dbReachable();
         map<string> breakers = breakerStates();
@@ -67,7 +79,7 @@ service http:InterceptableService / on jobsListener {
         postgresql:Client|error pg = database ? db() : error("database down");
         ReadyReport body = readiness(database, breakers, isRunInProgress(), pg is postgresql:Client ? outboxReport(pg) : (),
                 pg is postgresql:Client ? tokenPartitionReport(pg) : ());
-        return database ? <http:Ok>{body} : <http:ServiceUnavailable>{body};
+        return readyKeepsRouting(dbHost.trim() != "") ? <http:Ok>{body} : <http:ServiceUnavailable>{body};
     }
 
     # Runs the outbox once (announcements, sharing, scoring) and returns the run log. Safe to call any time
@@ -105,32 +117,41 @@ service http:InterceptableService / on jobsListener {
     # Also purges expired `Idempotency-Key` records (ADR-024 item 3) and re-seals token rows written under
     # an older key with the active one (key rotation; the result is in `token_rotation`, never fatal).
     #
-    # + return - What was done, 503 when the database isn't reachable, or 500
+    # One pass at a time across replicas: a pass that outlives the scheduler's deadline is not started again
+    # by its retry (a second 10k-row reseal sweep, a second partition drop); the retry gets 202 `SKIPPED`.
+    #
+    # + return - What was done, 202 when another pass is in progress, 503 when the database isn't reachable,
+    # or 500
     resource function post maintenance/partitions()
-            returns MaintenanceReport|http:ServiceUnavailable|http:InternalServerError {
-        postgresql:Client|error dbc = db();
+            returns MaintenanceReport|MaintenanceSkipped|http:Accepted|http:ServiceUnavailable|http:InternalServerError {
+        postgresql:Client|error dbc = maintenanceDb();
         if dbc is error {
             log:printError("Partition maintenance: database unavailable", resilience:loggable(dbc));
             return <http:ServiceUnavailable>{body: {message: "Database unavailable"}};
         }
-        store:MaintenanceResult|error result = store:runPartitionMaintenance(dbc);
+        PgRunLock guard = new (dbc, MAINTENANCE_LOCK_KEY);
+        boolean|error acquired = guard.tryAcquire();
+        if acquired is error {
+            log:printError("Partition maintenance: could not take the maintenance lock", resilience:loggable(acquired));
+            return <http:ServiceUnavailable>{body: {message: "Database unavailable"}};
+        }
+        if !acquired {
+            log:printInfo("Partition maintenance skipped: another pass is in progress");
+            return <http:Accepted>{body: <MaintenanceSkipped>{}};
+        }
+        // `trap`: however the pass ends (error or panic), the session lock is released below.
+        MaintenanceReport|error result = trap runMaintenance(dbc);
+        error? released = guard.release();
+        if released is error {
+            log:printError("Maintenance lock release failed (the session drop releases it)", released);
+        }
         if result is error {
             recordDbFailure(result);
             log:printError("Partition maintenance failed", resilience:loggable(result));
             return <http:InternalServerError>{body: {message: "Partition maintenance failed"}};
         }
-        int|error purged = store:purgeExpiredIdempotencyKeys(dbc);
-        if purged is error {
-            log:printError("Idempotency key purge failed", resilience:loggable(purged));
-            return <http:InternalServerError>{body: {message: "Idempotency key purge failed"}};
-        }
-        TokenRotation rotation = rotateTokenKeys(tokenCipher, new connection:PgTokenRepository(dbc));
-        // Never fatal and off by default: the sweep reports what it did (or why it did nothing).
-        LeaverSweepReport leavers = runConfiguredSweep(dbc);
-        MaintenanceReport report = {...result, idempotency_keys_purged: purged, token_rotation: rotation,
-            leaver_sweep: leavers};
-        log:printInfo(string `Partition maintenance done: ${report.toString()}`);
-        return report;
+        log:printInfo(string `Partition maintenance done: ${result.toString()}`);
+        return result;
     }
 
     # Runs only the leaver sweep (the daily maintenance run includes it). With `leaverSweepMode = DRY_RUN` it
@@ -165,4 +186,21 @@ service http:InterceptableService / on jobsListener {
         log:printInfo(string `Recognition rebuilt, standing version ${version}`);
         return {standingVersion: version};
     }
+}
+
+# The partition maintenance steps, in the order B10 lists them. Kept in one function so the resource can
+# release the maintenance lock however the pass ends (an error or a panic, through `trap`).
+#
+# + dbc - The maintenance client
+# + return - What was done, or an error naming the step that failed
+isolated function runMaintenance(postgresql:Client dbc) returns MaintenanceReport|error {
+    store:MaintenanceResult result = check store:runPartitionMaintenance(dbc);
+    int|error purged = store:purgeExpiredIdempotencyKeys(dbc);
+    if purged is error {
+        return error("Idempotency key purge failed", purged);
+    }
+    TokenRotation rotation = rotateTokenKeys(tokenCipher, new connection:PgTokenRepository(dbc));
+    // Never fatal and off by default: the sweep reports what it did (or why it did nothing).
+    LeaverSweepReport leavers = runConfiguredSweep(dbc);
+    return {...result, idempotency_keys_purged: purged, token_rotation: rotation, leaver_sweep: leavers};
 }

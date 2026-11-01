@@ -215,6 +215,7 @@ isolated class MemStore {
     private scoring:PointRule[] rules = [];
     private RunSettings settingsValue = {};
     private boolean duplicateNext = false;
+    private boolean publishWriteFails = false;
     private int reseals = 0;
 
     isolated function init(MemRunStore queue) {
@@ -331,6 +332,10 @@ isolated class MemStore {
                 return error sql:DatabaseError("duplicate key value violates unique constraint \"engagement_once_uk\"",
                     errorCode = 0, sqlState = "23505");
             }
+            if self.publishWriteFails {
+                self.publishWriteFails = false;
+                return error sql:DatabaseError("Connection reset", errorCode = 0, sqlState = "08006");
+            }
             check self.updateLocked(published, expectedVersion);
             self.engagements[key] = e;
         }
@@ -341,6 +346,13 @@ isolated class MemStore {
     isolated function failNextPublishAsDuplicate() {
         lock {
             self.duplicateNext = true;
+        }
+    }
+
+    # Test switch: make `recordPublish` fail like a database blip (no unique violation) after a post.
+    isolated function failNextPublishWrite() {
+        lock {
+            self.publishWriteFails = true;
         }
     }
 
