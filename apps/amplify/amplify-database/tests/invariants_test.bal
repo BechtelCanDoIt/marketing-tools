@@ -31,7 +31,7 @@ function roleClient(string user, string password, int poolSize = 2) returns post
     new (host = dbHost, username = user, password = password, database = itDbName, port = dbPort,
         options = {ssl: {mode: dbSslMode}}, connectionPool = {maxOpenConnections: poolSize, minIdleConnections: 0});
 
-function apiClient() returns postgresql:Client|error => roleClient("amplify_api", IT_API_PASSWORD);
+function apiClient() returns postgresql:Client|error => roleClient("amplify_api", itApiPassword);
 
 function readonlyClient() returns postgresql:Client|error => roleClient("amplify_readonly", IT_READONLY_PASSWORD);
 
@@ -322,7 +322,7 @@ function testPartitionFunctionGuardsAndUtcBounds() returns error? {
     if !itEnabled {
         return;
     }
-    postgresql:Client jobs = check roleClient("amplify_jobs", IT_JOBS_PASSWORD, 1);
+    postgresql:Client jobs = check roleClient("amplify_jobs", itJobsPassword, 1);
     // The token fixture is inserted as the admin: since V017 amplify_jobs no longer inserts tokens.
     postgresql:Client admin = check adminClient(itDbName);
     test:assertTrue(selectFailure(jobs, `SELECT connection.create_token_partitions(-1)`).includes("0-60"));
@@ -386,8 +386,8 @@ function testConcurrentLedgerAppendsKeepRanksConsistent() returns error? {
         return;
     }
     // Two writers (as amplify_jobs and amplify_api) append top-of-board rows at the same time.
-    postgresql:Client first = check roleClient("amplify_jobs", IT_JOBS_PASSWORD, 1);
-    postgresql:Client second = check roleClient("amplify_api", IT_API_PASSWORD, 1);
+    postgresql:Client first = check roleClient("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client second = check roleClient("amplify_api", itApiPassword, 1);
     string tag = time:utcNow()[0].toString();
     check sqlText(first, "BEGIN");
     check appendAndApply(first, "ADJ-it-c1-" + tag, "it-conc-1-" + tag, 1000003);
@@ -419,11 +419,11 @@ function testUpkeepGivesUpOnALockInsteadOfQueueing() returns error? {
         return;
     }
     // A month past retention to drop, so the upkeep needs ACCESS EXCLUSIVE on audit.audit_log.
-    postgresql:Client jobs = check roleClient("amplify_jobs", IT_JOBS_PASSWORD, 1);
+    postgresql:Client jobs = check roleClient("amplify_jobs", itJobsPassword, 1);
     string old = time:utcToString(time:utcAddSeconds(time:utcNow(), -64d * 31d * 86400d)).substring(0, 10);
     _ = check jobs->queryRow(`SELECT audit.create_audit_partitions(0, CAST(${old} AS date))`, int);
     // A long reader holds a lock on the audit table.
-    postgresql:Client reader = check roleClient("amplify_api", IT_API_PASSWORD, 1);
+    postgresql:Client reader = check roleClient("amplify_api", itApiPassword, 1);
     check sqlText(reader, "BEGIN");
     _ = check reader->queryRow(`SELECT count(*)::int FROM audit.audit_log`, int);
     // Without the V012 lock_timeout the call would queue until statement_timeout (57014).
