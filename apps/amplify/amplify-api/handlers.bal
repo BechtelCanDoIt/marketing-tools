@@ -110,6 +110,8 @@ isolated function editCampaign(auth:Principal p, string? correlationId, string i
         returns CampaignDto|ProblemResponse {
     do {
         string campaignId = check uuidOf(id, "id");
+        check maxLen(body.resourceUrn, 255, "resourceUrn");
+        check maxLen(body.resourceUrl, 2048, "resourceUrl");
         check maxLen(body.summary, 2000, "summary");
         check maxLen(body.imageUrl, 2048, "imageUrl");
         string[]? tags = body.tags;
@@ -134,6 +136,8 @@ isolated function editCampaign(auth:Principal p, string? correlationId, string i
         // `updateCampaign` re-reads and would lock on whatever version it finds, so an edit committed between
         // this check and the update was silently overwritten.
         campaign:Campaign changed = check campaign:applyPatch(current, {
+            resourceUrn: body.resourceUrn,
+            resourceUrl: body.resourceUrl,
             title: body.title,
             summary: body.summary,
             imageUrl: body.imageUrl,
@@ -142,7 +146,8 @@ isolated function editCampaign(auth:Principal p, string? correlationId, string i
             tags: body.tags,
             opensAt: check parseTime(body.opensAt, "opensAt"),
             closesAt: check parseTime(body.closesAt, "closesAt")
-        }, now);
+        }, now, postLinkOrigins);
+        check campaign:ensurePostChangeAllowed(repo, current, changed);
         check repo.update(changed, body.version);
         return campaignDto(changed, now);
     } on fail error e {
