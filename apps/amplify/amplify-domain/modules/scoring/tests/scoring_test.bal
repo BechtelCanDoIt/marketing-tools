@@ -188,20 +188,39 @@ function externalShareAwardAndAmplifiedTopUp() returns error? {
     test:assertEquals(own.entry.points, 30);
     _ = check appendAward(ledger, own);
 
-    LedgerAppend topUp = check amplifiedTopUp(rules(), externalShare(), (), types:addDays(T0, 2));
+    LedgerAppend topUp = check amplifiedTopUp(rules(), externalShare(), check ownPostNet(ledger, externalShare()), (),
+            types:addDays(T0, 2));
     test:assertEquals(topUp.entry.action, types:OWN_POST_AMPLIFIED);
     test:assertEquals(topUp.entry.points, 20, "C4: 50 - 30, a top-up row, not an update");
     test:assertNotEquals(topUp.entry.reference, own.entry.reference);
     _ = check appendAward(ledger, topUp);
     test:assertEquals(ledger.size(), 2, "original OWN_POST row stays");
     test:assertEquals(ledger.total("emp-1"), 50, "employee ends on the amplified tier");
-    test:assertFalse(check appendAward(ledger, check amplifiedTopUp(rules(), externalShare(), (), T0)), "top-up once");
+    test:assertFalse(check appendAward(ledger,
+            check amplifiedTopUp(rules(), externalShare(), check ownPostNet(ledger, externalShare()), (), T0)), "top-up once");
 }
 
 @test:Config
 function topUpNeedsHigherTier() {
     PointRule[] flat = [rule("a", types:OWN_POST, 30, T0), rule("b", types:OWN_POST_AMPLIFIED, 30, T0)];
-    test:assertEquals(code(amplifiedTopUp(flat, externalShare(), (), T0)), types:ERR_TOP_UP_NOT_POSITIVE);
+    test:assertEquals(code(amplifiedTopUp(flat, externalShare(), 30, (), T0)), types:ERR_TOP_UP_NOT_POSITIVE);
+}
+
+// Round 2: the top-up is priced against the ledger, not the rules, so reversing the own post doesn't leave
+// the employee short of the amplified tier.
+@test:Config
+function topUpAfterOwnPostReversalPaysTheWholeTier() returns error? {
+    InMemoryLedger ledger = new;
+    LedgerAppend own = check awardForExternalShare(rules(), externalShare(), (), types:addDays(T0, 1));
+    _ = check appendAward(ledger, own);
+    _ = check reverseEntry(ledger, own.entry.reference, "Reassessing", "po-1", (), types:addDays(T0, 2));
+    test:assertEquals(ledger.total("emp-1"), 0, "own post reversed to 0");
+    int net = check ownPostNet(ledger, externalShare());
+    test:assertEquals(net, 0, "nothing left for OWN_POST on the ledger");
+    LedgerAppend topUp = check amplifiedTopUp(rules(), externalShare(), net, (), types:addDays(T0, 2));
+    test:assertEquals(topUp.entry.points, 50, "0 awarded + 50 = the amplified tier, not the 20 rule gap");
+    _ = check appendAward(ledger, topUp);
+    test:assertEquals(ledger.total("emp-1"), 50, "the employee ends on the amplified tier after all");
 }
 
 @test:Config

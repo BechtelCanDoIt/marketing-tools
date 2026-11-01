@@ -73,7 +73,7 @@ public isolated class PgShareRepository {
         final readonly & events:OutboxEvent[] queued = outbox.cloneReadOnly();
         error? result = store:inTransaction(isolated function () returns error? => self.insertTx(r, queued));
         if result is error && store:isUniqueViolation(result, "share_request_campaign_employee_uk") {
-            return types:domainError(types:ERR_SHARE_ALREADY_QUEUED, "You already asked to share this campaign");
+            return existingShareError(self.db, r);
         }
         return result;
     }
@@ -198,6 +198,25 @@ public isolated class PgShareRepository {
 
 isolated function auditAction(ShareRequest request, events:OutboxEvent[] outbox) returns string =>
     outbox.length() > 0 ? outbox[0].eventType : string `Share${shareStatus(request)}`;
+
+# The error for the request already stored for this campaign and employee, chosen by its state and not by
+# the insert conflict: a `PUBLISHED` row reports `SHARE_ALREADY_PUBLISHED`, anything else
+# `SHARE_ALREADY_QUEUED`. A `FAILED` row is retried through `retryShare`, so a conflict on it is a
+# concurrent request. If the state can't be read it reports `SHARE_ALREADY_QUEUED`: refusing the duplicate
+# is right either way.
+#
+# + db - Client, after the insert transaction rolled back
+# + request - The request whose insert conflicted
+# + return - The domain error to report
+isolated function existingShareError(postgresql:Client db, ShareRequest request) returns types:DomainError {
+    string|error status = db->queryRow(`
+        SELECT status FROM sharing.share_request_v
+        WHERE campaign_id = CAST(${request.campaignId} AS uuid) AND employee_id = ${request.employeeId}`);
+    if status is string && status == "PUBLISHED" {
+        return types:domainError(types:ERR_SHARE_ALREADY_PUBLISHED, "You already shared this campaign");
+    }
+    return types:domainError(types:ERR_SHARE_ALREADY_QUEUED, "You already asked to share this campaign");
+}
 
 isolated function toShare(ShareRow|error row) returns ShareRequest|error? {
     if row is error {

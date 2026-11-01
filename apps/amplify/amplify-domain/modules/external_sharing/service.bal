@@ -217,7 +217,9 @@ public isolated function approveWithPoints(ExternalShareRepository repo, scoring
     return approved;
 }
 
-# Marks an approved claim amplified and appends the T4 top-up in the same transaction (C4).
+# Marks an approved claim amplified and appends the T4 top-up in the same transaction (C4). The top-up is
+# priced against the `OWN_POST` points actually on the ledger, so a reversed own-post award is topped up to
+# the full amplified tier instead of only the rule difference.
 #
 # + repo - External share repository
 # + rules - Point rule versions
@@ -225,13 +227,16 @@ public isolated function approveWithPoints(ExternalShareRepository repo, scoring
 # + poId - PO marking it
 # + correlationId - Request correlation id
 # + now - Current time
+# + ledger - Ledger repository (reads the net `OWN_POST` points already awarded)
 # + return - The amplified claim, a domain error, or a repository error
 public isolated function amplifyWithPoints(ExternalShareRepository repo, scoring:PointRule[] rules, string id,
-        types:EmployeeId poId, string? correlationId, time:Utc now) returns ExternalShare|error {
+        types:EmployeeId poId, string? correlationId, time:Utc now, scoring:LedgerRepository ledger)
+        returns ExternalShare|error {
     ExternalShare current = check findOrFail(repo, id);
     ExternalShare amplified = check markAmplified(current, now, poId);
-    scoring:LedgerAppend topUp = check scoring:amplifiedTopUp(rules, factOf(amplified, amplified.decidedAt ?: now),
-            correlationId, now);
+    scoring:ExternalShareFact fact = factOf(amplified, amplified.decidedAt ?: now);
+    int ownPostPoints = check scoring:ownPostNet(ledger, fact);
+    scoring:LedgerAppend topUp = check scoring:amplifiedTopUp(rules, fact, ownPostPoints, correlationId, now);
     check repo.updateWithAward(amplified, current.version, [externalShareAmplifiedEvent(amplified, poId)], topUp);
     return amplified;
 }

@@ -16,7 +16,8 @@
 
 
 // Read side of C1 for the published API (M5): the employee's own shares and the PO share-health tile.
-// Reads only the `sharing` schema. Commentary is never read here.
+// Reads the `sharing` views, and `messaging.outbox` for when the current request was actually queued.
+// Commentary is never read here.
 
 import amplify_common.types;
 
@@ -47,7 +48,7 @@ public type ShareView record {|
 
 # PO dashboard tile 7.
 public type ShareHealth record {|
-    # Still queued, requested in the window
+    # Still queued, with its current request made in the window (a retry counts at the retry time)
     int queued;
     # Published in the window
     int published;
@@ -98,16 +99,23 @@ public isolated function sharesOf(postgresql:Client db, types:EmployeeId employe
 
 # Share health since `since` (tile 7): every failure reason is present, 0 when none.
 #
+# `requested_at` is the first request and a retry (ADR-015) reuses the row without moving it, so "queued in
+# the window" counts the current attempt instead: its `RepostRequested:<id>:<attempts>` outbox row, which a
+# retry writes again with the retry time.
+#
 # + db - Client
 # + since - Window start
 # + return - Counts, or an error
 public isolated function shareHealth(postgresql:Client db, time:Utc since) returns ShareHealth|error {
     string sinceText = time:utcToString(since);
     record {|int queued; int published; int failed;|} totals = check db->queryRow(`
-        SELECT count(*) FILTER (WHERE status = 'QUEUED' AND requested_at >= CAST(${sinceText} AS timestamptz))::int AS queued,
-               count(*) FILTER (WHERE published_at >= CAST(${sinceText} AS timestamptz))::int AS published,
-               count(*) FILTER (WHERE failed_at >= CAST(${sinceText} AS timestamptz))::int AS failed
-        FROM sharing.share_request_v`);
+        SELECT count(*) FILTER (WHERE sr.status = 'QUEUED' AND EXISTS (
+                   SELECT 1 FROM messaging.outbox o
+                   WHERE o.idempotency_key = 'RepostRequested:' || sr.id::text || ':' || sr.attempts::text
+                     AND o.created_at >= CAST(${sinceText} AS timestamptz)))::int AS queued,
+               count(*) FILTER (WHERE sr.published_at >= CAST(${sinceText} AS timestamptz))::int AS published,
+               count(*) FILTER (WHERE sr.failed_at >= CAST(${sinceText} AS timestamptz))::int AS failed
+        FROM sharing.share_request_v sr`);
     map<int> failedByReason = {NEEDS_RECONNECT: 0, PROVIDER_REJECTED: 0, RETRIES_EXHAUSTED: 0};
     stream<record {|string reason; int n;|}, error?> rows = db->query(`
         SELECT failure_reason AS reason, count(*)::int AS n FROM sharing.share_request_v
