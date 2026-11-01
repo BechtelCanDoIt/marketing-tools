@@ -162,7 +162,7 @@ paths:
       tags: [S1 Campaign]
       operationId: editCampaign
       x-access: CAN_CAMPAIGN
-      description: Edits a campaign (optimistic lock on `version`). Not on an archived campaign.
+      description: Edits a campaign (optimistic lock on `version`). Not on an archived campaign. The post link may always change; the post id (`resourceUrn`) only while the campaign has no recorded activity.
       parameters: [{$ref: "#/components/parameters/CorrelationId"}]
       requestBody:
         required: true
@@ -1075,7 +1075,7 @@ components:
             ROUTE_NOT_PERMITTED, ROLE_NOT_PERMITTED, DEPENDENCY_UNAVAILABLE, EMAIL_CONFLICT, VALIDATION_FAILED,
             NOT_FOUND, METHOD_NOT_ALLOWED, VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, INTERNAL_ERROR,
             CAMPAIGN_ALREADY_REGISTERED, NOT_WSO2_RESOURCE, INVALID_CAMPAIGN, INVALID_WINDOW, CAMPAIGN_ARCHIVED,
-            CAMPAIGN_CLOSED, OAUTH_STATE_INVALID, OAUTH_REDIRECT_MISMATCH, MISSING_SCOPE, MEMBER_ALREADY_LINKED, CONNECTION_REMOVED,
+            POST_HAS_ACTIVITY, CAMPAIGN_CLOSED, OAUTH_STATE_INVALID, OAUTH_REDIRECT_MISMATCH, MISSING_SCOPE, MEMBER_ALREADY_LINKED, CONNECTION_REMOVED,
             LINKEDIN_NOT_CONNECTED, NEEDS_RECONNECT, DUPLICATE_ACTION, COMMENTARY_REQUIRED, COMMENTARY_NOT_ALLOWED,
             COMMENTARY_TOO_LONG, FEATURE_DISABLED, CERTIFICATION_REQUIRED, EVIDENCE_ALREADY_CLAIMED,
             INVALID_EVIDENCE_URL, EVIDENCE_URL_NOT_HTTPS, EVIDENCE_URL_TOO_LONG, EVIDENCE_URL_CREDENTIALS,
@@ -1200,6 +1200,18 @@ components:
       required: [version]
       properties:
         version: {type: integer, minimum: 1, description: Version read before the edit}
+        resourceUrn:
+          type: string
+          maxLength: 255
+          example: "urn:li:share:7123"
+          description: >-
+            New post id, same rules as registration. Allowed only while nothing is recorded against the campaign
+            (no share requests, reposts or external shares); otherwise 409 `POST_HAS_ACTIVITY`. An id another
+            campaign already has answers 409 `CAMPAIGN_ALREADY_REGISTERED`.
+        resourceUrl:
+          type: string
+          maxLength: 2048
+          description: New link to the post, same origin rules as registration (`campaignLinkOrigins`). Blank clears it.
         title: {type: string, minLength: 1, maxLength: 200}
         summary: {type: string, maxLength: 2000}
         imageUrl: {type: string, maxLength: 2048}

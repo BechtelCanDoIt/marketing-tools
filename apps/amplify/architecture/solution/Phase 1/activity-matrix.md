@@ -38,7 +38,7 @@ Enforced twice: API proxy scopes per resource, then the Ballerina request interc
 | S1 | `GET /tags`, `GET /categories` | `EMPLOYEE` | R | R | R | R | R | |
 | S1 | `POST /campaigns` | `CAN_CAMPAIGN` | — | C | C | — | — | ADR-012. `closes_at` defaults to `opens_at` + `campaign.default_window_days` (30) |
 | S1 | `POST /campaigns?shareNow=true` | `CAN_CAMPAIGN` | — | C + X | C + X | — | — | Also calls `amplify-jobs POST /runs` (fire-and-forget behind a breaker) |
-| S1 | `PATCH /campaigns/{id}` | `CAN_CAMPAIGN` | — | U | U | — | — | Not on an archived campaign |
+| S1 | `PATCH /campaigns/{id}` | `CAN_CAMPAIGN` | — | U | U | — | — | Not on an archived campaign. May change the post link (`resourceUrl`) always and the post id (`resourceUrn`) only while nothing is recorded against it (else 409 `POST_HAS_ACTIVITY`) |
 | S1 | `DELETE /campaigns/{id}` | `CAN_CAMPAIGN` | — | D (archive) | D (archive) | — | — | Soft archive only; shares and points stay |
 | S2 Connection | `POST /connections/linkedin/start` | `EMPLOYEE` | C own | C own | C own | C own | C own | Issues `state`; one active connection per employee |
 | S2 | `POST /connections/linkedin/complete` | `EMPLOYEE` | U own | U own | U own | U own | U own | `state` must match, be unused and unexpired; same employee who started |
