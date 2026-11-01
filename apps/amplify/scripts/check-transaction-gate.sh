@@ -54,19 +54,74 @@ scan() {
   local names
   names=$(awk '/^TXFN /{print $2}' "$tmp/txfns" | sort -u | paste -sd'|' -)
   [ -n "$names" ] || { [ "${rc:-0}" -eq 0 ] && echo "no transaction blocks found"; return "${rc:-0}"; }
-  # Pass 2: every call of one of those functions goes through the gate on the same line.
+  # Pass 2: every call of one of those functions runs inside the gate's callback.
+  # "Inside" is decided by parenthesis nesting, not by the line mentioning the gate: on
+  # `check store:inTransaction(() => saveTx(v)); check saveTx(v);` the second call is outside the
+  # callback and used to pass because the line contained `inTransaction(`. String literals are blanked
+  # first so a `)` or a `saveTx(` inside one cannot open or close a region, and the region may span
+  # lines (`store:inTransaction(` followed by the callback on the next line).
   # shellcheck disable=SC2086
   awk -v names="$names" '
+    # Replace string-literal contents with spaces, keeping the length so offsets line up.
+    function blank_strings(s,   out, i, n, c, q) {
+      out = ""; i = 1; n = length(s); q = ""
+      while (i <= n) {
+        c = substr(s, i, 1)
+        if (q == "") {
+          if (c == "\"" || c == "`") { q = c; out = out " " }
+          else out = out c
+          i++; continue
+        }
+        if (c == "\\") { out = out "  "; i += 2; continue }
+        if (c == q) { q = ""; out = out " " } else out = out " "
+        i++
+      }
+      return out
+    }
+
+    # Mark every character that sits inside an inTransaction( / inTransactionValue( call.
+    # depth/top/stack carry across lines: a gate callback may start on the next line.
+    function mark_gates(s,   i, n, c, j, k, word, prev) {
+      n = length(s)
+      for (i = 1; i <= n; i++) inside[i] = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (c == "(") {
+          j = i - 1
+          while (j >= 1 && substr(s, j, 1) == " ") j--
+          k = j
+          while (k >= 1 && substr(s, k, 1) ~ /[A-Za-z0-9_]/) k--
+          word = substr(s, k + 1, j - k)
+          prev = (k >= 1) ? substr(s, k, 1) : ""
+          depth++
+          if ((word == "inTransaction" || word == "inTransactionValue") && prev !~ /[A-Za-z0-9_]/) {
+            top++; stack[top] = depth
+          }
+        } else if (c == ")") {
+          if (top > 0 && stack[top] == depth) top--
+          depth--
+          if (depth < 0) depth = 0
+        }
+        inside[i] = (top > 0) ? 1 : 0
+      }
+    }
+
+    FNR == 1 { depth = 0; top = 0 }
     /^[[:space:]]*(\/\/|#)/ { next }
     {
-      line = $0
-      while (match(line, "(^|[^A-Za-z0-9_])(" names ")[[:space:]]*\\(")) {
-        hit = substr(line, RSTART, RLENGTH)
-        isdef = ($0 ~ ("function[[:space:]]+(" names ")[[:space:]]*\\("))
-        if (!isdef && $0 !~ /inTransaction(Value)?\(/) {
-          printf "%s:%d: %s called outside store:inTransaction\n", FILENAME, FNR, hit; bad = 1
+      s = blank_strings($0)
+      mark_gates(s)
+      if (s ~ ("function[[:space:]]+(" names ")[[:space:]]*\\(")) next
+      rest = s; off = 0
+      while (match(rest, "(^|[^A-Za-z0-9_])(" names ")[[:space:]]*\\(")) {
+        hit = substr(rest, RSTART, RLENGTH)
+        lead = (substr(hit, 1, 1) ~ /[A-Za-z0-9_]/) ? 0 : 1
+        pos = off + RSTART + lead
+        if (inside[pos] != 1) {
+          name = hit; sub(/^[^A-Za-z0-9_]/, "", name); sub(/[[:space:]]*\($/, "", name)
+          printf "%s:%d: %s called outside store:inTransaction\n", FILENAME, FNR, name; bad = 1
         }
-        line = substr(line, RSTART + RLENGTH)
+        rest = substr(rest, RSTART + RLENGTH); off = off + RSTART + RLENGTH - 1
       }
     }
     END { exit bad }
@@ -109,6 +164,33 @@ isolated function againTx() returns error? {
 }
 BAL
   ( scan "$fx" >/dev/null ) && { echo "self-test: retry transaction passed"; exit 1; }
+  rm "$fx/amplify-jobs/bad3.bal"
+  # The gate has to enclose the call, not merely share its line.
+  cat > "$fx/amplify-jobs/bad4.bal" <<'BAL'
+isolated function sameLine() returns error? {
+    check store:inTransaction(() => saveTx(1)); check saveTx(2);
+}
+BAL
+  ( scan "$fx" >/dev/null ) && { echo "self-test: a call beside the gate on the same line passed"; exit 1; }
+  rm "$fx/amplify-jobs/bad4.bal"
+  cat > "$fx/amplify-jobs/bad5.bal" <<'BAL'
+isolated function nested() returns error? {
+    check someOtherWrapper(() => saveTx(1));
+}
+BAL
+  ( scan "$fx" >/dev/null ) && { echo "self-test: a call inside a non-gate callback passed"; exit 1; }
+  rm "$fx/amplify-jobs/bad5.bal"
+  # A `)` or a call inside a string literal must not open or close a region, and a
+  # callback may start on the line after the gate.
+  cat > "$fx/amplify-jobs/ok2.bal" <<'BAL'
+isolated function strings() returns error? {
+    log:printInfo("saveTx(1) )");
+    check store:inTransaction(
+        () => saveTx(2));
+}
+BAL
+  ( scan "$fx" >/dev/null ) || { echo "self-test: a next-line callback or a string literal was rejected"; exit 1; }
+  rm "$fx/amplify-jobs/ok2.bal"
   echo "Transaction gate check self-test passed."
   exit 0
 fi

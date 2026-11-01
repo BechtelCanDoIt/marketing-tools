@@ -20,8 +20,9 @@
 #   Dockerfile EXPOSE                                            : same ports
 #   compose.yaml service env                                     : subset of the descriptor env + LOCAL_ONLY
 # No yq needed: the descriptors are written one key per line on purpose.
+#
+# Usage: scripts/check-descriptors.sh [apps/amplify root]   scripts/check-descriptors.sh --self-test
 set -uo pipefail  # no -e on purpose: report every drift, then exit non-zero at the end
-cd "$(dirname "$0")/.."
 LINKEDIN=linkedin/apps/mock_linkedin
 
 # component | Choreo descriptor | workload.yaml | Dockerfile | compose service
@@ -37,7 +38,7 @@ COMPONENTS=(
 LOCAL_ONLY="BAL_CONFIG_VAR_DEVLOCALJWTENABLED BAL_CONFIG_VAR_DEVJWKSFILE BAL_CONFIG_VAR_CHATALLOWINSECUREHTTP BAL_CONFIG_VAR_NOVERAALLOWINSECUREHTTP
 BAL_CONFIG_VAR_MINRUNINTERVALSECONDS BAL_CONFIG_VAR_RECONCILEDELAYSECONDS BAL_CONFIG_VAR_DBSSLMODE
 BAL_CONFIG_VAR_LINKEDINAUTHORIZEBASEURL
-BAL_CONFIG_VAR_ENABLEMOCKADMIN"
+BAL_CONFIG_VAR_ENABLEMOCKADMIN BAL_CONFIG_VAR_MOCKADMINKEY"
 
 envs()  { grep -E '^\s*- name: (BAL_CONFIG_[A-Z_]+|DSN)\s*$' "$1" | awk '{print $3}' | sort -u; }
 ports() { grep -E '^\s+port: [0-9]+' "$1" | awk '{print $2}' | sort -u; }
@@ -55,6 +56,11 @@ compose_envs() {  # env keys of one compose service, including the x-db-common a
 
 fail=0
 err() { echo "DRIFT [$1]: $2"; fail=1; }
+
+# scan: compare the descriptors under one apps/amplify root. Reports every drift, then returns non-zero.
+scan() {
+  cd "$1" || { echo "check-descriptors: cannot enter $1" >&2; return 2; }
+  fail=0
 for row in "${COMPONENTS[@]}"; do
   IFS='|' read -r name desc wl dockerfile svc <<<"$row"
   for f in "$desc" "$wl" "$dockerfile"; do [[ -f "$f" ]] || { err "$name" "missing $f"; continue 2; }; done
@@ -70,6 +76,7 @@ for row in "${COMPONENTS[@]}"; do
   # `FROM name` passes only when `name` is an earlier stage (`AS name`), never as an unpinned base image.
   stages="$(grep -iE '^FROM .* AS ' "$dockerfile" | awk '{print tolower($NF)}')"
   unpinned=$(grep -E '^FROM ' "$dockerfile" | grep -v '@sha256:[0-9a-f]\{64\}' | while read -r _ ref rest; do
+    [[ "$(tr 'A-Z' 'a-z' <<<"$ref")" == "scratch" ]] && continue        # no digest exists for scratch
     if [[ -z "$rest" ]] && grep -qxF "$(tr 'A-Z' 'a-z' <<<"$ref")" <<<"$stages"; then continue; fi
     echo "FROM $ref $rest"
   done || true)
@@ -88,6 +95,23 @@ unpinned=$(grep -E '^\s+image: ' compose.yaml | grep -v '@sha256:[0-9a-f]\{64\}'
 [[ -z "$unpinned" ]] || err compose.yaml "image not pinned by digest: $(echo $unpinned)"
 # Only amplify-api (9090), the mock OAuth page (19091) and the local people-stub (19092) reach the host, on
 # loopback (cell rules).
+#
+# Every entry under a `ports:` key must be the short quoted loopback form this scan can resolve. A Compose
+# long-form mapping (`- target: 9090` with no `host_ip`) publishes on every interface, and an unquoted or
+# partial mapping hides the host side; both used to slip through because the scan only selected
+# `- "..."` lines. Rejecting the forms it cannot inspect is the safe answer (docs.docker.com/compose-file).
+unparsed_ports=$(awk '
+  /^  [a-z][a-z0-9-]*:$/ { svc = $1; sub(":$", "", svc); p = 0; next }
+  /^    ports:/ { p = 1; next }
+  p && /^    [a-z_]+:/ { p = 0; next }
+  !p { next }
+  !/^      - "127\.0\.0\.1:[0-9]+:[0-9]+(\/(tcp|udp))?"$/ { printf "%s %s\n", svc, $0 }
+' compose.yaml)
+while read -r svc entry; do
+  [[ -z "$svc" ]] && continue
+  err compose.yaml "port form this scan cannot verify (want - \"127.0.0.1:HOST:CONTAINER\"): $svc $entry"
+done <<<"$unparsed_ports"
+
 host_ports=$(awk '/^  [a-z][a-z0-9-]*:$/{svc=$1} /^    ports:/{p=1; next} /^    [a-z_]+:/{p=0} p && /^      - "/{print svc, $2}' compose.yaml)
 while read -r svc port; do
   [[ -z "$svc" ]] && continue
@@ -100,4 +124,123 @@ while read -r svc port; do
   [[ "$port" == '"127.0.0.1:'* ]] || err compose.yaml "host port not on loopback: $svc $port"
 done <<<"$host_ports"
 [[ $fail -eq 0 ]] && echo "Descriptors in sync: ${#COMPONENTS[@]} components."
-exit $fail
+  return $fail
+}
+
+# The gate is the only thing standing between a drift and production, so it carries its own fixtures:
+# every bypass below is one a reviewer had to find by reading the script.
+if [ "${1:-}" = "--self-test" ]; then
+  SELFTEST_TMP=$(mktemp -d)
+  trap 'rm -rf "$SELFTEST_TMP"' EXIT
+  DIGEST_A="sha256:$(printf 'a%.0s' {1..64})"
+  DIGEST_B="sha256:$(printf 'b%.0s' {1..64})"
+  COMPONENTS=("amplify-api|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api")
+
+  fixture() {  # (re)write a clean, in-sync tree
+    cd "$SELFTEST_TMP"
+    rm -rf root; mkdir -p root/.choreo root/amplify-api root/local/chat-stub root/local/people-stub
+    cat > root/.choreo/component.yaml <<EOF
+schemaVersion: "1.2"
+endpoints:
+  - name: amplify-api
+    port: 9090
+configurations:
+  - name: BAL_CONFIG_FOO
+EOF
+    cat > root/amplify-api/workload.yaml <<EOF
+endpoints:
+  - name: amplify-api
+    port: 9090
+configurations:
+  - name: BAL_CONFIG_FOO
+EOF
+    cat > root/amplify-api/Dockerfile <<EOF
+FROM alpine:3.20@$DIGEST_A AS build
+RUN true
+FROM alpine:3.20@$DIGEST_B
+USER 10014
+EXPOSE 9090
+EOF
+    for f in root/local/chat-stub/Dockerfile root/local/people-stub/Dockerfile; do
+      printf 'FROM alpine:3.20@%s\n' "$DIGEST_A" > "$f"
+    done
+    cat > root/compose.yaml <<EOF
+x-db-common: &db-common
+  BAL_CONFIG_DB: 1
+
+services:
+  amplify-api:
+    image: alpine:3.20@$DIGEST_A
+    ports:
+      - "127.0.0.1:9090:9090"
+    environment:
+      BAL_CONFIG_FOO: 1
+EOF
+  }
+
+  expect_ok() {  # label
+    local out; out=$(scan "$SELFTEST_TMP/root" 2>&1)
+    [[ $? -eq 0 ]] || { echo "self-test: $1 was rejected"; echo "$out"; exit 1; }
+  }
+  expect_drift() {  # label expected-substring
+    local out; out=$(scan "$SELFTEST_TMP/root" 2>&1) && { echo "self-test: $1 passed"; exit 1; }
+    grep -qF "$2" <<<"$out" || { echo "self-test: $1 failed for the wrong reason"; echo "$out"; exit 1; }
+  }
+
+  fixture; expect_ok "an in-sync tree"
+
+  fixture
+  python3 - "$SELFTEST_TMP/root/compose.yaml" <<'PYFIX'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+s = s.replace('''    ports:
+      - "127.0.0.1:9090:9090"''', '''    ports:
+      - target: 9090
+        published: 9090''')
+p.write_text(s)
+PYFIX
+  expect_drift "a long-form compose port with no host_ip" "port form this scan cannot verify"
+
+  fixture
+  printf 'FROM ubuntu:24.04\n' >> "$SELFTEST_TMP/root/amplify-api/Dockerfile"
+  expect_drift "an unpinned base image" "base image not pinned by digest"
+
+  fixture
+  sed -i.bak 's/^USER 10014$//' "$SELFTEST_TMP/root/amplify-api/Dockerfile"
+  expect_drift "USER 10014 only in the build stage" "the final stage must end as USER 10014"
+
+  fixture
+  sed -i.bak '/BAL_CONFIG_FOO/d' "$SELFTEST_TMP/root/amplify-api/workload.yaml"
+  expect_drift "an env name in one descriptor but not the other" "env names differ"
+
+  fixture
+  sed -i.bak 's/^EXPOSE 9090$/EXPOSE 9090 9091/' "$SELFTEST_TMP/root/amplify-api/Dockerfile"
+  expect_drift "an EXPOSE the descriptor does not list" "Dockerfile EXPOSE"
+
+  # A stage alias and `scratch` are not unpinned images.
+  fixture
+  cat > "$SELFTEST_TMP/root/amplify-api/Dockerfile" <<EOF
+FROM alpine:3.20@$DIGEST_A AS base
+FROM base
+USER 10014
+EXPOSE 9090
+EOF
+  expect_ok "a final stage built on a stage alias"
+
+  fixture
+  cat > "$SELFTEST_TMP/root/amplify-api/Dockerfile" <<EOF
+FROM alpine:3.20@$DIGEST_A AS build
+FROM scratch
+COPY --from=build /app /app
+USER 10014
+EXPOSE 9090
+EOF
+  expect_ok "a final stage from scratch"
+
+  echo "check-descriptors self-test passed."
+  exit 0
+fi
+
+root="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+scan "$root"
+exit $?
