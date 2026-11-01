@@ -192,9 +192,9 @@ Per environment (dev, prod), for each of the three components **[console]**:
 
 ## 13. People directory (team rosters)
 
-My Team and the Team page's team scope come from people-app's `GET /employees/basic-info` (ADR-019). Amplify Backend fetches the whole directory once, groups everyone by sub-team (team when there's none) and keeps that index in memory for 3 days (`ROSTERCACHESECONDS`, default 259200). Nothing is written to the database or the logs.
+My Team and the Team page's team scope come from people-app's `GET /employees/basic-info` (ADR-019). Amplify Backend fetches the whole directory once, groups everyone by sub-team (team when there's none) and keeps that index (teams, names and houses) in memory for 24 hours (`ROSTERCACHESECONDS`, default 86400). Nothing is written to the database or the logs.
 
-- **Someone moved team and still sees the old one.** Expected for up to 3 days. To pick it up now, restart Amplify Backend; the next leaderboard read fetches the directory again.
+- **Someone moved team and still sees the old one.** Expected for up to 24 hours. To pick it up now, restart Amplify Backend; the next leaderboard read fetches the directory again.
 - **`teamStatus: NO_TEAM` for one person.** They aren't in the directory (only Active and Marked leaver employees are), their people-app record has no team, or their Amplify email doesn't match their people-app `workEmail`. Compare the two emails first.
 - **`teamStatus: UNAVAILABLE` for everyone.** The directory has never loaded since the last start. Check, in order:
   1. The Backend log for `People directory not configured`: the `PEOPLEDIRECTORY*` settings are empty (choreo-deploy C5/C7).

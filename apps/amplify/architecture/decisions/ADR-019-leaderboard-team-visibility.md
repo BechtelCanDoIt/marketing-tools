@@ -15,7 +15,7 @@ The first version of this ADR assumed a One WSO2 roster endpoint (`?email=<viewe
 - Employees see the Team page for **their own team** only (read-only). `amplify_po` sees the whole company and keeps Adjust / Reverse (ADR-010).
 - `team.visibility` setting: `TEAM` (default) or `COMPANY`, so PO can widen it without a release.
 - **A team is the people-app sub-team**, or the team when a person has no sub-team. The key carries both, so two teams with a same-named sub-team stay apart.
-- `amplify-api` reads the whole directory server to server and builds the index in memory. It reuses the index for **3 days** (`rosterCacheSeconds`; teams change, but rarely), never writes it to the database or the logs, and keeps serving the last index when a refresh fails.
+- `amplify-api` reads the whole directory server to server and builds the index in memory. It reuses the index for **24 hours** (`rosterCacheSeconds`, amended 2026-11-01 from 3 days: the team list now shows the whole roster, names included, so joiners and movers should appear within a day), never writes it to the database or the logs, and keeps serving the last index when a refresh fails.
 - The call goes through the Choreo gateway with OAuth2 client credentials (`peopleDirectoryUrl`, `…TokenUrl`, `…ClientId`, `…ClientSecret`). people-app admits a listed client for `GET /employees/basic-info` only (service-client allow-list, people-ops-suite PR).
 
 ## Consequences
@@ -33,3 +33,7 @@ The first version of this ADR assumed a One WSO2 roster endpoint (`?email=<viewe
 - [ADR-009](ADR-009-people-data-from-one-wso2.md), [ADR-010](ADR-010-team-adjust-remove-po.md), [ADR-014](ADR-014-three-leaderboards-top-n.md)
 - Threat model (B-E3, AMP-R5, AMP-R9)
 - [Phase 1 plan](../../docs/requirements/phase1-planned-todos.md) (M0 D13, M0c B15/A10)
+
+## Amendment 2026-11-01: the Team page lists the whole roster
+
+The team list (My Team, the Team page, the company view) is the roster from the people directory joined to the standings, not the standings alone. A member nobody has recorded points for, whether or not they ever signed in to Amplify, is listed with 0 points, no `employeeId` and no company rank; every zero-point member shares the last team rank, and ties order by name then email. Names come from the directory (first and last name). The company-wide view lists everyone the directory lists; with the directory down and nothing cached it falls back to the people with points and answers `teamStatus: UNAVAILABLE`. The Leaderboards (`/leaderboard` top N, `/leaderboard/people`, `/leaderboard/groups`) stay standings-based: a leaderboard ranks people who scored. Directory results are cached for 24 hours (`rosterCacheSeconds`, `headcountCacheSeconds`); only a successful read is kept.

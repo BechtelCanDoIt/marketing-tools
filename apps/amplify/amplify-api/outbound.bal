@@ -23,6 +23,7 @@ import amplify_api.scheduler;
 import amplify_common.crypto;
 import amplify_common.linkedin;
 import amplify_common.resilience;
+import amplify_domain.recognition;
 
 import ballerina/http;
 import ballerina/log;
@@ -79,12 +80,14 @@ configurable string peopleDirectoryTokenUrl = "";
 configurable string peopleDirectoryClientId = "";
 # Directory client secret (Choreo secret).
 configurable string peopleDirectoryClientSecret = "";
-# How long the team index is reused, seconds (default 3 days: teams change, but rarely). Memory only,
-# never written to the database.
-configurable decimal rosterCacheSeconds = 259200;
-# How long the employee count is reused, seconds (default 7 days). Memory only, never written to the
-# database. When it runs out the directory is fetched again, whatever age the team index has.
-configurable decimal headcountCacheSeconds = 604800;
+# How long the directory results (teams, names, houses) are reused, seconds (default 24 hours). Memory
+# only, never written to the database. Only a successful read is kept: a failed refresh keeps serving the
+# previous result and asks the directory again on the next call, so an outage is never cached.
+configurable decimal rosterCacheSeconds = 86400;
+# How long the employee count is reused, seconds (default 24 hours, the same directory read). Memory only,
+# never written to the database. When it runs out the directory is fetched again, whatever age the team
+# index has.
+configurable decimal headcountCacheSeconds = 86400;
 
 final http:Client? peopleDirectoryClient = check newBreakerClient(peopleDirectoryUrl, peopleDirectoryTimeoutSeconds,
         peopleDirectoryAuth());
@@ -312,6 +315,8 @@ type Roster record {|
     string[] emails;
     # House of each member that has one, by lowercase email
     map<string> houses = {};
+    # Display name of each member that has one, by lowercase email (directory first and last name)
+    map<string> names = {};
 |};
 
 # The fields of a directory row Amplify reads. Open: the row carries more (names, photo, manager), which
@@ -320,6 +325,10 @@ type DirectoryRecord record {
     # Work email. Optional: one row without it (a contractor, a placeholder) is skipped, not a reason to
     # reject the whole directory.
     string? workEmail = ();
+    # First name
+    string? firstName = ();
+    # Last name
+    string? lastName = ();
     # Team
     string? team = ();
     # Sub-team
@@ -351,6 +360,10 @@ type DirectoryIndex record {|
     map<string> teamBu;
     # Everyone the directory returned with a work email, whether or not they have a team
     int total;
+    # Lowercase email to display name (first and last name; people without a name are left out)
+    map<string> nameOf;
+    # Everyone's lowercase email, in directory order (the company roster)
+    string[] everyone;
 |};
 
 # The cached index and when it was built (monotonic seconds).
@@ -372,6 +385,8 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
     map<string> houseOf = {};
     map<string[]> houseMembers = {};
     map<string> teamBu = {};
+    map<string> nameOf = {};
+    string[] everyone = [];
     map<boolean> seen = {};
     foreach DirectoryRecord r in records {
         string email = (r.workEmail ?: "").trim().toLowerAscii();
@@ -379,6 +394,11 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
             continue;
         }
         seen[email] = true;
+        everyone.push(email);
+        string fullName = string `${(r.firstName ?: "").trim()} ${(r.lastName ?: "").trim()}`.trim();
+        if fullName != "" {
+            nameOf[email] = fullName;
+        }
         string team = (r.team ?: "").trim();
         string subTeam = (r.subTeam ?: "").trim();
         string bu = (r.businessUnit ?: "").trim();
@@ -406,7 +426,7 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
         list.push(email);
         members[key] = list;
     }
-    return {teamOf, teamNames, members, buOf, buMembers, houseOf, houseMembers, teamBu, total: seen.length()}.cloneReadOnly();
+    return {teamOf, teamNames, members, buOf, buMembers, houseOf, houseMembers, teamBu, total: seen.length(), nameOf, everyone}.cloneReadOnly();
 }
 
 # The viewer's roster from the index.
@@ -421,14 +441,35 @@ isolated function rosterFrom(DirectoryIndex index, string email) returns Roster?
     }
     string[] emails = [...(index.members[key] ?: [])];
     map<string> houses = {};
+    map<string> names = {};
     foreach string member in emails {
         string? house = index.houseOf[member];
         if house is string {
             houses[member] = house;
         }
+        string? name = index.nameOf[member];
+        if name is string {
+            names[member] = name;
+        }
     }
-    return {teamName: index.teamNames[key] ?: key, emails, houses};
+    return {teamName: index.teamNames[key] ?: key, emails, houses, names};
 }
+
+# A roster as the members the database joins to the standings.
+#
+# + roster - Roster
+# + return - One member per email, with the directory's name when it has one
+isolated function membersOf(Roster roster) returns recognition:RosterMember[] =>
+    from string email in roster.emails
+    select {email, name: roster.names[email] ?: ""};
+
+# Everyone in the directory as roster members (the company-wide view).
+#
+# + index - Directory index
+# + return - One member per person with a work email
+isolated function everyoneIn(DirectoryIndex index) returns recognition:RosterMember[] =>
+    from string email in index.everyone
+    select {email, name: index.nameOf[email] ?: ""};
 
 # The viewer's team roster. The whole directory is fetched once and reused for `rosterCacheSeconds`.
 #

@@ -19,6 +19,7 @@
 // tiles 4 (totals), 5 (participation) and 6 (campaign numbers). Reads only the `recognition` schema.
 // The roster (team emails) always comes from the server side (leaderboards.md), never from the caller.
 
+import amplify_common.types;
 import amplify_domain.store;
 
 import ballerina/lang.regexp;
@@ -172,6 +173,160 @@ public isolated function teamPage(postgresql:Client db, string periodKey, string
         total = check db->queryRow(sql:queryConcat(`SELECT count(*)::int FROM recognition.standing s `, cond));
     }
     return {items, total};
+}
+
+# One person on a roster from the people directory.
+public type RosterMember record {|
+    # Work email, any case
+    string email;
+    # Display name from the directory; empty falls back to the standing's name, then the email
+    string name = "";
+|};
+
+# One row of the roster page: a directory person with or without a standing row.
+public type RosterEntry record {|
+    # Employee id, `()` when the person has no standing row (nobody has recorded points for them)
+    types:EmployeeId? employeeId;
+    # Display name: the directory's, else the standing's, else the email
+    string displayName;
+    # Email, lowercase
+    string email;
+    # Points in the period; 0 without a standing row
+    int totalPoints;
+    # Company rank, `()` without a standing row (a zero-point person has no company rank)
+    int? rank;
+    # Rank before the last re-rank
+    int? previousRank;
+    # Last ledger row time
+    time:Utc? lastActivityAt;
+    # Rank within the roster (dense); every zero-point person shares the last rank
+    int teamRank;
+|};
+
+# One page of the roster list.
+public type RosterPage record {|
+    # Rows
+    RosterEntry[] items;
+    # Roster people matching the search, across all pages
+    int total;
+    # Roster people with points in the period (before the search)
+    int activeCount;
+|};
+
+type RosterRow record {|
+    string? employee_id;
+    string display_name;
+    string email;
+    int total_points;
+    int? rank;
+    int? previous_rank;
+    time:Utc? last_activity_at;
+    int team_rank;
+    int total;
+    int active;
+|};
+
+# Splits a roster into two parallel columns for `unnest`: lowercase emails and trimmed names. Blank and
+# repeated emails are dropped (the first name wins).
+#
+# + members - Roster
+# + return - `[emails, names]`, same length and order
+isolated function rosterColumns(RosterMember[] members) returns [string[], string[]] {
+    map<boolean> seen = {};
+    string[] emails = [];
+    string[] names = [];
+    foreach RosterMember m in members {
+        string email = m.email.trim().toLowerAscii();
+        if email == "" || seen.hasKey(email) {
+            continue;
+        }
+        seen[email] = true;
+        emails.push(email);
+        names.push(m.name.trim());
+    }
+    return [emails, names];
+}
+
+# The full roster, from the people directory, joined to the standings: members nobody has recorded
+# points for appear with 0 points and no employee id, whether or not they ever signed in. Ties order by
+# name, then email, so the order is stable. A person has one standing row per period (the lateral picks the
+# best one if a legacy duplicate email ever exists, so the roster never lists anyone twice). Used for My Team, the Team page and the company view.
+#
+# + db - Client
+# + periodKey - Period
+# + members - Roster from the directory (server side, never from the caller); duplicate emails are dropped
+# + q - Name search (trigram or prefix), or `()`
+# + sort - Order
+# + page - Zero-based page
+# + size - Page size
+# + return - The page, or an error
+public isolated function rosterPage(postgresql:Client db, string periodKey, RosterMember[] members, string? q,
+        TeamSort sort, int page, int size) returns RosterPage|error {
+    [int, int] ['limit, offset] = store:pageWindow(page, size);
+    var [emails, names] = rosterColumns(members);
+    string emailArray = store:arrayLiteral(emails);
+    string nameArray = store:arrayLiteral(names);
+    sql:ParameterizedQuery search = ``;
+    if q is string {
+        string prefix = re `[%_\\]`.replaceAll(q, isolated function(regexp:Groups g) returns string => "\\" + g[0].substring()) + "%";
+        search = ` WHERE (display_name % ${q} OR display_name ILIKE ${prefix})`;
+    }
+    sql:ParameterizedQuery orderBy = sort == SORT_NAME ? ` ORDER BY display_name, email`
+        : sort == SORT_POINTS ? ` ORDER BY total_points DESC, display_name, email`
+            : ` ORDER BY team_rank, display_name, email`;
+    // Ranks and the active count run over the whole roster, before the search filters it.
+    stream<RosterRow, error?> rows = db->query(sql:queryConcat(`
+        WITH joined AS (
+            SELECT s.employee_id::text AS employee_id,
+                   COALESCE(NULLIF(m.name, ''), s.display_name, m.email::text) AS display_name,
+                   m.email::text AS email, COALESCE(s.total_points, 0) AS total_points, s.rank AS rank,
+                   s.previous_rank AS previous_rank, s.last_activity_at AS last_activity_at
+            FROM unnest(CAST(${emailArray} AS citext[]), CAST(${nameArray} AS text[])) AS m(email, name)
+            LEFT JOIN LATERAL (SELECT * FROM recognition.standing x WHERE x.email = m.email AND x.period_key = ${periodKey}
+                               ORDER BY x.total_points DESC, x.employee_id LIMIT 1) s ON true
+        ), ranked AS (
+            SELECT j.*, (dense_rank() OVER (ORDER BY j.total_points DESC))::int AS team_rank,
+                   (count(*) FILTER (WHERE j.total_points > 0) OVER ())::int AS active
+            FROM joined j
+        )
+        SELECT employee_id, display_name, email, total_points, rank, previous_rank, last_activity_at, team_rank, active,
+               (count(*) OVER ())::int AS total
+        FROM ranked`, search, orderBy, ` LIMIT ${'limit} OFFSET ${offset}`));
+    int total = 0;
+    int active = 0;
+    RosterEntry[] items = [];
+    check from RosterRow r in rows
+        do {
+            total = r.total;
+            active = r.active;
+            items.push({
+                employeeId: r.employee_id,
+                displayName: r.display_name,
+                email: r.email,
+                totalPoints: r.total_points,
+                rank: r.rank,
+                previousRank: r.previous_rank,
+                lastActivityAt: r.last_activity_at,
+                teamRank: r.team_rank
+            });
+        };
+    if items.length() == 0 {
+        // Past the last page, or nothing matched: the window counts are gone with the rows.
+        sql:ParameterizedQuery matching = search;
+        total = check db->queryRow(sql:queryConcat(`
+            WITH joined AS (
+                SELECT COALESCE(NULLIF(m.name, ''), s.display_name, m.email::text) AS display_name
+                FROM unnest(CAST(${emailArray} AS citext[]), CAST(${nameArray} AS text[])) AS m(email, name)
+                LEFT JOIN LATERAL (SELECT * FROM recognition.standing x WHERE x.email = m.email AND x.period_key = ${periodKey}
+                                   ORDER BY x.total_points DESC, x.employee_id LIMIT 1) s ON true
+            )
+            SELECT count(*)::int FROM joined`, matching));
+        active = check db->queryRow(`
+            SELECT count(*)::int
+            FROM unnest(CAST(${emailArray} AS citext[])) AS m(email)
+            JOIN recognition.standing s ON s.email = m.email AND s.period_key = ${periodKey} AND s.total_points > 0`);
+    }
+    return {items, total, activeCount: active};
 }
 
 # Whether an email belongs to the roster's standings (used for history visibility).
