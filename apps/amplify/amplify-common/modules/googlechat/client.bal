@@ -22,7 +22,7 @@ import ballerina/url;
 # Reply in the campaign's thread, or start one.
 const string REPLY_OPTION = "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD";
 
-# Incoming webhook settings. The URL carries the space key and token: treat it as a secret and never log it.
+# Incoming webhook settings. The URL carries the space key and token: treat it as a secret: never log it, never put it in an error, and keep it off trace spans (transport.bal).
 public type WebhookConfig record {|
     # Full webhook URL, `https://chat.googleapis.com/v1/spaces/{space}/messages?key=…&token=…`.
     # Plain `http` is accepted only for `localhost` / `127.0.0.1`, or any host when `allowInsecureHttp`.
@@ -31,7 +31,8 @@ public type WebhookConfig record {|
     boolean allowInsecureHttp = false;
     # Per-call timeout
     decimal timeoutSeconds = 10;
-    # Breaker and its own pool (M9). Retry stays 0: a repeated webhook call posts the card twice (ADR-025)
+    # Breaker (M9): window, volume, ratio, reset time and status codes apply; retry and pool size do not (the call
+    # goes through the JDK client, see transport.bal). Retry stays 0: a repeated webhook call posts the card twice (ADR-025)
     resilience:HttpResilience resilience = {};
 |};
 
@@ -61,7 +62,12 @@ public type ChatError distinct error<ChatErrorDetail>;
 
 # Sends messages to one Google Chat space through its incoming webhook.
 public isolated class WebhookClient {
-    private final http:Client httpClient;
+    private final handle jdkClient;
+    private final Breaker breakerImpl;
+    private final decimal timeoutSeconds;
+    // Scheme and host (no user info), and the path with the webhook's own `key` / `token` query. The URL is
+    // rebuilt only inside `post`, never logged, never put in an error or on a span (see transport.bal).
+    private final string origin;
     private final string path;
 
     # Creates the client.
@@ -82,8 +88,12 @@ public isolated class WebhookClient {
         string authority = webhookUrl.substring(schemeEnd + 3, pathStart);
         int at = authority.lastIndexOf("@") ?: -1;
         string host = at >= 0 ? authority.substring(at + 1) : authority;
-        self.httpClient = check new (webhookUrl.substring(0, schemeEnd + 3) + host,
-                resilience:clientConfig(config.resilience, config.timeoutSeconds));
+        self.origin = webhookUrl.substring(0, schemeEnd + 3) + host;
+        self.timeoutSeconds = config.timeoutSeconds;
+        self.jdkClient = newJdkClient(config.timeoutSeconds);
+        resilience:HttpResilience r = config.resilience;
+        self.breakerImpl = new (r.rollingWindowSeconds, r.requestVolumeThreshold, r.failureThreshold,
+                r.resetTimeSeconds, r.breakerStatusCodes);
         string path = webhookUrl.substring(pathStart);
         self.path = path.length() == 0 ? "/" : path;
     }
@@ -103,24 +113,23 @@ public isolated class WebhookClient {
         }
         string separator = self.path.includes("?") ? "&" : "?";
         string target = string `${self.path}${separator}threadKey=${encodedKey}&messageReplyOption=${REPLY_OPTION}`;
-        // Accepted risk (review of PR #232): `target` carries the webhook key and token, and with tracing on
-        // the HTTP client stamps it on the client span as `http.url`. Ballerina 2201.x has no per-client
-        // observability switch, and the client span is finished before this call returns
-        // (`ObserveUtils.stopObservation` closes it, then restores the parent context), so a
-        // `observe:addTagToSpan` here would tag the caller's span, not that one. Exposure is limited to
-        // whoever can read amplify-jobs traces; the token reaches one Chat space and can be rotated. The way
-        // out is the Chat API with a bearer credential (`spaces.messages.create`), which keeps the secret out
-        // of the URL.
-        http:Response|http:ClientError response = self.httpClient->post(target, message,
-                resilience:correlationHeaders(correlationId));
-        if response is http:IdleTimeoutError {
-            // Chat may already have created the message; a retry would post the card again (ADR-025)
-            return chatError("UNAVAILABLE", "Chat webhook call timed out; the card may have been posted", (), false);
+        // `target` carries the webhook key and token, so this call does not go through `ballerina/http`: its
+        // client spans would carry the URL as `http.url`. `jdkPost` is not instrumented (transport.bal).
+        if !self.breakerImpl.admit() {
+            return chatError("UNAVAILABLE", "Chat webhook breaker is open", (), true);
         }
-        if response is http:ClientError {
+        RawResponse|NoResponse response = jdkPost(self.jdkClient, self.origin + target, message.toJsonString(),
+                resilience:correlationHeaders(correlationId), self.timeoutSeconds);
+        if response is NoResponse {
+            self.breakerImpl.note(true);
+            if response == "TIMEOUT" {
+                // Chat may already have created the message; a retry would post the card again (ADR-025)
+                return chatError("UNAVAILABLE", "Chat webhook call timed out; the card may have been posted", (), false);
+            }
             return chatError("UNAVAILABLE", "Chat webhook call failed: no response", (), true);
         }
-        int status = response.statusCode;
+        int status = response.status;
+        self.breakerImpl.note(self.breakerImpl.failsBreaker(status));
         if status == http:STATUS_TOO_MANY_REQUESTS {
             return chatError("RATE_LIMITED", "Chat webhook rate limited", status, true);
         }
@@ -130,10 +139,10 @@ public isolated class WebhookClient {
         if status != http:STATUS_OK {
             return chatError("REJECTED", string `Chat webhook refused the message with HTTP ${status}`, status, false);
         }
-        json|http:ClientError body = response.getJsonPayload();
-        if body is json {
-            json|error name = body.name;
-            json|error thread = body.thread;
+        json body = parseJson(response.body);
+        if body is map<json> {
+            json name = body["name"];
+            json thread = body["thread"];
             string? threadName = ();
             if thread is map<json> && thread["name"] is string {
                 threadName = <string>thread["name"];
@@ -148,7 +157,7 @@ public isolated class WebhookClient {
     # Breaker state, for the run log.
     #
     # + return - `CLOSED`, `HALF_OPEN` or `OPEN`
-    public isolated function breaker() returns resilience:BreakerState => resilience:breakerState(self.httpClient);
+    public isolated function breaker() returns resilience:BreakerState => self.breakerImpl.state();
 }
 
 // Host of `host[:port][/path][?query]`, without user info. Exact match only: a prefix check would let
