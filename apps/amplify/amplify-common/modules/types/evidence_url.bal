@@ -32,7 +32,8 @@ final string[] & readonly TRACKING_PARAMS = ["fbclid", "gclid", "trk", "tracking
 # Evidence URL of an external share (S3), normalized for the one-claim-per-URL rule (C5, ADR-017).
 # Amplify never fetches it.
 public type EvidenceUrl record {|
-    # Normalized URL: the uniqueness key (`evidence_url`)
+    # Uniqueness key (`evidence_url`). For a LinkedIn URL that names a post URN it is the canonical
+    # feed URL of that URN, so both LinkedIn URL forms claim one post.
     string normalized;
     # URL as the employee typed it, trimmed (`evidence_url_submitted`)
     string submitted;
@@ -50,7 +51,8 @@ public type EvidenceUrl record {|
 # IP literal or a single label like `localhost`. Normalization lowercases scheme and host, drops the
 # default port, the fragment and trailing slashes, strips tracking parameters (`utm_*`, `fbclid`,
 # `gclid`, `trk`, `trackingId`, `mc_cid`, `mc_eid`) and sorts the remaining query parameters.
-# Path case is kept (paths are case sensitive). Percent-encoding is left as typed.
+# Path case is kept (paths are case sensitive). Percent-encoding is left as typed. A LinkedIn URL that
+# names a post URN normalizes to the canonical feed URL of that URN (see `EvidenceUrl.normalized`).
 #
 # + raw - URL as typed
 # + return - The normalized evidence URL, or a domain error
@@ -139,27 +141,36 @@ public isolated function parseEvidenceUrl(string raw) returns EvidenceUrl|Domain
         kept.push(param);
     }
     string sortedQuery = string:'join("&", ...kept.sort());
-    string normalized = string `https://${host}${port}${path}` + (sortedQuery.length() > 0 ? "?" + sortedQuery : "");
 
     string provider = detectProvider(host);
+    PostUrn? resourceUrn = provider == EVIDENCE_PROVIDER_LINKEDIN ? linkedInResourceUrn(path) : ();
+    // One claim per post (ADR-017): LinkedIn serves a post under both `/feed/update/urn:li:activity:N`
+    // and `/posts/<slug>-activity-N-xyz`, so a URL that names a post URN claims it through the one
+    // canonical feed URL of that URN. The URL as typed is kept in `submitted`.
+    string normalized = resourceUrn is PostUrn
+        ? canonicalPostUrl(resourceUrn)
+        : string `https://${host}${port}${path}` + (sortedQuery.length() > 0 ? "?" + sortedQuery : "");
     return {
         normalized,
         submitted,
         host,
         provider,
-        resourceUrn: provider == EVIDENCE_PROVIDER_LINKEDIN ? linkedInResourceUrn(path) : ()
+        resourceUrn
     };
 }
+
+// Canonical public URL of a LinkedIn post URN: the claim key for both LinkedIn URL forms.
+isolated function canonicalPostUrl(PostUrn urn) returns string =>
+    string `https://www.linkedin.com/feed/update/${urn}`;
 
 isolated function validateHost(string host) returns DomainError? {
     if host.length() == 0 || host.length() > 253 {
         return domainError(ERR_INVALID_EVIDENCE_URL, "Evidence URL has no valid host");
     }
-    string[] labels = re `\.`.split(host);
-    // Dotted, decimal (2130706433) and hex (0x7f000001) IPv4 forms all end in a numeric label.
-    if re `[0-9]+|0x[0-9a-f]+`.isFullMatch(labels[labels.length() - 1]) {
+    if isIpLiteralHost(host) {
         return domainError(ERR_EVIDENCE_URL_IP_HOST, "Evidence URL must use a host name, not an IP address");
     }
+    string[] labels = re `\.`.split(host);
     if labels.length() < 2 {
         return domainError(ERR_INVALID_EVIDENCE_URL, "Evidence URL host must be a public domain name");
     }

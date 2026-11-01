@@ -96,7 +96,8 @@ public isolated class DbBreaker {
         }
     }
 
-    # Records a failed call. Non-transient errors are ignored. A failed half-open trial is reported with
+    # Records a failed call. Only errors that say the database is unhealthy count; non-transient errors and lock
+    # contention (deadlock 40P01, serialization failure 40001) are ignored. A failed half-open trial is reported with
     # `onTrialFailure`, not here: a failure arriving while half-open comes from a call admitted before the
     # breaker opened, says nothing about the trial, and must not re-open the breaker or discard a trial that
     # then succeeds.
@@ -104,7 +105,7 @@ public isolated class DbBreaker {
     # + err - The error
     # + return - True when the failure was counted
     public isolated function onFailure(error err) returns boolean {
-        if !isTransientDbError(err) {
+        if !isBreakerFailure(err) {
             return false;
         }
         decimal now = self.clock();
@@ -176,14 +177,16 @@ public isolated class DbBreaker {
 
 // SQLSTATE classes that mean "the database or the connection is in trouble", not "your data is wrong":
 // 08 connection exception, 53 insufficient resources, 57 operator intervention (shutdown, cancel),
-// 58 system error, 40001 serialization failure, 40P01 deadlock.
+// 58 system error, 40001 serialization failure, 40P01 deadlock. All of these are worth a retry
+// (`isTransientDbError`); the breaker skips the last two (`isBreakerFailure`), which are contention.
 final readonly & string[] TRANSIENT_SQLSTATE_PREFIXES = ["08", "53", "57", "58", "40001", "40P01"];
 
-# Whether an error is a transient database problem (connection, pool, shutdown, serialization).
-# Errors that wrap another error are judged by their cause.
+# Whether an error is a transient database problem (connection, pool, shutdown, serialization failure,
+# deadlock). Errors that wrap another error are judged by their cause. This is the retry predicate
+# (`TransientDbRetry`); the breaker uses the narrower `isBreakerFailure`.
 #
 # + err - The error
-# + return - True when worth counting (breaker) or retrying
+# + return - True when worth retrying
 public isolated function isTransientDbError(error err) returns boolean {
     if err is sql:NoRowsError || err is sql:DataError || err is sql:TypeMismatchError
             || err is sql:FieldMismatchError || err is sql:ConversionError {
@@ -206,6 +209,26 @@ public isolated function isTransientDbError(error err) returns boolean {
     }
     error? cause = err.cause();
     return cause is error && isTransientDbError(cause);
+}
+
+// Contention SQLSTATEs: transient, so worth retrying, but a busy table says nothing about database health.
+final readonly & string[] CONTENTION_SQLSTATES = ["40001", "40P01"];
+
+# Whether an error counts against the breaker: a transient database error that is not lock contention
+# (a deadlock or serialization failure means the database is working and busy, not unhealthy).
+#
+# + err - The error
+# + return - True when the failure should count toward opening the breaker
+isolated function isBreakerFailure(error err) returns boolean {
+    if !isTransientDbError(err) {
+        return false;
+    }
+    if err is sql:DatabaseError {
+        string? state = err.detail().sqlState;
+        return state is () || CONTENTION_SQLSTATES.indexOf(state) is ();
+    }
+    error? cause = err.cause();
+    return !(cause is error) || isBreakerFailure(cause);
 }
 
 isolated function mentionsConnection(string message) returns boolean {
