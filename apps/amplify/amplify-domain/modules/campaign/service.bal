@@ -94,17 +94,30 @@ public isolated function newCampaign(CampaignDraft draft, CampaignPolicy policy,
     };
 }
 
-# Applies an edit. Archived campaigns can't change; the window rule is re-checked.
+# Applies an edit. Archived campaigns can't change; the window rule is re-checked. Once a campaign has opened its
+# start is frozen (only `closesAt` can move); resending the stored `opensAt` is fine. A new post id and link get
+# the registration checks; whether the id may change (no recorded activity) is `ensurePostChangeAllowed`.
 #
 # + campaign - Current campaign
 # + patch - Changes
 # + now - Current time
+# + postLinkOrigins - Origins a post link may use
 # + return - The changed campaign (version bumped), or a domain error
-public isolated function applyPatch(Campaign campaign, CampaignPatch patch, time:Utc now) returns Campaign|types:DomainError {
+public isolated function applyPatch(Campaign campaign, CampaignPatch patch, time:Utc now,
+        string[] postLinkOrigins = DEFAULT_POST_LINK_ORIGINS) returns Campaign|types:DomainError {
     if campaign.archivedAt !is () {
         return types:domainError(types:ERR_CAMPAIGN_ARCHIVED, "An archived campaign can't be changed");
     }
     Campaign changed = campaign.clone();
+    string? resourceUrn = patch.resourceUrn;
+    if resourceUrn is string {
+        types:PostUrn urn = check types:parsePostUrn(resourceUrn);
+        changed.resourceUrn = urn;
+        changed.resourceType = types:resourceTypeOf(urn);
+    }
+    if patch.resourceUrl !is () {
+        changed.resourceUrl = check postLink(patch.resourceUrl, postLinkOrigins);
+    }
     string? title = patch.title;
     if title is string {
         changed.title = check validTitle(title);
@@ -127,12 +140,37 @@ public isolated function applyPatch(Campaign campaign, CampaignPatch patch, time
     if tags is string[] {
         changed.tags = check normalizeTags(tags);
     }
-    changed.opensAt = patch.opensAt ?: campaign.opensAt;
+    time:Utc? newOpensAt = patch.opensAt;
+    if newOpensAt is time:Utc && newOpensAt != campaign.opensAt && !types:isBefore(now, campaign.opensAt) {
+        return types:domainError(types:ERR_INVALID_WINDOW, "A campaign that has opened can't change its start");
+    }
+    changed.opensAt = newOpensAt ?: campaign.opensAt;
     changed.closesAt = patch.closesAt ?: campaign.closesAt;
     check validWindow(changed.opensAt, changed.closesAt);
     changed.updatedAt = now;
     changed.version = campaign.version + 1;
     return changed;
+}
+
+# Guards a change of the post id: the id is what shares, reposts and claims are matched on, so it may change only
+# while none exist. Also answers the registration conflict when another campaign already has the new id.
+#
+# + repo - Campaign repository
+# + current - Campaign as stored
+# + changed - Campaign after `applyPatch`
+# + return - `POST_HAS_ACTIVITY`, `CAMPAIGN_ALREADY_REGISTERED`, a repository error, or `()` when allowed
+public isolated function ensurePostChangeAllowed(CampaignRepository repo, Campaign current, Campaign changed)
+        returns error? {
+    if changed.resourceUrn == current.resourceUrn {
+        return;
+    }
+    Campaign? other = check repo.findByResource(changed.provider, changed.resourceUrn);
+    if other is Campaign && other.id != current.id {
+        return types:domainError(types:ERR_CAMPAIGN_ALREADY_REGISTERED, "This post is already a campaign");
+    }
+    if check repo.hasActivity(current.id, current.resourceUrn) {
+        return types:domainError(types:ERR_POST_HAS_ACTIVITY, "The post can't change once it has activity");
+    }
 }
 
 # Archives a campaign (the "Delete" action). Points and ledger references already earned stay.
@@ -173,18 +211,24 @@ public isolated function registerCampaign(CampaignRepository repo, CampaignDraft
     return campaign;
 }
 
-# Edits a campaign.
+# Edits a campaign. The edit applies only if the campaign is still at the version the editor saw.
 #
 # + repo - Campaign repository
 # + id - Campaign id
+# + expectedVersion - Version the caller loaded; a different stored version is a lost-update `VERSION_CONFLICT`
 # + patch - Changes
 # + now - Current time
-# + return - The changed campaign, `NOT_FOUND`, a domain error, or a repository error
-public isolated function updateCampaign(CampaignRepository repo, string id, CampaignPatch patch, time:Utc now)
-        returns Campaign|error {
+# + postLinkOrigins - Origins a post link may use
+# + return - The changed campaign, `NOT_FOUND`, `VERSION_CONFLICT`, `POST_HAS_ACTIVITY`, a domain error, or a repository error
+public isolated function updateCampaign(CampaignRepository repo, string id, int expectedVersion, CampaignPatch patch,
+        time:Utc now, string[] postLinkOrigins = DEFAULT_POST_LINK_ORIGINS) returns Campaign|error {
     Campaign current = check findOrFail(repo, id);
-    Campaign changed = check applyPatch(current, patch, now);
-    check repo.update(changed, current.version);
+    if current.version != expectedVersion {
+        return types:domainError(types:ERR_VERSION_CONFLICT, "The campaign was changed by someone else");
+    }
+    Campaign changed = check applyPatch(current, patch, now, postLinkOrigins);
+    check ensurePostChangeAllowed(repo, current, changed);
+    check repo.update(changed, expectedVersion);
     return changed;
 }
 
