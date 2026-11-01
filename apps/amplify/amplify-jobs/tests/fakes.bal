@@ -597,6 +597,10 @@ isolated class FakeLinkedIn {
                 "503" => {
                     return providerError(linkedin:UNAVAILABLE, 503, true);
                 }
+                "timeout" => {
+                    // The call timed out before LinkedIn took anything (adapter: OUTCOME_UNKNOWN).
+                    return providerError(linkedin:OUTCOME_UNKNOWN, 0, false);
+                }
                 "timeout-after-post" => {
                     // LinkedIn took the post but the answer never came back (the adapter's OUTCOME_UNKNOWN).
                     self.posts += 1;
