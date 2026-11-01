@@ -274,6 +274,12 @@ configurations:
           displayName: Validate the LinkedIn ID token on connect (true/false)
           type: boolean
           required: false
+    - name: BAL_CONFIG_VAR_LINKEDINNONCEMODE
+      valueFrom:
+        configForm:
+          displayName: OIDC nonce on connect, only with ID-token validation on - OFF, SEND (checked when LinkedIn echoes it) or REQUIRE (default OFF; leave empty for the default)
+          type: string
+          required: false
     - name: BAL_CONFIG_VAR_TOKENKEYS
       valueFrom:
         configForm:

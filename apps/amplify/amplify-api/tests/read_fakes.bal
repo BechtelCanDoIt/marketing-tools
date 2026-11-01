@@ -325,6 +325,10 @@ isolated class FakeLinkedIn {
     public isolated function authorizationUrl(string state) returns string|linkedin:ProviderError =>
         "https://www.linkedin.com/oauth/v2/authorization?response_type=code&state=" + state;
 
+    public isolated function authorizationUrlWithNonce(string state, string? nonce) returns string|linkedin:ProviderError =>
+        "https://www.linkedin.com/oauth/v2/authorization?response_type=code&state=" + state
+            + (nonce is string ? "&nonce=" + nonce : "");
+
     public isolated function exchangeCode(string code) returns linkedin:TokenGrant|linkedin:ProviderError {
         LinkedInMode mode = currentLinkedInMode();
         if mode == "REJECTED" {
