@@ -21,6 +21,8 @@
 import amplify_common.types;
 
 import ballerina/http;
+import ballerina/http.httpscerr;
+import ballerina/sql;
 import ballerina/test;
 import ballerina/time;
 
@@ -225,7 +227,47 @@ function testOversizedBodyIsProblemDetailsBeforeBinding() returns error? {
     test:assertEquals(res.getContentType(), "application/problem+json");
     json body = check res.getJsonPayload();
     test:assertEquals(check body.status, 413);
-    test:assertEquals(check body.code, "VALIDATION_FAILED");
+    test:assertEquals(check body.code, "PAYLOAD_TOO_LARGE");
     test:assertTrue((check body.detail).toString().includes("65536"), "the detail names the limit");
     test:assertTrue(res.getHeader("X-Correlation-ID") is string, "the security interceptor still runs");
+}
+
+// A chunked body has no Content-Length, so BodyLimitInterceptor cannot see it; the listener's own limit
+// (`MAX_ENTITY_BODY_BYTES`) refuses it. The listener answers that 413 itself, before any interceptor runs, so it
+// carries no problem+json body: the status is what is pinned here (it must never be a 500).
+@test:Config
+function testChunkedOverLimitBodyIsRefusedWith413() returns error? {
+    http:Client h1 = check new (string `http://localhost:${port}`,
+            {httpVersion: http:HTTP_1_1, http1Settings: {chunking: http:CHUNKING_ALWAYS}, cache: {enabled: false}});
+    byte[] chunk = "a".padEnd(1024, "a").toBytes();
+    byte[][] chunks = [];
+    foreach int i in 0 ..< 300 {
+        chunks.push(chunk);
+    }
+    http:Request req = new;
+    req.setByteStream(chunks.toStream(), "application/json");
+    req.setHeader("x-jwt-assertion", check po());
+    http:Response res = check h1->post("/campaigns", req);
+    test:assertEquals(res.statusCode, 413, "an over-limit chunked body is 413, never 500");
+}
+
+@test:Config
+function testPayloadTooLargeErrorMapsToProblemDetails() returns error? {
+    httpscerr:PayloadTooLargeError err = error httpscerr:PayloadTooLargeError("Entity too large");
+    http:RequestContext ctx = new;
+    http:Response res = errorResponse(ctx, err);
+    test:assertEquals(res.statusCode, 413);
+    test:assertEquals(res.getContentType(), "application/problem+json");
+    json body = check res.getJsonPayload();
+    test:assertEquals(check body.code, "PAYLOAD_TOO_LARGE");
+}
+
+@test:Config
+function testLoggedDatabaseErrorsCarryKindAndSqlStateOnly() {
+    sql:DatabaseError dbErr = error sql:DatabaseError("ERROR: duplicate key\nDetail: Key (email)=(ada@wso2.com) exists",
+            sqlState = "23505", errorCode = 0);
+    test:assertEquals(errorKind(dbErr), "sql:DatabaseError");
+    test:assertEquals(sqlStateOf(dbErr), "23505");
+    test:assertEquals(errorKind(error("boom")), "error");
+    test:assertEquals(sqlStateOf(error("boom")), ());
 }

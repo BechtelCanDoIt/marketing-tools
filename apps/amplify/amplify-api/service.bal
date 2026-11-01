@@ -38,7 +38,8 @@ const int MAX_REQUEST_BODY_BYTES = 65536;
 
 # What the transport accepts before it refuses a request unread, bytes: twice the API limit, so a request that
 # declares its length reaches `BodyLimitInterceptor` and gets problem details, and an absurd one never gets read.
-# A chunked body carries no length to check, so this bound is the one that stops it.
+# A chunked body carries no length to check, so this bound is the one that stops it: the listener answers 413 itself,
+# before any interceptor runs, so that answer has no problem details body.
 const int MAX_ENTITY_BODY_BYTES = MAX_REQUEST_BODY_BYTES * 2;
 
 // Request bodies here are small JSON documents; without a limit the listener buffers whatever it is sent, and the
@@ -119,7 +120,7 @@ isolated service class BodyLimitInterceptor {
 isolated function payloadTooLarge(string? correlationId) returns http:Response {
     http:Response res = new;
     res.statusCode = 413;
-    res.setJsonPayload(problem(413, "Payload Too Large", VALIDATION_FAILED,
+    res.setJsonPayload(problem(413, "Payload Too Large", PAYLOAD_TOO_LARGE,
             string `The request body is larger than ${MAX_REQUEST_BODY_BYTES} bytes`, correlationId).toJson(),
             PROBLEM_JSON);
     return res;
@@ -181,14 +182,16 @@ service http:InterceptableService / on apiListener {
                 return conflicted(EMAIL_CONFLICT, "This email belongs to another Amplify account, contact the Amplify admins",
                         correlationId);
             }
-            log:printError("Could not record the employee", employee, correlationId = correlationId);
+            log:printError("Could not record the employee", errorKind = errorKind(employee), sqlState = sqlStateOf(employee),
+                    correlationId = correlationId);
             return unavailable(DEPENDENCY_UNAVAILABLE, correlationId);
         }
 
         store:Actor actor = {actorId: principal.employeeId, roles: principal.roles, correlationId};
         connection:LinkedInConnection|error? linked = findConnection(actor, principal.employeeId);
         if linked is error {
-            log:printError("Could not read the LinkedIn connection", linked, correlationId = correlationId);
+            log:printError("Could not read the LinkedIn connection", errorKind = errorKind(linked),
+                    sqlState = sqlStateOf(linked), correlationId = correlationId);
             return unavailable(DEPENDENCY_UNAVAILABLE, correlationId);
         }
         MeResponse me = {
