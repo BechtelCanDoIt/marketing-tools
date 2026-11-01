@@ -1,14 +1,14 @@
 # amplify-database
 
-Amplify DB Migrate: the Choreo Manual Task (and Compose one-shot) that builds the Amplify PostgreSQL 18 database. It applies `migrations/` (`V###__name.sql`), then `seed/` (`S###__name.sql`), in order, one transaction per script, and records each in `public.schema_version` with a checksum. It also sets the app role passwords from secrets, then exits. A rerun is a no-op, a changed applied script stops the run (forward-only), and `dryRun = true` only lists the scripts shipped in the image (it never connects, so it can't say which are pending).
+Amplify DB Migrate: the Choreo Manual Task (and Compose one-shot) that builds the Amplify PostgreSQL 18 database. It applies `migrations/` (`V###__name.sql`), then `seed/` (`S###__name.sql`), in order, one transaction per script, and records each in `public.schema_version` with a checksum. It also sets the app role passwords from secrets, then exits. A rerun is a no-op, a changed applied script stops the run (forward-only), a pending script that sorts below an already-applied version stops it too (no out-of-order), and `dryRun = true` connects but creates nothing (not even `public.schema_version`) and runs no script: it logs each script as pending, applied or changed, and fails on a changed one.
 
 | Folder | What |
 | --- | --- |
 | `main.bal` | The runner |
-| `migrations/` | Forward-only schema scripts, `V001` to `V016` so far |
-| `seed/` | Idempotent seed data (`ON CONFLICT DO NOTHING`): point rules, categories, app settings, scheduler settings (see `seed/README.md`) |
+| `migrations/` | Forward-only schema scripts, `V001` to `V014` so far |
+| `seed/` | Idempotent seed data (`ON CONFLICT DO NOTHING`): point rules (S001, S005 pilot values, S006 all values), categories, app settings, scheduler settings, leaderboard top scope (see `seed/README.md`) |
 | `checks/` | One-off checks such as `d2_extensions.sql` (run on each new server, plan D2) |
-| `tests/` | Unit tests plus the `integration` group (needs a migrated PostgreSQL 18, see `docs/migrations/README.md`) |
+| `tests/` | Unit tests plus the `integration` group: off unless `itEnabled = true`. It drops and recreates `itDbName` (default `amplify_it`) on a PostgreSQL 18 server, so never point it at a database you need (see `docs/migrations/README.md`) |
 
 Run from this folder: `bal build`, `bal test`, `bal run`. Rules for writing scripts: never edit an applied migration, no `?` in scripts (the JDBC driver reads it as a bind marker), enums are `text` plus `CHECK`, views are `security_invoker`, and maintenance functions are `SECURITY DEFINER` with a pinned `search_path`. Details: `CLAUDE.md` in this folder.
 
@@ -509,7 +509,7 @@ Index: `(created_at) WHERE decision IS NULL` for the PO queue.
 erDiagram
     POINT_RULE["scoring.point_rule (AR)"] {
         uuid id PK "uuidv7()"
-        enum action UK "REPOST REPOST_COMMENTARY SHARE SHARE_COMMENTARY OWN_POST OWN_POST_AMPLIFIED (future: COMMENT REACTION)"
+        enum action UK "REPOST REPOST_COMMENTARY SHARE SHARE_COMMENTARY OWN_POST OWN_POST_AMPLIFIED REACTION COMMENT CHALLENGE_ENTRY CHALLENGE_WINNER"
         int points
         timestamptz effective_from UK
         text created_by
@@ -773,15 +773,14 @@ The migration user owns every object; app users never own tables, so they can't 
 
 **As built (M3, V001–V010; later scripts below):** roles are created `NOLOGIN` with no password; the migrate runner (connected as the bootstrap admin) runs every script after V001 as `SET LOCAL ROLE amplify_migrate` and then sets the app role passwords from secrets. Enums are `text` + `CHECK`. `*_v` views are `security_invoker`, so the grants above apply through them; `sharing.share_request_v` leaves out `commentary`, and `amplify_readonly` gets a column grant on `share_request` without it. `amplify_api` and `amplify_jobs` get `INSERT/SELECT` plus `UPDATE (status, status_changed_at, paid_at, coin_reference)` on the ledger, and only `amplify_jobs` can run the partition functions and `recognition.rebuild`.
 
-**Bootstrap login.** V001 grants `amplify_migrate` to the login that first ran it (`WITH SET TRUE`, PostgreSQL 16+), and every later script switches to that role. Rotating `dbUser` afterwards leaves the new login unable to `SET ROLE amplify_migrate`, and V001 is already recorded so it never grants again. The runner checks for this before any script (and that the server is PostgreSQL 18 or later) and stops with the reason; fix it with `GRANT amplify_migrate TO <new login> WITH SET TRUE` or run as the original login.
-
-**As built after M3 (V011–V013):**
+**As built after M3 (V011–V014):**
 
 | Script | What it changes |
 | --- | --- |
 | `V011__announcement_thread_name.sql` | `announcement.chat_thread_name` (the thread Chat returns with each Club card, M6a). Recreates `announcement_v` to pick up the column and re-grants `SELECT` to the same roles as V008 |
 | `V012__recognition_lock_maintenance_timeout.sql` | `pg_advisory_xact_lock(1634561133)` first in `apply_ledger_entry`, `rerank`, `rebuild` (lock order above). `lock_timeout = 5s` on the six upkeep functions, so daily upkeep gives up instead of queueing every token and audit write behind an `ACCESS EXCLUSIVE` request; `run_partition_maintenance` takes advisory lock 1634561134 so two upkeep calls don't race. Owners and grants unchanged |
 | `V013__idle_timeout_dashboard_indexes.sql` | `ALTER ROLE amplify_api / amplify_jobs SET idle_in_transaction_session_timeout = '30s'` (runs as the bootstrap admin, before `SET LOCAL ROLE`), so a session the runtime leaves idle in a transaction releases its locks (R-13). Indexes `points_ledger (created_at)` and partial `share_request (failed_at) WHERE failed_at IS NOT NULL`, the two the planner used for the PO dashboard tiles (EXPLAIN in `docs/migrations/2026-10-17-v013-idle-timeout-dashboard-indexes.md`). `COMMENT ON FUNCTION` for the lock order |
+| `V014__point_actions_all_phases.sql` | `point_rule_action_check` and `points_ledger_action_check` also accept `REACTION`, `COMMENT`, `CHALLENGE_ENTRY` and `CHALLENGE_WINNER`, so the whole points table fits without a later schema change. Nothing awards them yet (likes and comments need Community Management; Challenge entry and winner are PO adjustments for now). `sharing.engagement.action` is unchanged. Seeds S005 to S007 price them (REACTION 1, COMMENT 1, CHALLENGE_ENTRY 10, CHALLENGE_WINNER 25 from 2026-10-19) and add `leaderboard.top_scope` |
 
 No script after V010 changes a grant (V011 only re-grants the recreated view). **Proposed, not applied** (jobs-db review D4/D5, H3; waiting on a decision): `REVOKE DELETE ON messaging.outbox, sharing.share_request, sharing.engagement, sharing.engagement_verification, connection.member_connection FROM amplify_api, amplify_jobs`; `REVOKE INSERT, UPDATE ON messaging.idempotency_key FROM amplify_jobs`; `REVOKE DELETE ON connection.oauth_state FROM amplify_jobs`; `REVOKE TEMPORARY ON DATABASE <db> FROM PUBLIC`. The grants table above is still what's in the database.
 
