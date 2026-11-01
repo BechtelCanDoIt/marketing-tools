@@ -341,6 +341,62 @@ function aFailedRecordWriteAfterThePostLeavesTheMarkerAndNeverPostsTwice() retur
     test:assertEquals(w.linkedIn.postCount(), 1, "no second post");
 }
 
+// Scott 2026-11-01: the post is accepted, then the record ("mark sent") write fails. However many times the
+// outbox row comes back, LinkedIn has exactly one post.
+@test:Config
+function aFailedMarkSentWriteAfterAnAcceptedPostGivesExactlyOnePostAcrossAllRetries() returns error? {
+    [World, string, int] [w, cid, id] = check shareWorld("emp-lost-write-retries");
+    w.mem.failNextPublishWrite();
+    foreach int i in 0 ... TEST_CONFIG.maxAttempts + 1 {
+        _ = check run(w);
+        w.queue.makeAllDue();
+        if i == 1 {
+            w.queue.redeliver(id);
+        }
+    }
+    test:assertEquals(w.linkedIn.postCount(), 1, "exactly one post across every retry and redelivery");
+    test:assertEquals(w.queue.statusOf(id)[0], "FAILED", "settled for manual review, never PENDING again");
+    sharing:ShareRequest? stuck = check w.mem.share(cid, "emp-lost-write-retries");
+    test:assertTrue(stuck is sharing:ShareRequest && stuck.lastErrorCode == PUBLISH_IN_FLIGHT
+            && sharing:shareStatus(stuck) == sharing:QUEUED, "the marker stays and the share is not marked published");
+    test:assertEquals(w.mem.engagementCount(), 0);
+}
+
+// A 5xx (LinkedIn did not take the post) leaves the share QUEUED and the outbox row PENDING with the marker
+// cleared; the retry posts once.
+@test:Config
+function aProviderServerErrorLeavesTheRowPendingAndTheRetryPostsOnce() returns error? {
+    [World, string, int] [w, cid, id] = check shareWorld("emp-503", "503");
+    _ = check run(w);
+    test:assertEquals(w.queue.statusOf(id)[0], "PENDING");
+    sharing:ShareRequest? queued = check w.mem.share(cid, "emp-503");
+    test:assertTrue(queued is sharing:ShareRequest && queued.lastErrorCode == () && sharing:shareStatus(queued) == sharing:QUEUED);
+    test:assertEquals(w.linkedIn.postCount(), 0);
+    w.linkedIn.setMode("ok");
+    w.queue.makeAllDue();
+    _ = check run(w);
+    _ = check run(w);
+    test:assertEquals(w.linkedIn.postCount(), 1);
+    test:assertEquals(w.queue.statusOf(id)[0], "DONE");
+}
+
+// Current behaviour for an unknown outcome (timeout or dropped connection after the post was sent): the adapter
+// says `OUTCOME_UNKNOWN`, never retryable, so the share fails for the employee to re-request; the outbox does not
+// post it again. This is the safe side of the choice: a retry here could duplicate a live post.
+@test:Config
+function anUnknownOutcomeIsNotRetriedSoAnAcceptedPostIsNeverDuplicated() returns error? {
+    [World, string, int] [w, cid, id] = check shareWorld("emp-timeout", "timeout-after-post");
+    foreach int i in 0 ... TEST_CONFIG.maxAttempts {
+        _ = check run(w);
+        w.queue.makeAllDue();
+    }
+    test:assertEquals(w.linkedIn.postCount(), 1, "no second post after a lost answer");
+    test:assertEquals(w.queue.statusOf(id)[0], "DONE");
+    sharing:ShareRequest? failedShare = check w.mem.share(cid, "emp-timeout");
+    test:assertTrue(failedShare is sharing:ShareRequest && sharing:shareStatus(failedShare) == sharing:FAILED
+            && failedShare.failureReason == types:PROVIDER_REJECTED, "the share failed with the provider reason");
+}
+
 // LinkedIn answered with an error, so it did not post: the marker is cleared and the retry posts.
 @test:Config
 function aLinkedInErrorClearsTheInFlightMarkerSoTheRetryCanPost() returns error? {
