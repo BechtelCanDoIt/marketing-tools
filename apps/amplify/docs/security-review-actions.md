@@ -18,7 +18,6 @@ who to ask. Findings that are infrastructure or process cannot be closed from th
 
 | Finding | Severity | What to do | Who |
 | --- | --- | --- | --- |
-| Scheduler API unauthenticated (pinned image); now also holds the internal key | High | Network policy: only amplify-api reaches the scheduler; Project visibility is not enough | Platform / Choreo ops |
 | Aiven PostgreSQL may be publicly reachable | High | Check the service's allowed IP ranges and public access; restrict to the Choreo egress addresses or a private link; keep `VERIFY_FULL` with the CA file (identity-setup section 12) | Platform + Aiven admin |
 | Access tokens survive logout | Medium | In the Asgardeo org: check whether logout revokes tokens and set the access-token lifetime short (15 to 60 minutes); Amplify has no denylist | IAM admins |
 | Non-prod runs on local ThunderID | Medium | Create the staging Asgardeo org and Choreo project; point `GATEWAYJWKSURL`, `GATEWAYISSUER`, `GATEWAYAUDIENCES` and the One WSO2 config at it (identity-setup A and C) | IAM + Amplify tech owner |

@@ -22,8 +22,9 @@ denialAuditWindowSeconds = 0.0
 peopleDirectoryUrl = "http://localhost:9591/people/employees/basic-info"
 # Off 9090, so `bal test` never talks to a local Compose amplify-api that already holds it.
 port = 19590
-# Shared secret for amplify-jobs (the fake scheduler and jobs in tests never check it).
+# Secrets for amplify-jobs: full access, and the scheduler-only key (the fake scheduler and jobs in tests never check it).
 internalApiKey = "test-internal-key-0123456789abcdef0123456789"
+schedulerApiKey = "test-scheduler-key-0123456789abcdef012345"
 # Access (modules/auth/access.bal): the defaults, plus a second campaign group so a test can prove
 # a capability is shared by configuration alone.
 canCampaignGroups = "amplify_po, amplify_marketing, amplify_campaign_extra"
