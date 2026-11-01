@@ -20,16 +20,23 @@ import amplify_common.events;
 
 import ballerina/time;
 
-# `CampaignAnnounced` once the card is sent (key `outbox.id`).
+# `CampaignAnnounced` once the card is sent (key `outbox.id`). A row read back without its outbox id is
+# keyed by `campaign.id` instead: the column is nullable, and defaulting to `0` would give every such
+# announcement the same key `CampaignAnnounced:0` and drop all but the first.
 #
 # + announcement - Sent announcement
 # + return - Outbox row
 public isolated function campaignAnnouncedEvent(Announcement announcement) returns events:OutboxEvent {
     time:Utc? sentAt = announcement.sentAt;
-    return events:newCampaignAnnounced({
+    int? outboxId = announcement.outboxId;
+    events:OutboxEvent event = events:newCampaignAnnounced({
         campaignId: announcement.campaignId,
-        outboxId: announcement.outboxId ?: 0,
+        outboxId: outboxId ?: 0,
         chatMessageName: announcement.chatMessageName ?: "",
         sentAt: sentAt is () ? "" : time:utcToString(sentAt)
     });
+    if outboxId is () {
+        event.idempotencyKey = events:idempotencyKey(events:CAMPAIGN_ANNOUNCED, announcement.campaignId);
+    }
+    return event;
 }
