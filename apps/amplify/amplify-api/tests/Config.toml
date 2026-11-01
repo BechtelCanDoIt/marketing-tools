@@ -16,6 +16,8 @@ dbBreakerResetSeconds = 1.0
 dbReadRetries = 0
 # Settings cache off: tests change settings through fakes and expect the next call to see them.
 settingsCacheSeconds = 0.0
+# Denial audit throttle off: the existing tests assert one row per denial; the throttle is exercised directly.
+denialAuditWindowSeconds = 0.0
 # People directory (D13): the fake directory in tests/read_fakes.bal, on the test JWKS listener.
 peopleDirectoryUrl = "http://localhost:9591/people/employees/basic-info"
 # Off 9090, so `bal test` never talks to a local Compose amplify-api that already holds it.

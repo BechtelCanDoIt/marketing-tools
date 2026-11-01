@@ -60,12 +60,22 @@ isolated function newSchedulerClient() returns scheduler:Api?|error {
     if runDeadlineSeconds < 1 || maintenanceDeadlineSeconds < 1 {
         return error("runDeadlineSeconds and maintenanceDeadlineSeconds must be positive");
     }
-    if schedulerJobsUrl.trim() == "" && jobsUrl.trim() == "" {
-        // Every job's target would be just "/runs": refuse to start rather than log an error per job on every
-        // reconcile and answer 503 on /admin/scheduler/sync for what is a configuration mistake.
-        return error("schedulerUrl is set but neither schedulerJobsUrl nor jobsUrl is: the scheduler has nowhere to call");
-    }
+    check schedulerTargetError(schedulerJobsUrl, jobsUrl);
     return check new scheduler:Client(schedulerUrl, schedulerTimeoutSeconds, schedulerResilience);
+}
+
+# Refuses a configured scheduler with no target for its jobs: every job's URI would be just "/runs", which
+# would log an error per job on every reconcile and answer 503 on /admin/scheduler/sync for what is a
+# configuration mistake. One clear startup error instead.
+#
+# + schedulerJobsUrl - amplify-jobs URL as the scheduler reaches it
+# + jobsUrl - fallback amplify-jobs URL
+# + return - An error when both are empty
+isolated function schedulerTargetError(string schedulerJobsUrl, string jobsUrl) returns error? {
+    if schedulerJobsUrl.trim() != "" || jobsUrl.trim() != "" {
+        return ();
+    }
+    return error("schedulerUrl is set but neither schedulerJobsUrl nor jobsUrl is: the scheduler has nowhere to call");
 }
 
 # Test seam: the scheduler client.

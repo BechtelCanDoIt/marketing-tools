@@ -45,7 +45,7 @@ public const string KEYS_UNAVAILABLE = "KEYS_UNAVAILABLE";
 
 // Longest token read. The HTTP listener refuses a header over its own `maxHeaderSize` (default 8192) before this
 // code runs, with no problem body and no audit row, so a higher limit here would never be reached.
-const int MAX_TOKEN_LENGTH = 8192;
+public const int MAX_TOKEN_LENGTH = 8192;
 const string RS256 = "RS256";
 
 # Detail of an authentication failure: a stable code only, never token content.
