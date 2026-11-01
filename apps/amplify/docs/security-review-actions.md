@@ -8,6 +8,7 @@ who to ask. Findings that are infrastructure or process cannot be closed from th
 | Finding | Severity | What changed |
 | --- | --- | --- |
 | amplify-jobs has no authentication | High | Shared `X-Amplify-Internal-Key`, fail closed, constant-time compare (ADR-039) |
+| Chat webhook key and token on amplify-jobs trace spans (`http.url`), upstream PR 232 review | Medium | `googlechat` no longer uses `ballerina/http`: it posts through the JDK `java.net.http` client by Java interop (`amplify-common/modules/googlechat/transport.bal`), which opens no span, adds no metric label and logs nothing. Reproduced with an OTLP collector before the change, absent after. `scripts/check-chat-transport.sh` (in `make check`) fails if the module creates an `http:Client` or logs. Supersedes the accepted-risk row from fork PR 27: when both PRs are merged, delete that row |
 | Interim deletion script fails (`email` is NOT NULL UNIQUE) and keeps the member URN | Medium | `identity.erase_employee` (V018), integration-tested; the runbook calls it |
 | No outbox queue monitoring | Medium | Gauges, `/ready` block, warning log; alert rules in `operations.md` section 11 |
 | `amplify_api` has broad grants on `provider_token` | Low | V017: API loses UPDATE, jobs loses INSERT. API keeps SELECT (revoke at LinkedIn) |
