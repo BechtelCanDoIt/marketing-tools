@@ -178,7 +178,9 @@ service http:InterceptableService / on apiListener {
         identity:Employee|error employee = upsertEmployee(principal, now);
         if employee is error {
             if store:isUniqueViolation(employee) {
-                return conflicted(EMAIL_CONFLICT, "This email belongs to another Amplify account, contact the Amplify admins",
+                // Generic on purpose: the sign-in resolver already merged a re-created account, so this is a
+                // real clash, and which email belongs to whom is nothing a caller may probe for.
+                return conflicted(EMAIL_CONFLICT, "This sign-in can't be matched to an Amplify profile, contact the Amplify admins",
                         correlationId);
             }
             log:printError("Could not record the employee", employee, correlationId = correlationId);

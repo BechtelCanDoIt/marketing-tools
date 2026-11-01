@@ -202,6 +202,7 @@ isolated function mockRecordDenial(store:AuditEntry entry) returns error? {
 isolated class FakeEmployees {
     *identity:EmployeeRepository;
     private map<identity:Employee> rows = {};
+    private map<string> aliases = {};
 
     public isolated function findById(types:EmployeeId employeeId) returns identity:Employee|error? {
         lock {
@@ -212,6 +213,38 @@ isolated class FakeEmployees {
     public isolated function upsert(identity:Employee employee) returns error? {
         lock {
             self.rows[employee.employeeId] = employee.clone();
+        }
+    }
+
+    public isolated function findByEmail(string email) returns identity:Employee|error? {
+        lock {
+            foreach identity:Employee e in self.rows {
+                if e.email.toLowerAscii() == email.toLowerAscii() {
+                    return e.clone();
+                }
+            }
+            return ();
+        }
+    }
+
+    public isolated function findAlias(string sub) returns types:EmployeeId|error? {
+        lock {
+            return self.aliases[sub];
+        }
+    }
+
+    public isolated function addAlias(string sub, types:EmployeeId employeeId) returns types:EmployeeId|error {
+        lock {
+            string existing = self.aliases[sub] ?: employeeId;
+            self.aliases[sub] = existing;
+            return existing;
+        }
+    }
+
+    # Test seam: how many aliases exist.
+    isolated function aliasCount() returns int {
+        lock {
+            return self.aliases.length();
         }
     }
 }
