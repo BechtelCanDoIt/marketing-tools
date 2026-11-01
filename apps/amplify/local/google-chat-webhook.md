@@ -5,7 +5,7 @@ Owner: Amplify technical owner. Dev test space first, test, then the WSO2 Club s
 
 `amplify-jobs` config keys referenced below live in `projects/marketing-tools/apps/amplify/amplify-jobs/config.bal` (Choreo: Configs & Secrets; local: `BAL_CONFIG_VAR_*` via `compose.yaml` / `local/.env`).
 
-**The webhook URL is a secret.** It looks like `https://chat.googleapis.com/v1/spaces/SPACE/messages?key=…&token=…` and anyone holding it can post into the space as "Amplify". Never log it, never paste it into chat, tickets, PRs, screenshots or `Config.toml` in git. The code never logs it and never puts it in errors or `announcement.last_error` (tests: `webhookErrorsNeverCarryTheUrl`, `webhook400FailsOnceWithoutRetryStorm`).
+**The webhook URL is a secret.** It looks like `https://chat.googleapis.com/v1/spaces/SPACE/messages?key=…&token=…` and anyone holding it can post into the space as "Amplify". Never log it, never paste it into chat, tickets, PRs, screenshots or `Config.toml` in git. The code never logs it and never puts it in errors or `announcement.last_error` (tests: `webhookErrorsNeverCarryTheUrl`, `webhook400FailsOnceWithoutRetryStorm`). It also never reaches a trace: the Ballerina HTTP client would stamp the URL on its client span as `http.url`, so the webhook call goes through the JDK HTTP client (`amplify-common/modules/googlechat/transport.bal`), which is not instrumented. Do not switch it back to `http:Client` (`scripts/check-chat-transport.sh` fails the build).
 
 ## A. Workspace admin (once)
 
