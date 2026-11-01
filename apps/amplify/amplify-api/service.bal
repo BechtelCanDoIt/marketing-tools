@@ -31,9 +31,21 @@ import ballerina/time;
 # Port the published API listens on (fronted by the API proxy at the cell edge).
 configurable int port = 9090;
 
+# Largest request body the API accepts from a request that declares its length, bytes (64 KiB). The biggest real
+# payload is a campaign registration (title, summary, two URLs, up to 20 tags) or a share (commentary), both under
+# 16 KiB, so the headroom is ample.
+const int MAX_REQUEST_BODY_BYTES = 65536;
+
+# What the transport accepts before it refuses a request unread, bytes: twice the API limit, so a request that
+# declares its length reaches `BodyLimitInterceptor` and gets problem details, and an absurd one never gets read.
+# A chunked body carries no length to check, so this bound is the one that stops it.
+const int MAX_ENTITY_BODY_BYTES = MAX_REQUEST_BODY_BYTES * 2;
+
 // Request bodies here are small JSON documents; without a limit the listener buffers whatever it is sent, and the
-// idempotency hash serialises it again, before validation can refuse it.
-listener http:Listener apiListener = new (port, requestLimits = {maxEntityBodySize: 65536});
+// idempotency hash serialises it again, before validation can refuse it. `BodyLimitInterceptor` answers a request
+// that declares a longer body with problem details before any of that; this transport limit bounds every request
+// that reaches the resources.
+listener http:Listener apiListener = new (port, requestLimits = {maxEntityBodySize: MAX_ENTITY_BODY_BYTES});
 
 function init() returns error? {
     check checkInternalKey(jobsUrl, schedulerUrl, internalApiKey);
@@ -81,6 +93,38 @@ type MeResponse record {|
     MeLinkedIn linkedin;
 |};
 
+# Refuses a request that declares a body past `MAX_REQUEST_BODY_BYTES` with problem details, before the payload is
+# read and hashed for idempotency. A request that declares no `Content-Length` can't be measured here: the transport
+# limit refuses it instead.
+isolated service class BodyLimitInterceptor {
+    *http:RequestInterceptor;
+
+    isolated resource function 'default [string... path](http:RequestContext ctx, http:Request req)
+            returns http:NextService|http:Response|error? {
+        string|http:HeaderNotFoundError length = req.getHeader("content-length");
+        if length is string {
+            int|error declared = int:fromString(length.trim());
+            if declared is int && declared > MAX_REQUEST_BODY_BYTES {
+                return payloadTooLarge(cid(ctx));
+            }
+        }
+        return ctx.next();
+    }
+}
+
+# 413 problem details for a request body past the limit.
+#
+# + correlationId - Correlation id
+# + return - The response
+isolated function payloadTooLarge(string? correlationId) returns http:Response {
+    http:Response res = new;
+    res.statusCode = 413;
+    res.setJsonPayload(problem(413, "Payload Too Large", VALIDATION_FAILED,
+            string `The request body is larger than ${MAX_REQUEST_BODY_BYTES} bytes`, correlationId).toJson(),
+            PROBLEM_JSON);
+    return res;
+}
+
 # Amplify published API. Every resource except the probes runs behind `AuthInterceptor`.
 @display {
     label: "Amplify API",
@@ -89,9 +133,10 @@ type MeResponse record {|
 service http:InterceptableService / on apiListener {
 
     // Order matters: responses run back through the list, so the security headers (first) are added to
-    // every response, including errors mapped by the two error interceptors.
+    // every response, including errors mapped by the two error interceptors, and the caller is authenticated
+    // before the body limit answers.
     public function createInterceptors() returns [SecurityHeadersInterceptor, ResponseErrorMapper, AuthInterceptor,
-            RequestErrorMapper] => [new, new, new, new];
+            BodyLimitInterceptor, RequestErrorMapper] => [new, new, new, new, new];
 
     # Liveness probe.
     #
