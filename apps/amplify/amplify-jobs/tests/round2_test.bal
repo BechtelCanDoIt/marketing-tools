@@ -320,7 +320,7 @@ function testShareArticleCarriesTheCampaignTitleToLinkedIn() returns error? {
             WHERE id = CAST(${share.id} AS uuid) AND status = 'PUBLISHED'`), 1,
             "published: the mock accepted the article (it refuses one without a title)");
     http:Client mock = check new (mockApiUrl);
-    json[] posts = check mock->get("/mock/posts");
+    json[] posts = check mock->get("/mock/posts", {"X-Amplify-Internal-Key": mockAdminKey});
     json[] mine = from json p in posts where (check p.commentary) == "Worth a read " + emp select p;
     test:assertEquals(mine.length(), 1);
     test:assertEquals(check mine[0].articleTitle, title, "the campaign title, not the generic default");
