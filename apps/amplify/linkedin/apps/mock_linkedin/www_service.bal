@@ -16,11 +16,13 @@
 import mock_linkedin.store;
 
 import ballerina/http;
+import ballerina/io;
 import ballerina/log;
 
 # Listener for the `www.linkedin.com` host.
-// Uploads are small test images; without a limit `PUT /dms-uploads` buffers whatever it is sent.
-listener http:Listener wwwListener = new (wwwPort, host = listenerHost, requestLimits = {maxEntityBodySize: 10485760});
+// Uploads are small test images. `readUploadBody` enforces `maxUploadBytes`, so an oversized body is
+// refused instead of being buffered.
+listener http:Listener wwwListener = new (wwwPort, host = listenerHost);
 
 # Mock of LinkedIn's 3-legged OAuth 2.0 authorization code flow. There is no login page:
 # every authorization signs in as the configured `member` and consents straight away.
@@ -203,7 +205,7 @@ service http:InterceptableService /dms\-uploads on wwwListener {
     # + req - Request with the binary body and bearer token
     # + return - 201, or an error
     isolated resource function put [string... uploadPath](http:RequestContext ctx, http:Request req)
-            returns http:Created|ErrorBadRequest|ErrorUnauthorized|ErrorForbidden|ErrorNotFound {
+            returns http:Created|ErrorBadRequest|ErrorUnauthorized|ErrorForbidden|ErrorNotFound|ErrorPayloadTooLarge {
         store:AccessToken|ErrorUnauthorized|ErrorForbidden token =
             authenticateWithScope(req, SCOPE_W_MEMBER_SOCIAL, "PUT /dms-uploads");
         if token !is store:AccessToken {
@@ -220,11 +222,15 @@ service http:InterceptableService /dms\-uploads on wwwListener {
         if upload.expiresAt <= nowSeconds() {
             return badRequest("Upload URL has expired");
         }
-        byte[]|http:ClientError body = req.getBinaryPayload();
-        if body is http:ClientError {
-            log:printDebug("Upload rejected: unreadable body", correlationId = correlationId(ctx),
-                    reason = body.message());
-            return badRequest(MSG_INVALID_UPLOAD_BODY);
+        byte[]|ErrorBadRequest|ErrorPayloadTooLarge body = readUploadBody(req);
+        if body !is byte[] {
+            if body is ErrorPayloadTooLarge {
+                log:printWarn("Upload rejected: body over the limit", correlationId = correlationId(ctx),
+                        limitBytes = maxUploadBytes);
+            } else {
+                log:printDebug("Upload rejected: unreadable body", correlationId = correlationId(ctx));
+            }
+            return body;
         }
         if body.length() == 0 {
             return badRequest(MSG_INVALID_UPLOAD_BODY);
@@ -239,4 +245,33 @@ service http:InterceptableService /dms\-uploads on wwwListener {
         log:printInfo("Media uploaded", correlationId = correlationId(ctx), media = upload.mediaUrn, bytes = body.length());
         return http:CREATED;
     }
+}
+
+# Reads an upload body, stopping as soon as it passes `maxUploadBytes` so an oversized body is never
+# held in memory in full.
+#
+# + req - Request with the image bytes
+# + return - The bytes, a 400 for a body that cannot be read, or a 413 when the body is too large
+isolated function readUploadBody(http:Request req) returns byte[]|ErrorBadRequest|ErrorPayloadTooLarge {
+    stream<byte[], io:Error?>|http:ClientError bodyStream = req.getByteStream();
+    if bodyStream is http:ClientError {
+        return badRequest(MSG_INVALID_UPLOAD_BODY);
+    }
+    byte[] body = [];
+    int total = 0;
+    record {| byte[] value; |}|io:Error? chunk = bodyStream.next();
+    while chunk is record {| byte[] value; |} {
+        total += chunk.value.length();
+        if total > maxUploadBytes {
+            return payloadTooLarge();
+        }
+        body.push(...chunk.value);
+        chunk = bodyStream.next();
+    }
+    if chunk is io:Error {
+        // The caller logs the rejection with its correlation id; this keeps the cause.
+        log:printDebug("Upload body could not be read", chunk);
+        return badRequest(MSG_INVALID_UPLOAD_BODY);
+    }
+    return body;
 }

@@ -22,13 +22,17 @@ const TEST_CLIENT_SECRET = "test-client-secret";
 const TEST_REDIRECT_URI = "http://localhost:3000/callback";
 const TEST_VERSION = "202610";
 const TEST_AUTHOR = "urn:li:person:782bbtaQ";
+# Same value as `mockAdminKey` in tests/Config.toml.
+const TEST_ADMIN_KEY = "test-admin-key-for-mock-linkedin-0123456789";
+# Free port for listeners these tests create themselves; the package's own listeners use 19090/19091.
+const TEST_LISTENER_PORT = 19190;
 
 final http:Client apiClient = check new ("http://localhost:19090");
 final http:Client wwwClient = check new ("http://localhost:19091");
 
 @test:BeforeEach
 function resetState() returns error? {
-    http:Response res = check apiClient->post("/mock/reset", ());
+    http:Response res = check apiClient->post("/mock/reset", (), adminHeaders());
     test:assertEquals(res.statusCode, http:STATUS_NO_CONTENT);
 }
 
@@ -250,7 +254,7 @@ function testUpdateThenDeletePost() returns error? {
     http:Response updated = check apiClient->post(path, {patch: {"$set": {commentary: "Updated text"}}}, updateHeaders);
     test:assertEquals(updated.statusCode, http:STATUS_NO_CONTENT);
 
-    json stored = check apiClient->get("/mock/posts");
+    json stored = check apiClient->get("/mock/posts", adminHeaders());
     json[] posts = check stored.ensureType();
     test:assertEquals(check posts[0].commentary, "Updated text");
 
@@ -332,7 +336,7 @@ function testLegacyUgcShareThenDelete() returns error? {
 
     http:Response deleted = check apiClient->delete("/v2/ugcPosts/" + re `:`.replaceAll(urn, "%3A"), headers = headers);
     test:assertEquals(deleted.statusCode, http:STATUS_NO_CONTENT);
-    json stored = check apiClient->get("/mock/posts");
+    json stored = check apiClient->get("/mock/posts", adminHeaders());
     json[] posts = check stored.ensureType();
     test:assertEquals(posts.length(), 0);
 }
@@ -388,6 +392,78 @@ function testHealth() returns error? {
     test:assertEquals(status["status"], "UP");
 }
 
+// Admin endpoints (local only)
+
+@test:Config
+function testAdminEndpointsRejectMissingAndWrongKey() returns error? {
+    http:Response missing = check apiClient->get("/mock/posts");
+    test:assertEquals(missing.statusCode, http:STATUS_UNAUTHORIZED);
+    test:assertEquals(check (check missing.getJsonPayload()).message, MSG_ADMIN_UNAUTHORIZED);
+
+    http:Response wrong = check apiClient->get("/mock/posts", {[ADMIN_KEY_HEADER]: "not-the-admin-key"});
+    test:assertEquals(wrong.statusCode, http:STATUS_UNAUTHORIZED);
+
+    http:Response resetWithoutKey = check apiClient->post("/mock/reset", ());
+    test:assertEquals(resetWithoutKey.statusCode, http:STATUS_UNAUTHORIZED);
+}
+
+@test:Config
+function testAdminEndpointsAcceptTheKey() returns error? {
+    string token = check accessToken("w_member_social");
+    http:Response created = check createPost(token, uniqueText());
+    test:assertEquals(created.statusCode, http:STATUS_CREATED);
+
+    http:Response posts = check apiClient->get("/mock/posts", adminHeaders());
+    test:assertEquals(posts.statusCode, http:STATUS_OK);
+    json[] stored = check (check posts.getJsonPayload()).ensureType();
+    test:assertEquals(stored.length(), 1);
+
+    http:Response reset = check apiClient->post("/mock/reset", (), adminHeaders());
+    test:assertEquals(reset.statusCode, http:STATUS_NO_CONTENT);
+}
+
+@test:Config
+function testAdminEndpointsAreAbsentWhenDisabled() returns error? {
+    http:Listener probe = check new (TEST_LISTENER_PORT);
+    http:Client probeClient = check new (string `http://localhost:${TEST_LISTENER_PORT}`);
+    check attachMockAdmin(probe, false, TEST_ADMIN_KEY);
+    check probe.start();
+    http:Response res = check probeClient->get("/mock/posts", adminHeaders());
+    test:assertEquals(res.statusCode, http:STATUS_NOT_FOUND);
+    check probe.gracefulStop();
+}
+
+@test:Config
+function testAdminEndpointsAreNotAttachedWithoutAKey() returns error? {
+    http:Listener probe = check new (TEST_LISTENER_PORT);
+    http:Client probeClient = check new (string `http://localhost:${TEST_LISTENER_PORT}`);
+    check attachMockAdmin(probe, true, "");
+    check probe.start();
+    http:Response res = check probeClient->get("/mock/posts", adminHeaders());
+    test:assertEquals(res.statusCode, http:STATUS_NOT_FOUND, "enabled with no key must not serve the endpoints");
+    check probe.gracefulStop();
+}
+
+// Upload body limit
+
+@test:Config
+function testUploadOverTheBodyLimitIsRejected() returns error? {
+    string token = check accessToken("w_member_social");
+    http:Response init = check apiClient->post("/rest/images?action=initializeUpload",
+            {initializeUploadRequest: {owner: TEST_AUTHOR}}, restliHeaders(token));
+    InitializeImageUploadResponse upload = check (check init.getJsonPayload()).cloneWithType();
+    string uploadUrl = upload.value?.uploadUrl ?: "";
+
+    byte[] tooBig = [];
+    int i = 0;
+    while i <= maxUploadBytes {
+        tooBig.push(1);
+        i += 1;
+    }
+    http:Response res = check wwwClient->put(uploadUrl.substring("http://localhost:19091".length()), tooBig, bearer(token));
+    test:assertEquals(res.statusCode, http:STATUS_PAYLOAD_TOO_LARGE);
+}
+
 // Helpers
 
 function authorizeRequest(string scope, string? state) returns http:Response|error {
@@ -417,6 +493,8 @@ function accessToken(string scope) returns string|error {
 }
 
 function bearer(string token) returns map<string> => {[HEADER_AUTHORIZATION]: BEARER_PREFIX + token};
+
+function adminHeaders() returns map<string> => {[ADMIN_KEY_HEADER]: TEST_ADMIN_KEY};
 
 function restliHeaders(string? token = ()) returns map<string> {
     map<string> headers = {

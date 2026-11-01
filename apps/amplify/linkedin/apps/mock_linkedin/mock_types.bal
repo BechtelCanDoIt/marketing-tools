@@ -18,6 +18,13 @@
 
 import ballerina/http;
 
+# 413 for an upload body over `maxUploadBytes`.
+public type ErrorPayloadTooLarge record {|
+    *http:PayloadTooLarge;
+    # Error body, in the shape the rest of the mock returns.
+    Error body;
+|};
+
 // `CreateUgcPost` from the spec. Written by hand because the OpenAPI tool fails on the
 // dotted `com.linkedin.ugc.*` property names in this schema.
 

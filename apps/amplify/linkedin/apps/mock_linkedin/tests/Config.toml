@@ -7,3 +7,5 @@ clientId = "test-client-id"
 clientSecret = "test-client-secret"
 redirectUris = ["http://localhost:3000/callback"]
 enableMockAdmin = true
+mockAdminKey = "test-admin-key-for-mock-linkedin-0123456789"
+maxUploadBytes = 4096
