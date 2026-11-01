@@ -32,7 +32,7 @@ One file per decision, dated, short format (Status, Date, Context, Decision, Con
 | [ADR-024](ADR-024-amplify-api-m5-boundaries.md) | amplify-api M5 boundary choices: S3→C2 unit of work, idempotency keys, degraded dependencies | Accepted |
 | [ADR-025](ADR-025-jobs-run-delivery-and-resilience.md) | amplify-jobs Run: synchronous `/runs`, one run via advisory lock, outbox retry not HTTP retry, deferral, breakers + bulkheads | Accepted (amended 2026-10-17) |
 | [ADR-026](ADR-026-akornatskyy-scheduler.md) | `akornatskyy/scheduler` replaces amplify-cron and the Choreo Scheduled Task; amplify-api pushes schedule settings to it | Accepted (amended 2026-10-17) |
-| [ADR-027](ADR-027-per-component-docker-contexts.md) | One Docker context per component (Choreo reads `<context>/.choreo/component.yaml`); shared packages built inside the image | Accepted |
+| [ADR-027](ADR-027-per-component-docker-contexts.md) | One Docker context per component (Choreo reads `<context>/.choreo/component.yaml`); shared packages built inside the image; jobs on its own ancestor context `apps` | Accepted (amended 2026-10-30, 2026-11-01) |
 | [ADR-028](ADR-028-database-breaker-and-breaker-metrics.md) | Database circuit breaker (`DbBreaker` in front of each pool), read-only transient retry, `amplify_breaker_state` gauge, log hygiene check | Accepted (amended 2026-10-17) |
 | [ADR-029](ADR-029-ledger-reference-encoding.md) | Ledger reference encoding: deterministic base64url (`AMP-`/`ADJ-`/`REV-`), append-only, 47-char award (C1) | Accepted for phase 1 (re-check with wso2-coin) |
 | [ADR-030](ADR-030-repository-home.md) | Amplify source in its own repo under a WSO2-managed GitHub org, added as a submodule (D12) | Superseded by ADR-033 |
