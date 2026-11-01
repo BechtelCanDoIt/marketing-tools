@@ -172,3 +172,18 @@ isolated function failure(error err, string? correlationId, string context) retu
 # + res - Response
 # + return - HTTP status
 isolated function statusOf(http:StatusCodeResponse res) returns int => res.status.code;
+
+# What of a database error is safe to put in a log line: its kind and the SQLSTATE, never its message. PostgreSQL
+# text can carry row values (`Detail: Key (email)=(...)`), so callers that log a failed write or read use these two
+# fields instead of the error itself.
+#
+# + err - The error
+# + return - `sql:DatabaseError`, `sql:Error` or `error`
+isolated function errorKind(error err) returns string =>
+    err is sql:DatabaseError ? "sql:DatabaseError" : err is sql:Error ? "sql:Error" : "error";
+
+# The SQLSTATE of a database error, for the log.
+#
+# + err - The error
+# + return - The five character SQLSTATE, or `()` when the error has none
+isolated function sqlStateOf(error err) returns string? => err is sql:DatabaseError ? err.detail().sqlState : ();

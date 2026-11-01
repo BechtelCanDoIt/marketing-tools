@@ -18,6 +18,7 @@ import amplify_api.auth;
 import amplify_common.resilience;
 
 import ballerina/http;
+import ballerina/http.httpscerr;
 import ballerina/log;
 import ballerina/time;
 import ballerina/uuid;
@@ -253,6 +254,11 @@ isolated function errorResponse(http:RequestContext ctx, error err) returns http
     string code = INTERNAL_ERROR;
     string detail = "Something went wrong on our side";
     string title = "Internal Server Error";
+    if err is httpscerr:PayloadTooLargeError {
+        // Any 413 raised as an error (`httpscerr:PayloadTooLargeError`) is the same stable code, not a 500. The listener's
+        // own over-limit refusal of a chunked body never reaches here (it answers before the interceptors run).
+        return payloadTooLarge(id);
+    }
     if err is http:PayloadBindingError || err is http:QueryParameterBindingError || err is http:HeaderBindingError
             || err is http:PathParameterBindingError || err is http:PayloadValidationError
             || err is http:QueryParameterValidationError || err is http:HeaderValidationError {
