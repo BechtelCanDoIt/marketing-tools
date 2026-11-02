@@ -760,12 +760,12 @@ What used to be enforced by roles is now enforced in code and by constraints:
 | Was a role grant | Now |
 | --- | --- |
 | API can't run partition upkeep or `recognition_rebuild`; only jobs can | `amplify-api` never calls them; the maintenance functions stay `SECURITY DEFINER` and are called only by the jobs worker |
-| Ledger facts immutable, settlement columns only | `scoring_points_ledger` check constraints (no `PAID` in phase 1); the repository only updates the settlement columns |
-| Audit rows insert-only | `audit_log` is written only through `store:writeAudit` and the system audit function |
+| Ledger facts immutable, settlement columns only | V021 trigger `scoring_points_ledger_guard`; plus a check constraint (no `PAID` in phase 1) |
+| Audit rows insert-only | V021 trigger `audit_log_guard` (retention drops whole partitions) |
 | Token grants narrowed per component (ADR-040) | the repositories: api inserts, reads and deletes tokens; jobs reads, re-seals and deletes |
 | `amplify_readonly` (phase 2 reports) without tokens, URNs or commentary | needs its own mechanism when phase 2 starts (read replica, views in another schema, or a second user) |
 
-A database trigger that rejects updates and deletes on the ledger and the audit log would make the first two enforceable for every component again, without roles. It is a recommended follow-up (ADR-043).
+**V021 makes the first two enforceable again for every component, without roles:** row triggers on `scoring_points_ledger` (settlement columns only, never deleted) and `audit_log` (never changed or deleted). The owner can still drop a trigger or `TRUNCATE`; the triggers guard against code paths and mistakes, not against someone with the login's password.
 
 **As built after M3 (V011–V013):**
 
