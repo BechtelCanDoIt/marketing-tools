@@ -22,6 +22,16 @@ import ballerinax/postgresql;
 // ---- Identity (ADR-022). Setup values: docs/runbooks/identity-setup.md ----------------------------
 
 # Deployment environment: `local`, `dev`, `staging` or `prod`. Defaults to the strictest.
+#
+# Only `local` changes what the code does. Every other value, including one that is not on this list, is treated
+# as a deployed environment, so `dev`, `staging` and `prod` behave identically here and differ only in the values
+# you configure (URLs, secrets, groups). `local` is the developer's machine or the Docker Compose stack, which has
+# no gateway and no certificates, and it allows exactly three things a deployed environment refuses:
+#   1. the dev-only locally signed JWT switch, `devLocalJwtEnabled` (ADR-023, which also needs an unencrypted
+#      database connection and a `http://localhost` JWKS URL);
+#   2. a plain-http `gatewayJwksUrl`, to localhost or 127.0.0.1 only (`checkJwksUrl`);
+#   3. a plain-http `linkedinRedirectUri`, for the local One WSO2 page (`checkRedirectUri`).
+# Never set `local` on a deployed component: `scripts/check-descriptors.sh` fails if a descriptor does.
 configurable string environment = "prod";
 # Header the API proxy puts the backend JWT in.
 configurable string jwtHeader = "x-jwt-assertion";
