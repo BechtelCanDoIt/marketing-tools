@@ -99,7 +99,7 @@ function testM5ApproveAndAmplifyAwardInTheSameTransaction() returns error? {
             "approve + top-up = the amplified tier");
     test:assertEquals(check count(db, `SELECT count(*)::int FROM scoring.points_ledger WHERE employee_id = ${emp}`), 2);
     // A failed award rolls back the decision: amplifying again is refused and writes nothing.
-    test:assertTrue(external_sharing:amplifyWithPoints(repo, rules, claim.id, po, (), time:utcNow(), ledger) is error);
+    assertCode(external_sharing:amplifyWithPoints(repo, rules, claim.id, po, (), time:utcNow(), ledger), types:ERR_ALREADY_AMPLIFIED);
     test:assertEquals(check count(db, `SELECT count(*)::int FROM scoring.points_ledger WHERE employee_id = ${emp}`), 2);
 
     external_sharing:ReviewQueue queue = check external_sharing:reviewQueue(db, 48, time:utcNow());
@@ -156,7 +156,7 @@ function testM5AdjustReverseUpdatesStanding() returns error? {    postgresql:Cli
     _ = check scoring:reverseEntry(ledger, adj.reference, "IT reversal", po, "it-rev", time:utcNow());
     recognition:Standing? s2 = check recognition:standingOf(db, emp);
     test:assertEquals(s2 is recognition:Standing ? s2.totalPoints : -1, 0);
-    test:assertTrue(scoring:reverseEntry(ledger, adj.reference, "again", po, (), time:utcNow()) is error);
+    assertCode(scoring:reverseEntry(ledger, adj.reference, "again", po, (), time:utcNow()), types:ERR_ALREADY_REVERSED);
 
     scoring:LedgerPage history = check scoring:historyOf(db, emp, 0, 10);
     test:assertEquals(history.total, 2);
