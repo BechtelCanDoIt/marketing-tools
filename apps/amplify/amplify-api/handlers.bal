@@ -184,7 +184,10 @@ isolated function startConnect(auth:Principal p, string? correlationId, ConnectS
         }
         connection:OAuthState state = check connection:newOAuthState(p.employeeId, returnTo, pendingId, time:utcNow());
         check (check oauthStateRepository()).issue(state);
-        string url = check adapter.authorizationUrl(state.state);
+        // The nonce goes out only when ID-token validation can check it (`linkedinNonceMode`, `outbound.bal`).
+        string url = nonceModeFor(idTokens()) == "OFF"
+            ? check adapter.authorizationUrl(state.state)
+            : check adapter.authorizationUrlWithNonce(state.state, state.nonce);
         return <http:Ok>{body: {authorizationUrl: url, state: state.state, expiresAt: ts(state.expiresAt)}};
     } on fail error e {
         return failure(e, correlationId, "Start LinkedIn connect");
@@ -234,7 +237,7 @@ isolated function completeConnect(auth:Principal p, string? correlationId, Conne
         if profile is linkedin:ProviderError {
             return providerFailure(profile, correlationId);
         }
-        http:StatusCodeResponse? refused = checkIdToken(idTokens(), grant.idToken, profile.sub, correlationId);
+        http:StatusCodeResponse? refused = checkIdToken(idTokens(), grant.idToken, profile.sub, correlationId, state);
         if refused is http:StatusCodeResponse {
             return refused;
         }
@@ -253,7 +256,8 @@ isolated function completeConnect(auth:Principal p, string? correlationId, Conne
         // strand the person on an error page after LinkedIn.
         error? consentRecorded = recordConsent(p.employeeId, connection:CONSENTED, (), now);
         if consentRecorded is error {
-            log:printWarn("Could not record LinkedIn consent", 'error = consentRecorded, correlationId = correlationId);
+            log:printWarn("Could not record LinkedIn consent", errorKind = errorKind(consentRecorded),
+                    sqlState = sqlStateOf(consentRecorded), correlationId = correlationId);
         }
         return <http:Ok>{
             body: {
@@ -291,16 +295,17 @@ isolated function declineConnect(auth:Principal p, string? correlationId, Connec
 }
 
 # ID-token check on connect (common H1 / api H1), when `linkedinIdTokenValidation` is on: the token must be
-# present, validate (RS256, `iss`, `aud`, `exp`/`iat`; no nonce, see `outbound.bal`) and name the same
-# member as userinfo. The validator's reason goes only to the log, never to the caller or with the token.
+# present, validate (RS256, `iss`, `aud`, `exp`/`iat`, and the `nonce` per `linkedinNonceMode`) and name the
+# same member as userinfo. The validator's reason goes only to the log, never to the caller or with the token.
 #
 # + validator - The validator, `()` when validation is off
 # + idToken - `TokenGrant.idToken`
 # + userInfoSub - `sub` from `/v2/userinfo`
 # + correlationId - Correlation id
+# + state - The consumed OAuth state, whose `nonce` was sent on the authorize request
 # + return - The refusal, or `()` to carry on
 isolated function checkIdToken(linkedin:IdTokenValidator? validator, string? idToken, string userInfoSub,
-        string? correlationId) returns http:StatusCodeResponse? {
+        string? correlationId, connection:OAuthState state) returns http:StatusCodeResponse? {
     if validator is () {
         return ();
     }
@@ -308,7 +313,11 @@ isolated function checkIdToken(linkedin:IdTokenValidator? validator, string? idT
         log:printWarn("LinkedIn returned no ID token while ID-token validation is on", correlationId = correlationId);
         return unprocessable(OAUTH_STATE_INVALID, "LinkedIn didn't confirm the sign-in; start again", correlationId);
     }
-    linkedin:IdTokenClaims|linkedin:ProviderError claims = validator.validate(idToken, ());
+    NonceMode nonceMode = nonceModeFor(validator);
+    // REQUIRE: the validator itself refuses a token with no nonce or another one. SEND: a nonce that is present
+    // must match; one that is absent is logged, not refused (see `linkedinNonceMode`).
+    linkedin:IdTokenClaims|linkedin:ProviderError claims = validator.validate(idToken,
+            nonceMode == "REQUIRE" ? state.nonce : ());
     if claims is linkedin:ProviderError {
         if claims.detail().code == linkedin:UNAVAILABLE {
             log:printWarn("LinkedIn ID-token keys unavailable", correlationId = correlationId);
@@ -316,6 +325,15 @@ isolated function checkIdToken(linkedin:IdTokenValidator? validator, string? idT
         }
         log:printWarn("LinkedIn ID token refused", reason = claims.message(), correlationId = correlationId);
         return unprocessable(OAUTH_STATE_INVALID, "LinkedIn didn't confirm the sign-in; start again", correlationId);
+    }
+    if nonceMode == "SEND" {
+        string? echoed = claims.nonce;
+        if echoed is () {
+            log:printWarn("LinkedIn ID token carries no nonce (nonce not echoed)", correlationId = correlationId);
+        } else if !connection:nonceMatches(state, echoed) {
+            log:printWarn("LinkedIn ID token nonce does not match", correlationId = correlationId);
+            return unprocessable(OAUTH_STATE_INVALID, "LinkedIn didn't confirm the sign-in; start again", correlationId);
+        }
     }
     if claims.sub != userInfoSub {
         log:printWarn("LinkedIn ID token names another member than userinfo", correlationId = correlationId);
@@ -433,14 +451,35 @@ isolated function requestShare(auth:Principal p, string? correlationId, string i
 
 // ---- S3 External Sharing ------------------------------------------------------------------------------
 
+# The evidence URL a claim body names: the URL as sent, or the canonical LinkedIn post URL built from a post
+# number. Exactly one of the two.
+#
+# + body - Claim body
+# + return - The URL to validate and store, or a domain error
+isolated function evidenceUrlOf(ExternalShareBody body) returns string|types:DomainError {
+    string? url = body.evidenceUrl;
+    string? number = body.activityId;
+    if url is string && number is string {
+        return types:domainError(VALIDATION_FAILED, "Send evidenceUrl or activityId, not both");
+    }
+    if number is string {
+        return types:linkedInPostEvidenceUrl(number);
+    }
+    if url is string {
+        return url;
+    }
+    return types:domainError(VALIDATION_FAILED, "Send evidenceUrl or activityId");
+}
+
 isolated function claimExternalShare(auth:Principal p, string? correlationId, ExternalShareBody body)
         returns http:StatusCodeResponse {
     do {
         string? campaignId = body.campaignId;
+        string evidenceUrl = check evidenceUrlOf(body);
         external_sharing:ExternalShare claim = check external_sharing:submitExternalShare(
                 check externalShareRepository(actorOf(p, correlationId), 3), {
             employeeId: p.employeeId,
-            evidenceUrl: body.evidenceUrl,
+            evidenceUrl,
             certified: body.certified,
             campaignId: campaignId is string ? check uuidOf(campaignId, "campaignId") : ()
         }, time:utcNow());

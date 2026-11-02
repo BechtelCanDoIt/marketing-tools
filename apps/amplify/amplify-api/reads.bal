@@ -201,21 +201,23 @@ isolated function leaderboard(auth:Principal p, string? correlationId, string pe
         recognition:Standing? mine = check standingOf(p.employeeId, period);
         json myTeam = ();
         if roster is Roster {
-            recognition:TeamPage team = check teamPageOf(period, roster.emails, (), recognition:SORT_RANK, 0, 1000);
+            // The whole team from the directory, joined to the standings: a member with no points, or who
+            // never signed in, is a row with 0 points, no employeeId and no companyRank.
+            recognition:RosterPage team = check rosterPageOf(period, membersOf(roster), (), recognition:SORT_RANK, 0, 1000);
             myTeam = {
                 teamName: roster.teamName,
                 headcount: roster.emails.length(),
-                activeCount: team.total,
-                entries: from recognition:TeamEntry e in team.items
+                activeCount: team.activeCount,
+                entries: from recognition:RosterEntry e in team.items
                     select {
-                        employeeId: e.standing.employeeId,
-                        displayName: e.standing.displayName,
-                        email: e.standing.email,
-                        points: e.standing.totalPoints,
-                        houseName: roster.houses[e.standing.email.toLowerAscii()],
+                        employeeId: e.employeeId,
+                        displayName: e.displayName,
+                        email: e.email,
+                        points: e.totalPoints,
+                        houseName: roster.houses[e.email.toLowerAscii()],
                         teamRank: e.teamRank,
-                        companyRank: e.standing.rank,
-                        isMe: e.standing.employeeId == p.employeeId
+                        companyRank: e.rank,
+                        isMe: e.email.toLowerAscii() == p.email.trim().toLowerAscii()
                     }
             };
         }
@@ -258,6 +260,27 @@ isolated function myPoints(auth:Principal p, string? correlationId, string perio
     }
 }
 
+# A standings-only page (the people with points) in the roster page's shape, for when the directory
+# cannot supply the roster.
+#
+# + t - Standings page
+# + return - The same rows; every one has an employee id and a rank, all of them are active
+isolated function rosterPageFrom(recognition:TeamPage t) returns recognition:RosterPage => {
+    items: from recognition:TeamEntry e in t.items
+        select {
+            employeeId: e.standing.employeeId,
+            displayName: e.standing.displayName,
+            email: e.standing.email,
+            totalPoints: e.standing.totalPoints,
+            rank: e.standing.rank,
+            previousRank: e.standing.previousRank,
+            lastActivityAt: e.standing.lastActivityAt,
+            teamRank: e.teamRank
+        },
+    total: t.total,
+    activeCount: t.total
+};
+
 isolated function teamView(auth:Principal p, string? correlationId, string period, string? q, string sort, int page,
         int size) returns json|ProblemResponse {
     do {
@@ -279,17 +302,36 @@ isolated function teamView(auth:Principal p, string? correlationId, string perio
         Settings settings = check loadSettings();
         boolean company = can(p, auth:CAN_ADJUST_POINTS) || settings.teamVisibility == "COMPANY";
         TeamStatus teamStatus = "OK";
-        string[]? emails = ();
         int? headcount = ();
-        if !company {
+        string? search = q is string && q.trim().length() > 0 ? q.trim() : ();
+        recognition:RosterPage result;
+        if company {
+            // Everyone the directory lists, points or not. Directory down: the people with points, flagged
+            // `UNAVAILABLE`. No directory configured: the people with points, as before.
+            DirectoryIndex|error index = rosterConfigured() ? directoryIndex(correlationId) : error("not configured");
+            if index is DirectoryIndex {
+                recognition:RosterMember[] everyone = everyoneIn(index);
+                headcount = everyone.length();
+                result = check rosterPageOf(period, everyone, search, orderBy, page, size);
+            } else {
+                if rosterConfigured() {
+                    log:printWarn("Company list falls back to people with points: directory unavailable",
+                            reason = index.message(), correlationId = correlationId);
+                    teamStatus = "UNAVAILABLE";
+                }
+                result = rosterPageFrom(check teamPageOf(period, (), search, orderBy, page, size));
+            }
+        } else {
             var [roster, status] = rosterStatus(p, correlationId);
             teamStatus = status;
-            // No roster: the caller still sees themselves, never the company.
-            emails = roster is Roster ? roster.emails : [p.email];
-            headcount = roster is Roster ? roster.emails.length() : ();
+            if roster is Roster {
+                headcount = roster.emails.length();
+                result = check rosterPageOf(period, membersOf(roster), search, orderBy, page, size);
+            } else {
+                // No roster: the caller still sees themselves, never the company.
+                result = rosterPageFrom(check teamPageOf(period, [p.email], search, orderBy, page, size));
+            }
         }
-        string? search = q is string && q.trim().length() > 0 ? q.trim() : ();
-        recognition:TeamPage result = check teamPageOf(period, emails, search, orderBy, page, size);
         boolean adjuster = can(p, auth:CAN_ADJUST_POINTS);
         return {
             period,
@@ -298,17 +340,17 @@ isolated function teamView(auth:Principal p, string? correlationId, string perio
             size,
             total: result.total,
             teamStatus,
-            summary: {headcount, activeCount: result.total},
-            entries: from recognition:TeamEntry e in result.items
+            summary: {headcount, activeCount: result.activeCount},
+            entries: from recognition:RosterEntry e in result.items
                 select {
-                    employeeId: e.standing.employeeId,
-                    displayName: e.standing.displayName,
-                    email: e.standing.email,
-                    points: e.standing.totalPoints,
-                    rank: e.standing.rank,
+                    employeeId: e.employeeId,
+                    displayName: e.displayName,
+                    email: e.email,
+                    points: e.totalPoints,
+                    rank: e.rank,
                     teamRank: e.teamRank,
-                    previousRank: e.standing.previousRank,
-                    lastActivityAt: tsOpt(e.standing.lastActivityAt),
+                    previousRank: e.previousRank,
+                    lastActivityAt: tsOpt(e.lastActivityAt),
                     actions: {canAdjust: adjuster, canReverse: adjuster}
                 }
         };

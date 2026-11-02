@@ -21,6 +21,8 @@
 import amplify_common.types;
 
 import ballerina/http;
+import ballerina/http.httpscerr;
+import ballerina/sql;
 import ballerina/test;
 import ballerina/time;
 
@@ -144,6 +146,52 @@ function testEmployeeListsAndSharesWithStableCodes() returns error? {
 }
 
 @test:Config
+function testExternalShareAcceptsJustThePostNumber() returns error? {
+    string claimant = check employee("emp-ext-num-1");
+    http:Response claimed = check send("POST", "/external-shares",
+            {activityId: " 7123456789012340001 ", certified: true}, claimant);
+    test:assertEquals(claimed.statusCode, 201);
+    check assertShape(claimed, "ExternalShare");
+    json body = check claimed.getJsonPayload();
+    test:assertEquals(check body.evidenceUrl, "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012340001",
+            "the canonical post URL is what is stored");
+    test:assertEquals(check body.evidenceProvider, "linkedin");
+
+    // The same post by its full URL, from someone else: one claim per post.
+    http:Response sameByUrl = check send("POST", "/external-shares",
+            {evidenceUrl: "https://www.linkedin.com/posts/avery_x-activity-7123456789012340001-AbCd", certified: true},
+            check employee("emp-ext-num-2"));
+    test:assertEquals(sameByUrl.statusCode, 409);
+    test:assertEquals(check codeIn(sameByUrl), "EVIDENCE_ALREADY_CLAIMED");
+    // And by the number again.
+    http:Response sameByNumber = check send("POST", "/external-shares",
+            {activityId: "7123456789012340001", certified: true}, check employee("emp-ext-num-3"));
+    test:assertEquals(sameByNumber.statusCode, 409);
+
+    // The full URL still works on its own; both or neither is a 400; a bad number is a 422.
+    http:Response urlOnly = check send("POST", "/external-shares",
+            {evidenceUrl: "https://medium.com/@emp/by-url-only", certified: true}, check employee("emp-ext-num-4"));
+    test:assertEquals(urlOnly.statusCode, 201);
+    http:Response both = check send("POST", "/external-shares",
+            {evidenceUrl: "https://medium.com/@emp/both", activityId: "7123456789012340002", certified: true}, claimant);
+    test:assertEquals(both.statusCode, 400);
+    test:assertEquals(check codeIn(both), "VALIDATION_FAILED");
+    http:Response neither = check send("POST", "/external-shares", {certified: true}, claimant);
+    test:assertEquals(neither.statusCode, 400);
+    http:Response letters = check send("POST", "/external-shares", {activityId: "12ab", certified: true}, claimant);
+    test:assertEquals(letters.statusCode, 422);
+    test:assertEquals(check codeIn(letters), "INVALID_EVIDENCE_URL");
+}
+
+@test:Config
+function testExternalShareRefusesLnkdInShortLinks() returns error? {
+    http:Response res = check send("POST", "/external-shares",
+            {evidenceUrl: "https://lnkd.in/eAbCdEf", certified: true}, check employee("emp-ext-lnkd"));
+    test:assertEquals(res.statusCode, 422);
+    test:assertEquals(check codeIn(res), "INVALID_EVIDENCE_URL");
+}
+
+@test:Config
 function testExternalShareApproveAndAmplifyAwardPoints() returns error? {
     string claimant = check employee("emp-ext-1");
     http:Response claimed = check send("POST", "/external-shares",
@@ -225,7 +273,47 @@ function testOversizedBodyIsProblemDetailsBeforeBinding() returns error? {
     test:assertEquals(res.getContentType(), "application/problem+json");
     json body = check res.getJsonPayload();
     test:assertEquals(check body.status, 413);
-    test:assertEquals(check body.code, "VALIDATION_FAILED");
+    test:assertEquals(check body.code, "PAYLOAD_TOO_LARGE");
     test:assertTrue((check body.detail).toString().includes("65536"), "the detail names the limit");
     test:assertTrue(res.getHeader("X-Correlation-ID") is string, "the security interceptor still runs");
+}
+
+// A chunked body has no Content-Length, so BodyLimitInterceptor cannot see it; the listener's own limit
+// (`MAX_ENTITY_BODY_BYTES`) refuses it. The listener answers that 413 itself, before any interceptor runs, so it
+// carries no problem+json body: the status is what is pinned here (it must never be a 500).
+@test:Config
+function testChunkedOverLimitBodyIsRefusedWith413() returns error? {
+    http:Client h1 = check new (string `http://localhost:${port}`,
+            {httpVersion: http:HTTP_1_1, http1Settings: {chunking: http:CHUNKING_ALWAYS}, cache: {enabled: false}});
+    byte[] chunk = "a".padEnd(1024, "a").toBytes();
+    byte[][] chunks = [];
+    foreach int i in 0 ..< 300 {
+        chunks.push(chunk);
+    }
+    http:Request req = new;
+    req.setByteStream(chunks.toStream(), "application/json");
+    req.setHeader("x-jwt-assertion", check po());
+    http:Response res = check h1->post("/campaigns", req);
+    test:assertEquals(res.statusCode, 413, "an over-limit chunked body is 413, never 500");
+}
+
+@test:Config
+function testPayloadTooLargeErrorMapsToProblemDetails() returns error? {
+    httpscerr:PayloadTooLargeError err = error httpscerr:PayloadTooLargeError("Entity too large");
+    http:RequestContext ctx = new;
+    http:Response res = errorResponse(ctx, err);
+    test:assertEquals(res.statusCode, 413);
+    test:assertEquals(res.getContentType(), "application/problem+json");
+    json body = check res.getJsonPayload();
+    test:assertEquals(check body.code, "PAYLOAD_TOO_LARGE");
+}
+
+@test:Config
+function testLoggedDatabaseErrorsCarryKindAndSqlStateOnly() {
+    sql:DatabaseError dbErr = error sql:DatabaseError("ERROR: duplicate key\nDetail: Key (email)=(ada@wso2.com) exists",
+            sqlState = "23505", errorCode = 0);
+    test:assertEquals(errorKind(dbErr), "sql:DatabaseError");
+    test:assertEquals(sqlStateOf(dbErr), "23505");
+    test:assertEquals(errorKind(error("boom")), "error");
+    test:assertEquals(sqlStateOf(error("boom")), ());
 }

@@ -71,7 +71,16 @@ function testLeaderboardEtagCacheControlAndRevalidation() returns error? {
     test:assertEquals(check body.teamStatus, "OK");
     test:assertEquals(check body.topN, 3);
     test:assertEquals((<json[]>check body.company).length(), 3);
-    test:assertEquals((<json[]>check body.myTeam.entries).length(), 2, "rv-a and rv-b have standings");
+    json[] mine = <json[]>check body.myTeam.entries;
+    test:assertEquals(mine.length(), 3, "the whole team, rv+plus has no standing row");
+    test:assertEquals(check body.myTeam.activeCount, 2);
+    test:assertEquals(check body.myTeam.headcount, 3);
+    test:assertEquals(check mine[2].employeeId, (), "no standing, no employee id");
+    test:assertEquals(check mine[2].points, 0);
+    test:assertEquals(check mine[2].companyRank, (), "no standing, no company rank");
+    test:assertEquals(check mine[2].isMe, false);
+    test:assertEquals(check mine[0].isMe, true);
+    test:assertEquals(check mine[2].displayName, "R rv+p", "the directory's name");
     test:assertEquals(check body.me.rank, 3);
     test:assertTrue(check body.me.inTopN);
     string etag = check first.getHeader("ETag");
@@ -153,6 +162,30 @@ function testDirectoryFetchedOnceAndCached() returns error? {
     setDirectory("ok");
 }
 
+@test:Config {groups: ["reads"]}
+function testFailedDirectoryRefreshIsNotCached() returns error? {
+    setDirectory("ok");
+    _ = check send("GET", "/leaderboard", (), check rvToken("rv-a"));
+    expireDirectoryCache();
+    lock {
+        directoryMode = "down";
+    }
+    _ = takeDirectoryFetches();
+    foreach int i in 0 ..< 3 {
+        http:Response res = check send("GET", "/leaderboard", (), check rvToken("rv-a"));
+        test:assertEquals(check (check res.getJsonPayload()).teamStatus, "OK", "the old teams keep being served");
+    }
+    test:assertEquals(takeDirectoryFetches(), 3,
+            "the outage is not cached for the TTL: every call asks the directory again");
+    lock {
+        directoryMode = "ok";
+    }
+    _ = check send("GET", "/leaderboard", (), check rvToken("rv-a"));
+    test:assertEquals(takeDirectoryFetches(), 1, "recovered: one fetch");
+    _ = check send("GET", "/leaderboard", (), check rvToken("rv-a"));
+    test:assertEquals(takeDirectoryFetches(), 0, "and the fresh result is cached again");
+}
+
 // ---- /team ------------------------------------------------------------------------------------------
 
 @test:Config {groups: ["reads"]}
@@ -166,8 +199,13 @@ function testTeamPageVisibility() returns error? {
     test:assertEquals(check body.scope, "TEAM");
     test:assertEquals(check body.teamStatus, "OK");
     test:assertEquals(check body.summary.headcount, 3);
-    string[] ids = from json e in <json[]>check body.entries select (check e.employeeId).toString();
-    test:assertEquals(ids, ["rv-a", "rv-b"], "own team only, never the company");
+    json[] entries = <json[]>check body.entries;
+    test:assertEquals(entries.map(e => e.email), ["rv-a@wso2.com", "rv-b@wso2.com", "rv+plus@wso2.com"],
+            "the whole team, zero points included, never the company");
+    test:assertEquals(check entries[2].employeeId, (), "a member with no standing row has no employee id");
+    test:assertEquals(check entries[2].points, 0);
+    test:assertEquals(check entries[2].rank, ());
+    test:assertEquals(check body.summary.activeCount, 2, "headcount 3, two with points");
     test:assertEquals(check (<json[]>check body.entries)[0].actions.canAdjust, false);
 
     http:Response alone = check send("GET", "/team", (), check rvToken("lb-1"));
@@ -179,8 +217,17 @@ function testTeamPageVisibility() returns error? {
     http:Response po = check send("GET", "/team", (), check rvToken("po-team", groups = [PO_GROUP]));
     json poBody = check po.getJsonPayload();
     test:assertEquals(check poBody.scope, "COMPANY");
-    test:assertEquals(check poBody.total, 6);
-    test:assertEquals(check poBody.summary.headcount, ());
+    test:assertEquals(check poBody.total, 4, "everyone the directory lists, points or not");
+    test:assertEquals(check poBody.summary.headcount, 4);
+    test:assertEquals(check poBody.summary.activeCount, 2, "rv-a and rv-b are the listed people with points");
+
+    // Directory down (nothing cached): the company view falls back to the people with points, flagged.
+    setDirectory("down");
+    json degraded = check (check send("GET", "/team", (), check rvToken("po-team", groups = [PO_GROUP]))).getJsonPayload();
+    test:assertEquals(check degraded.teamStatus, "UNAVAILABLE");
+    test:assertEquals(check degraded.total, 6, "standings only");
+    test:assertEquals(check degraded.summary.headcount, ());
+    setDirectory("ok");
     test:assertEquals(check (<json[]>check poBody.entries)[0].actions.canReverse, true);
 
     setSetting("team.visibility", "COMPANY");
