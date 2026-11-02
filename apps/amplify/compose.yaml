@@ -97,6 +97,7 @@ services:
       BAL_CONFIG_VAR_LINKEDINAUTHORIZEBASEURL: ${LINKEDIN_AUTHORIZE_BASE_URL-http://localhost:19091}
       # The mock issues no ID token, so this only makes sense against real LinkedIn.
       BAL_CONFIG_VAR_LINKEDINIDTOKENVALIDATION: ${LINKEDIN_ID_TOKEN_VALIDATION:-false}
+      BAL_CONFIG_VAR_LINKEDINNONCEMODE: ${LINKEDIN_NONCE_MODE:-OFF}
       # The company page posts must belong to. Default = WSO2's page; local/.env can point at a test page.
       BAL_CONFIG_VAR_WSO2ORGANIZATIONURN: ${WSO2_ORGANIZATION_URN:-urn:li:organization:1477}
       # Team rosters (D13) = people-stub by default: copy local/people-stub/directory.json.example to directory.json (gitignored) and edit it.
