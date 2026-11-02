@@ -68,6 +68,8 @@ scan() {
       while (i <= n) {
         c = substr(s, i, 1)
         if (q == "") {
+          # A trailing `//` comment is not code: blank the rest of the line so a bracket in it cannot move the gate.
+          if (c == "/" && substr(s, i + 1, 1) == "/") { while (i <= n) { out = out " "; i++ } break }
           if (c == "\"" || c == "`") { q = c; out = out " " }
           else out = out c
           i++; continue
@@ -191,6 +193,16 @@ isolated function strings() returns error? {
 BAL
   ( scan "$fx" >/dev/null ) || { echo "self-test: a next-line callback or a string literal was rejected"; exit 1; }
   rm "$fx/amplify-jobs/ok2.bal"
+  # An unbalanced `(` in a trailing comment must not leave the gate open for the ungated call after it.
+  cat > "$fx/amplify-jobs/bad6.bal" <<'BAL'
+isolated function commented() returns error? {
+    check store:inTransaction(
+        () => saveTx(1)); // retry (up to 3
+    check saveTx(2);
+}
+BAL
+  ( scan "$fx" >/dev/null ) && { echo "self-test: a bracket in a comment kept the gate open"; exit 1; }
+  rm "$fx/amplify-jobs/bad6.bal"
   echo "Transaction gate check self-test passed."
   exit 0
 fi
