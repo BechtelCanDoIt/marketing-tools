@@ -19,7 +19,7 @@
 #   make e2e      end-to-end smoke test against the running stack (scripts/e2e-local.sh)
 #   make down     stop and remove containers AND volumes
 #   make check    descriptor drift + log hygiene + Chat transport (no http client for the webhook) (no PII/tokens/commentary in log calls) + transaction gate (R-13)
-#   make test-all unit + IT (postgres:18, mock LinkedIn, DB down) + scheduler IT + e2e; cleans up after
+#   make test-all unit + IT (postgres:17.11, mock LinkedIn, DB down) + scheduler IT + e2e; cleans up after
 #   make load-test k6 against the running stack: 1k employees / 50k ledger rows, p95 < 50 ms target
 #   make up PROFILE=apim   also start WSO2 API Manager (pending the non-prod Asgardeo org)
 

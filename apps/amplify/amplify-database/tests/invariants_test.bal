@@ -191,7 +191,7 @@ function testConstraintsRejectBadRows() returns error? {
             VALUES (uuidv7(), 'club', 'k', now(), now())`), "announcement_sent_xor_failed_ck");
 
     // uuidv7 defaults.
-    int version = check api->queryRow(`SELECT uuid_extract_version(id)::int FROM external_sharing_external_share
+    int version = check api->queryRow(`SELECT substring(id::text FROM 15 FOR 1)::int FROM external_sharing_external_share
                                        WHERE evidence_url = 'https://x.example/p/once'`);
     test:assertEquals(version, 7, "ids default to UUIDv7");
     check api.close();

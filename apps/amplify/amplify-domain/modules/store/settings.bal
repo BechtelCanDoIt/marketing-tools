@@ -89,13 +89,18 @@ isolated function updateSettingsTx(postgresql:Client db, Actor actor, SettingCha
     transaction {
         foreach SettingChange c in changes {
             string value = c.value.toJsonString();
-            // PostgreSQL 18 `RETURNING old.*`: the audit row gets the value before the change.
+            // The old value is read and locked in the same statement that changes it, so the audit row gets it on every
+            // PostgreSQL version (`RETURNING old.*` needs 18).
             string|error before = db->queryRow(`
+                WITH prev AS (
+                    SELECT key, value::text AS old_value FROM config_app_setting
+                    WHERE key = ${c.key} AND version = ${c.expectedVersion} FOR UPDATE)
                 UPDATE config_app_setting
                 SET value = CAST(${value} AS jsonb), updated_by = ${actor.actorId},
                     updated_at = CAST(${ts(now)} AS timestamptz), version = version + 1
-                WHERE key = ${c.key} AND version = ${c.expectedVersion}
-                RETURNING old.value::text`);
+                FROM prev
+                WHERE config_app_setting.key = prev.key
+                RETURNING prev.old_value AS value`);
             if before is error {
                 if !isNoRows(before) {
                     fail before;
