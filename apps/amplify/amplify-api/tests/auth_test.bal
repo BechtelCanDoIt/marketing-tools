@@ -15,6 +15,7 @@
 // under the License.
 import amplify_api.auth;
 import amplify_common.types;
+import amplify_domain.identity;
 import amplify_domain.store;
 
 import ballerina/crypto;
@@ -402,4 +403,68 @@ function testColdJwksCacheFetchesOncePerInterval() returns error? {
         return e;
     }
     setJwksEmptyBody(false);
+}
+
+// ---- A re-created Asgardeo account (new sub, same email) ---------------------------------------------
+
+@test:Config
+function testRecreatedAccountActsAsTheExistingEmployee() returns error? {
+    http:Response first = check call("GET", "/me", check mint({sub: "emp-re-old", email: "Re.Person@wso2.com", name: "Re Person"}));
+    test:assertEquals(first.statusCode, 200);
+    test:assertEquals(check (check first.getJsonPayload()).employee.employeeId, "emp-re-old");
+    int before = fakeEmployees.aliasCount();
+
+    // Same person, new sub: no 409, and the history key stays the first one.
+    string recreated = check mint({sub: "emp-re-new", email: "re.person@wso2.com", name: "Re Person"});
+    http:Response second = check call("GET", "/me", recreated);
+    test:assertEquals(second.statusCode, 200);
+    test:assertEquals(check (check second.getJsonPayload()).employee.employeeId, "emp-re-old",
+            "acts as the first employee id, so the ledger and standing are the same person's");
+    test:assertEquals(fakeEmployees.aliasCount(), before + 1);
+    test:assertTrue(fakeEmployees.findById("emp-re-new") is (), "no second employee row is made");
+
+    // Idempotent: asking again, with the resolver's cache gone, adds nothing.
+    lock {
+        resolvedSubs.removeAll();
+    }
+    http:Response third = check call("GET", "/me", recreated);
+    test:assertEquals(third.statusCode, 200);
+    test:assertEquals(check (check third.getJsonPayload()).employee.employeeId, "emp-re-old");
+    test:assertEquals(fakeEmployees.aliasCount(), before + 1);
+    // And so does a route other than /me: the principal everywhere is the first id.
+    http:Response points = check call("GET", "/me/points", recreated);
+    test:assertEquals(points.statusCode, 200);
+    test:assertEquals(check (check points.getJsonPayload()).standing.employeeId, "emp-re-old");
+}
+
+@test:Config
+function testGenuineEmailClashIsATypedGenericConflict() returns error? {
+    _ = check call("GET", "/me", check mint({sub: "emp-cl-a", email: "cl.a@wso2.com", name: "A"}));
+    _ = check call("GET", "/me", check mint({sub: "emp-cl-b", email: "cl.b@wso2.com", name: "B"}));
+    // b's account now claims a's email: two separate records, nothing to merge by guessing.
+    string token = check mint({sub: "emp-cl-b", email: "cl.a@wso2.com", name: "B"});
+    lock {
+        resolvedSubs.removeAll();
+    }
+    foreach string path in ["/me", "/me/points"] {
+        http:Response res = check call("GET", path, token);
+        test:assertEquals(res.statusCode, 409, path);
+        json body = check res.getJsonPayload();
+        test:assertEquals(check body.code, "EMAIL_CONFLICT");
+        string text = body.toJsonString();
+        test:assertFalse(text.includes("cl.a") || text.includes("emp-cl-a") || text.includes("belongs to another"),
+                "the body says nothing about the other record (no account-enumeration oracle): " + text);
+    }
+    // The clash is not cached: once the other record is out of the way the caller recovers on the next call.
+    test:assertTrue(fakeEmployees.findByEmail("cl.a@wso2.com") is identity:Employee);
+}
+
+@test:Config
+function testNewPersonAndKnownPersonAreUntouched() returns error? {
+    int before = fakeEmployees.aliasCount();
+    http:Response fresh = check call("GET", "/me", check mint({sub: "emp-plain-1", email: "plain.one@wso2.com", name: "P"}));
+    test:assertEquals(check (check fresh.getJsonPayload()).employee.employeeId, "emp-plain-1");
+    http:Response again = check call("GET", "/me", check mint({sub: "emp-plain-1", email: "plain.one@wso2.com", name: "P2"}));
+    test:assertEquals(check (check again.getJsonPayload()).employee.displayName, "P2");
+    test:assertEquals(fakeEmployees.aliasCount(), before, "no alias for an ordinary sign-in");
 }
