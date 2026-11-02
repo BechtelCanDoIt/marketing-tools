@@ -33,14 +33,14 @@ order only, so a late-arriving `V0NN` must be renumbered above the highest appli
 script. It logs each script as `pending`, `applied` or `changed` and fails when any is `changed`, so it doubles
 as a checksum check before a deploy. Nothing in the database is touched.
 
-Local: `make up` runs it once before api/jobs start; `make seed` reruns it (compose pins `postgres:18`).
+Local: `make up` runs it once before api/jobs start; `make seed` reruns it (compose and the tests pin `postgres:17.11`, the version staging runs; CI also runs 15 and 18). Before PostgreSQL 18 the runner installs `bootstrap/uuidv7_compat.sql` first (ADR-044).
 
-## Integration tests (PostgreSQL 18)
+## Integration tests (PostgreSQL 15 or later)
 
 `bal test` without a database passes: the `integration` group returns early unless enabled.
 
 ```sh
-docker run -d --name amplify-pg18 -e POSTGRES_PASSWORD=postgres -p 55432:5432 postgres:18
+docker run -d --name amplify-pg17 -e POSTGRES_PASSWORD=postgres -p 55432:5432 postgres:17.11
 
 # 1. Runner: drops/creates `amplify_it`, plays the DBA (login user `amplify_it_user`, its schema), migrates fresh as that
 #    login, reruns (idempotent), checksum guard, partition tests. Steps 2 and 3 connect as the same login.

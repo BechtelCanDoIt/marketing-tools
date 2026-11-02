@@ -34,7 +34,7 @@ cd ../amplify-domain && bal pack && bal push --repository=local
 cd ../amplify-api && bal build && bal test
 ```
 
-Database: migrations, seeds and the integration-test recipe against PostgreSQL 18 are in [docs/migrations/README.md](docs/migrations/README.md).
+Database: migrations, seeds and the integration-test recipe against PostgreSQL 15 or later are in [docs/migrations/README.md](docs/migrations/README.md).
 
 Docker images build from a clean checkout (the shared packages are packed inside the build stage). Each component has its own Docker context, because Choreo reads `<context>/.choreo/component.yaml` ([ADR-027](architecture/decisions/ADR-027-per-component-docker-contexts.md)):
 

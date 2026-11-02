@@ -27,7 +27,7 @@ Inside marketing-tools the order is: databases, DB Migrate, Jobs, Scheduler, Bac
 
 ## B. Databases (per environment)
 
-1. **B1** Create a Choreo-managed PostgreSQL **18** server per environment (dev, prod) on a paid plan with backups (Hobbyist has none). If 18 isn't offered, stop: M3 depends on native `uuidv7()` (fallback: UUIDv7 generated in Ballerina, never v4).
+1. **B1** Create a Choreo-managed PostgreSQL server, **version 15 or later (18 recommended)**, per environment (dev, prod) on a paid plan with backups (Hobbyist has none). Before 18 there is no native `uuidv7()`; the DB Migrate runner installs a compatible one first (ADR-044), so a 15, 16 or 17 server works.
    - **B1a Extension check (plan D2).** On each new server run `apps/amplify/amplify-database/checks/d2_extensions.sql` (marketing-tools repo): it lists `pg_partman`, `pg_cron`, `pgaudit`, `citext`, `pg_trgm` and `SELECT version()`. Record the output in the plan's D2 line. `citext` and `pg_trgm` are required; if either is missing, stop and raise it (B18) before running DB Migrate.
 2. **B2** Database `amplify` with **one login user and one schema named after it** (staging `amplify_stg_user`, production its own name; ADR-043). There are no database roles. Ask the DBA for, once per environment: the login user, `CREATE SCHEMA <login> AUTHORIZATION <login>`, and `citext` and `pg_trgm` installed. Then connect as the login user and run `apps/amplify/amplify-database/checks/d3_single_user.sql`: every row must say `OK`. The login's credentials go into every Amplify component (C1, C2, C5); there are no per-role passwords.
 3. **B3** Database `scheduler` with its own user (ADR-026). Never Amplify's users.

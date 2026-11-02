@@ -160,14 +160,24 @@ public isolated class PgShareRepository {
 
     private isolated transactional function updateRow(ShareRequest r, int expectedVersion, events:OutboxEvent[] outbox)
             returns error? {
+        // The row is read and locked in the same statement that changes it, so the audit row records the state before the
+        // change on every PostgreSQL version (`RETURNING old.*` needs 18).
         record {|string kind; int attempts; time:Utc? published_at; time:Utc? failed_at;|}|error old = self.db->queryRow(`
+            WITH prev AS (
+                SELECT id, kind AS old_kind, attempts AS old_attempts, published_at AS old_published_at,
+                       failed_at AS old_failed_at
+                FROM sharing_share_request
+                WHERE id = CAST(${r.id} AS uuid) AND version = ${expectedVersion}
+                FOR UPDATE)
             UPDATE sharing_share_request
             SET kind = ${r.kind}, commentary = ${r.commentary}, published_at = CAST(${store:ts(r.publishedAt)} AS timestamptz),
                 failed_at = CAST(${store:ts(r.failedAt)} AS timestamptz), failure_reason = ${r.failureReason}, attempts = ${r.attempts},
                 last_error_code = ${r.lastErrorCode}, engagement_id = CAST(${r.engagementId} AS uuid),
                 version = ${r.version}
-            WHERE id = CAST(${r.id} AS uuid) AND version = ${expectedVersion}
-            RETURNING old.kind, old.attempts, old.published_at, old.failed_at`);
+            FROM prev
+            WHERE sharing_share_request.id = prev.id
+            RETURNING prev.old_kind AS kind, prev.old_attempts AS attempts, prev.old_published_at AS published_at,
+                      prev.old_failed_at AS failed_at`);
         if old is error {
             return store:isNoRows(old) ? store:versionConflict("share") : old;
         }
