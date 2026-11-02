@@ -322,7 +322,7 @@ paths:
       tags: [C1 Sharing]
       operationId: requestShare
       x-access: EMPLOYEE
-      description: Queues "Amplify, share this for me" (202). One per campaign per employee; asking again after FAILED retries the same row (ADR-015). Errors - `LINKEDIN_NOT_CONNECTED`, `NEEDS_RECONNECT`, `CAMPAIGN_CLOSED`, `DUPLICATE_ACTION`, `FEATURE_DISABLED`.
+      description: Queues "Amplify, share this for me" (202). One per campaign per employee; asking again after FAILED retries the same row (ADR-015). An employee gets 404 for a campaign that is archived, scheduled or closed (same as `GET /campaigns/{id}`); an editor gets `CAMPAIGN_CLOSED` or `CAMPAIGN_ARCHIVED`. Errors - `LINKEDIN_NOT_CONNECTED`, `NEEDS_RECONNECT`, `CAMPAIGN_CLOSED` (editors), `DUPLICATE_ACTION`, `FEATURE_DISABLED`.
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
