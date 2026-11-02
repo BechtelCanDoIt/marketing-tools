@@ -37,7 +37,7 @@ external='^(linkedin)[A-Z]'
 lint_files() {
   local status=0 f
   for f in "$@"; do
-    [ -r "$f" ] || { echo "lint-openapi-names: cannot read $f" >&2; return 2; }
+    [ -f "$f" ] && [ -r "$f" ] || { echo "lint-openapi-names: $f is not a readable file" >&2; return 2; }
   done
   for f in "$@"; do
   # 1. Paths: top-level keys under `paths:` (two-space indent, start with /). Same whole-segment rule as the
@@ -46,12 +46,17 @@ lint_files() {
   # 2. operationId values.
   hits+=$'\n'$(grep -nE 'operationId:' "$f" | sed -E 's/.*operationId: *//' | grep -E "$word" || true)
   # 3. Mapping keys (schema and property names), minus the HTTP method keys at four-space indent.
-  hits+=$'\n'$(grep -nE '^ *[A-Za-z_][A-Za-z0-9_]*:' "$f" \
+  # Quoted keys (`"Post":`) are names too.
+  hits+=$'\n'$(grep -nE '^ *["'"'"']?[A-Za-z_][A-Za-z0-9_]*["'"'"']?:' "$f" \
     | grep -vE '^[0-9]+:    (get|post|put|patch|delete|options|head):' \
-    | sed -E 's/^([0-9]+:) *([A-Za-z0-9_]+):.*/\1 \2/' \
+    | sed -E 's/^([0-9]+:) *["'"'"']?([A-Za-z0-9_]+)["'"'"']?:.*/\1 \2/' \
     | awk '{print $2}' | grep -E "$word" | grep -vE "$external" || true)
   # 4. Keys in flow mappings, e.g. `{name: postId, ...}` parameter names.
   hits+=$'\n'$(grep -oE 'name: *[A-Za-z0-9_-]+' "$f" | sed -E 's/name: *//' | grep -E "$word" | grep -vE "$external" || true)
+  # 5. Every other key in a flow mapping, e.g. `properties: {postId: {type: string}}`. The HTTP method keys
+  # (`{post: {...}}`) are not names.
+  hits+=$'\n'$(grep -oE '[{,] *["'"'"']?[A-Za-z_][A-Za-z0-9_]*["'"'"']? *:' "$f" | sed -E 's/^[{,] *["'"'"']?//; s/["'"'"']? *:$//' \
+    | grep -vxE '(get|post|put|patch|delete|options|head)' | grep -E "$word" | grep -vE "$external" || true)
   hits=$(printf '%s\n' "$hits" | sed '/^$/d')
   if [ -n "$hits" ]; then
     echo "$f: banned names (use the ubiquitous language: Campaign, Share, External share):"
@@ -99,12 +104,27 @@ paths:
     post:
       operationId: createPost
 YAML
+  cat > "$TMPDIR_SELF/bad-quoted.yaml" <<'YAML'
+components:
+  schemas:
+    "Post": {type: string}
+YAML
+  cat > "$TMPDIR_SELF/bad-flow.yaml" <<'YAML'
+components:
+  schemas:
+    Summary:
+      properties: {postId: {type: string}}
+YAML
   lint_files "$TMPDIR_SELF/good.yaml" >/dev/null || { echo "self-test: a segment match (reposts) or a provider name (linkedinPosts) was rejected"; exit 1; }
   lint_files "$TMPDIR_SELF/bad-path.yaml" >/dev/null && { echo "self-test: /posts passed"; exit 1; }
   lint_files "$TMPDIR_SELF/bad-name.yaml" >/dev/null && { echo "self-test: PostSummary passed"; exit 1; }
   lint_files "$TMPDIR_SELF/bad-op.yaml" >/dev/null && { echo "self-test: operationId createPost passed"; exit 1; }
+  lint_files "$TMPDIR_SELF/bad-quoted.yaml" >/dev/null && { echo "self-test: a quoted \"Post\" key passed"; exit 1; }
+  lint_files "$TMPDIR_SELF/bad-flow.yaml" >/dev/null && { echo "self-test: a flow-mapping postId key passed"; exit 1; }
   # A path that cannot be read must fail, not print OK: that was the silent no-op.
   lint_files "$TMPDIR_SELF/missing.yaml" 2>/dev/null && { echo "self-test: an unreadable file reported OK"; exit 1; }
+  # A directory is readable but is not a contract: it must fail too, not scan nothing and print OK.
+  lint_files "$TMPDIR_SELF" 2>/dev/null && { echo "self-test: a directory reported OK"; exit 1; }
   echo "lint-openapi-names self-test passed."
   exit 0
 fi
