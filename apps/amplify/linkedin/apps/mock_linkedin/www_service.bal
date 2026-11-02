@@ -21,8 +21,10 @@ import ballerina/log;
 
 # Listener for the `www.linkedin.com` host.
 // Uploads are small test images. `readUploadBody` enforces `maxUploadBytes`, so an oversized body is
-// refused instead of being buffered.
-listener http:Listener wwwListener = new (wwwPort, host = listenerHost);
+// refused instead of being buffered; the listener cap is the same limit plus headroom for multipart framing, so a
+// body far over it is refused before it is read at all.
+listener http:Listener wwwListener = new (wwwPort, host = listenerHost,
+    requestLimits = {maxEntityBodySize: maxUploadBytes + 8192});
 
 # Mock of LinkedIn's 3-legged OAuth 2.0 authorization code flow. There is no login page:
 # every authorization signs in as the configured `member` and consents straight away.

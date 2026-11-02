@@ -50,5 +50,5 @@ configurations:
     - name: BAL_CONFIG_DATA
       valueFrom:
         configForm:
-          displayName: TOML: redirectUris = ["<One WSO2 dev callback>"]
+          displayName: 'TOML: redirectUris = ["<One WSO2 dev callback>"]'
           type: string
