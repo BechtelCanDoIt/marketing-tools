@@ -19,13 +19,13 @@
 
 SET LOCAL ROLE amplify_migrate;
 
-CREATE TABLE recognition.standing_version (
+CREATE TABLE recognition_standing_version (
     period_key   text        PRIMARY KEY,
     version      bigint      NOT NULL DEFAULT 1,
     refreshed_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE recognition.standing (
+CREATE TABLE recognition_standing (
     period_key          text        NOT NULL,
     employee_id         text        NOT NULL,
     display_name        text        NOT NULL,
@@ -43,11 +43,11 @@ CREATE TABLE recognition.standing (
 );
 
 -- Company top N and the Team page; My Team by roster emails; Team search.
-CREATE INDEX standing_rank_idx ON recognition.standing (period_key, rank);
-CREATE INDEX standing_email_idx ON recognition.standing (period_key, email);
-CREATE INDEX standing_display_name_trgm_idx ON recognition.standing USING gin (display_name public.gin_trgm_ops);
+CREATE INDEX standing_rank_idx ON recognition_standing (period_key, rank);
+CREATE INDEX standing_email_idx ON recognition_standing (period_key, email);
+CREATE INDEX standing_display_name_trgm_idx ON recognition_standing USING gin (display_name public.gin_trgm_ops);
 
-CREATE TABLE recognition.employee_points_monthly (
+CREATE TABLE recognition_employee_points_monthly (
     employee_id   text NOT NULL,
     month         date NOT NULL CHECK (month = date_trunc('month', month)::date),
     points        int  NOT NULL DEFAULT 0,
@@ -55,7 +55,7 @@ CREATE TABLE recognition.employee_points_monthly (
     PRIMARY KEY (employee_id, month)
 );
 
-CREATE TABLE recognition.campaign_participation (
+CREATE TABLE recognition_campaign_participation (
     campaign_id              uuid        PRIMARY KEY,
     reposters                int         NOT NULL DEFAULT 0,
     external_shares_approved int         NOT NULL DEFAULT 0,
@@ -64,7 +64,7 @@ CREATE TABLE recognition.campaign_participation (
 );
 
 -- amplify_api writes here too, so PO adjust/reverse/approve updates standings in its transaction (B12).
-GRANT SELECT, INSERT, UPDATE, DELETE ON recognition.standing, recognition.standing_version,
-    recognition.employee_points_monthly, recognition.campaign_participation TO amplify_api, amplify_jobs;
-GRANT SELECT ON recognition.standing, recognition.standing_version, recognition.employee_points_monthly,
-    recognition.campaign_participation TO amplify_readonly;
+GRANT SELECT, INSERT, UPDATE, DELETE ON recognition_standing, recognition_standing_version,
+    recognition_employee_points_monthly, recognition_campaign_participation TO amplify_api, amplify_jobs;
+GRANT SELECT ON recognition_standing, recognition_standing_version, recognition_employee_points_monthly,
+    recognition_campaign_participation TO amplify_readonly;

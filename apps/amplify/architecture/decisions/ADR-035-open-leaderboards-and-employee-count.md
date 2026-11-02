@@ -26,7 +26,7 @@ WSO2 is an open company and the owner wants the company board open. Dashboards f
 ## Consequences
 
 - ADR-014's "no full company list" and ADR-019's visibility rule are superseded for ranks and points. Points *history* is not.
-- The reports need no new table: group boards read `recognition.standing` through `pointsByEmail` and the directory index. One more query of at most ~830 rows per request.
+- The reports need no new table: group boards read `recognition_standing` through `pointsByEmail` and the directory index. One more query of at most ~830 rows per request.
 - Group boards and BU views need the directory. When it has never loaded, they answer 503; the company board doesn't need it.
 - Another employee's rank and points are now visible to all. That is the decision, but security should note it in the threat model (data classification of points) and the data-deletion exception still applies.
 - Reach and impressions stay out: boards report only what Amplify recorded (reposts, shares, connections, points, Chat card status).

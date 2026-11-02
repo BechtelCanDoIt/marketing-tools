@@ -14,13 +14,13 @@ Ballerina backend for WSO2 Amplify phase 1. Three Ballerina deployables, the sch
 ## Architecture
 - `amplify-api`: published API, fronted by the Choreo API proxy at the cell edge (ADR-004). Only the proxy is published; the backend has Project visibility.
 - `amplify-jobs`: HTTP-triggered worker, no internal timer (ADR-003).
-- `amplify-scheduler`: pinned `akorn/scheduler` image (ADR-026, replaces amplify-cron). Calls `amplify-jobs POST /runs` and `/maintenance/partitions`; amplify-api pushes the schedules from `config.app_setting`. Its API has no auth: internal only, own Postgres database/user. Scheduler IT: `scripts/it-scheduler.sh`.
-- `amplify-database`: Amplify DB Migrate (Manual Task / Compose one-shot), forward-only `V###__name.sql`.
+- `amplify-scheduler`: pinned `akorn/scheduler` image (ADR-026, replaces amplify-cron). Calls `amplify-jobs POST /runs` and `/maintenance/partitions`; amplify-api pushes the schedules from `config_app_setting`. Its API has no auth: internal only, own Postgres database/user. Scheduler IT: `scripts/it-scheduler.sh`.
+- `amplify-database`: Amplify DB Migrate (Manual Task / Compose one-shot), forward-only `V###__name.sql` (rewritten once for ADR-042 on 2026-11-02; applied scripts are not edited again).
 - `amplify-common`: shared types, events, crypto and adapters (ADR-020).
 - `amplify-domain`: bounded contexts (domain + repository ports + PostgreSQL repositories) and `store` (client, outbox/audit writers), used by api and jobs (ADR-021).
 
 ## DB connections
-PostgreSQL 18, one schema per bounded context, one DB user per component (`amplify_migrate`, `amplify_api`, `amplify_jobs`, `amplify_readonly`). A context reads and writes only its own schema; no cross-context FKs (ADR-005). Exception by design: the ledger append applies the row to `recognition` in the same transaction (B12). Details: `architecture/solution/Phase 1/phase1-data-model.md`. Integration tests against Postgres 18: `docs/migrations/README.md`.
+PostgreSQL 18, **one login user and one schema** (named after the user; ADR-042), tables prefixed with their context (`sharing_share_request`). Four NOLOGIN group roles (`amplify_migrate`, `amplify_api`, `amplify_jobs`, `amplify_readonly`) carry the grants; each service connects as the login user and takes its role at connect: `store:newClient` appends the JDBC `options` startup parameter (`-c role=<dbRole> -c search_path=<dbSchema>,public -c idle_in_transaction_session_timeout=30000`) to the database name, so no query runs as the bare login. SQL names no schema. A context reads and writes only its own tables; no cross-context FKs (ADR-005). Exception by design: the ledger append applies the row to `recognition` in the same transaction (B12). Local: `local/db-init` plays the DBA (`make dba-setup`). Details: `architecture/solution/Phase 1/phase1-data-model.md`. Integration tests against Postgres 18: `docs/migrations/README.md`.
 
 ## Key patterns
 - Apache-2.0 WSO2 header on every `.bal`, `.sql`, `Dockerfile`.

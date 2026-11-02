@@ -10,7 +10,7 @@ The Celebrate "Top three amplifiers" read the all-time standings, so the same pe
 
 ## Decision
 
-1. **Scope is a setting.** `leaderboard.top_scope` (`config.app_setting`, admin-editable): `MONTH` (default; was `WEEK`) or `ALL`. Seed S009 moves an existing `WEEK` value to `MONTH` and leaves `ALL` alone. `ALL` serves the all-time standings as before.
+1. **Scope is a setting.** `leaderboard.top_scope` (`config_app_setting`, admin-editable): `MONTH` (default; was `WEEK`) or `ALL`. Seed S009 moves an existing `WEEK` value to `MONTH` and leaves `ALL` alone. `ALL` serves the all-time standings as before.
 2. **This month** is the calendar month, the 1st 00:00 UTC to the next 1st. People are ranked by the sum of their signed ledger points in it (adjustments and reversals included, so the arithmetic matches the all-time board). Anyone whose week nets to zero or less is left off. Ties share a rank.
 3. **Company wide.** The top three come from every employee with points; they are never narrowed to the caller's team or business unit (checked: `topBoard` reads no roster).
 4. **My position matches.** The caller's rank, points and gaps come from the same monthly totals as the podium, so the two always agree.
@@ -25,7 +25,7 @@ The Celebrate "Top three amplifiers" read the all-time standings, so the same pe
 - Several callers arriving together on an empty cache may each read the ledger once; the read is one grouped query over a month of rows.
 - On the 1st the board starts empty ("No points yet this month").
 - `previousRank` is not tracked for months (always null).
-- The month sum reads `scoring.points_ledger` from the recognition context, as the rebuild already does.
+- The month sum reads `scoring_points_ledger` from the recognition context, as the rebuild already does.
 
 ## Links
 

@@ -6,7 +6,7 @@
 
 ## Context
 
-`scoring.points_ledger.reference` is a `varchar(66)` primary key and the phase 1 dedupe boundary (K4: automated duplicate prevention). The original design was `AMP-` + a hex sha256 of the award facts, which is **68 characters in a 66-character column** (C1). The reference must also be **deterministic**: a re-run of a score pass, or a second replica, must produce the same key so the insert can be `ON CONFLICT (reference) DO NOTHING` and never double-award (the anti-farming rule "once per action per post per person", R6/K4).
+`scoring_points_ledger.reference` is a `varchar(66)` primary key and the phase 1 dedupe boundary (K4: automated duplicate prevention). The original design was `AMP-` + a hex sha256 of the award facts, which is **68 characters in a 66-character column** (C1). The reference must also be **deterministic**: a re-run of a score pass, or a second replica, must produce the same key so the insert can be `ON CONFLICT (reference) DO NOTHING` and never double-award (the anti-farming rule "once per action per post per person", R6/K4).
 
 The wso2-coin reference rules that will govern the eventual payment reference are **not ready**, so this decision fixes the phase 1 encoding and is revisited after phase 1 (todo C1, plan M0c).
 

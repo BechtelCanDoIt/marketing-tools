@@ -36,7 +36,7 @@ Shapes are in `amplify-api/openapi.yaml` (`LeaderboardPeople`, `LeaderboardGroup
 Amplify stores no org data (ADR-009). The team comes from **people-app's employee directory**, keyed by work email: the same source the One WSO2 UI reads for photos and names.
 
 1. `amplify-api` resolves the viewer's team roster (member emails + team name) from people-app's employee directory (`GET /employees/basic-info`, the same source One WSO2's Org Chart reads), **server to server**, through a declared egress connection with a circuit breaker. The whole directory is fetched in one call and grouped by **sub-team**, falling back to **team** when a person has no sub-team (decided 2026-10-19), under the person's own `businessUnit` (ADR-035). The index is kept in memory for **3 days** (teams change, but rarely), **never written to the database**; a failed refresh keeps serving the last index.
-2. It ranks that set from `recognition.standing` (query below).
+2. It ranks that set from `recognition_standing` (query below).
 3. The One WSO2 UI adds photos and full names per row from the same directory, with the user's own token (Org Chart's query, shared through React Query). If that fails, rows show amplify-api's display name and initials.
 
 Why server side: if the browser sent the list of emails, any employee could ask for anyone's points, and the visibility rule below would mean nothing.
@@ -60,30 +60,30 @@ Setting `team.visibility` (`TEAM` default, or `COMPANY`) lets PO widen the Team 
 
 ## Queries
 
-All against `recognition.standing` (PK `(period_key, employee_id)`, indexes `(period_key, rank)` and `(period_key, email)`), read through `amplify_api`'s `select` grant.
+All against `recognition_standing` (PK `(period_key, employee_id)`, indexes `(period_key, rank)` and `(period_key, email)`), read through `amplify_api`'s `select` grant.
 
 ```sql
 -- Company top N (ties can return more than N rows)
 SELECT employee_id, display_name, email, total_points, rank, previous_rank
-FROM recognition.standing
+FROM recognition_standing
 WHERE period_key = $period AND rank <= $top_n
 ORDER BY rank, display_name;
 
 -- Personal (single PK lookup; no row = no points yet)
 SELECT total_points, rank, previous_rank, points_to_next_rank, points_to_top_n, last_activity_at
-FROM recognition.standing
+FROM recognition_standing
 WHERE period_key = $period AND employee_id = $viewer;
 
 -- My Team: rank within the viewer's directory sub-team
 SELECT employee_id, display_name, email, total_points, rank AS company_rank,
        dense_rank() OVER (ORDER BY total_points DESC) AS team_rank
-FROM recognition.standing
+FROM recognition_standing
 WHERE period_key = $period AND email = ANY($team_emails::citext[])
 ORDER BY team_rank, display_name;
 
 -- Team page (paged, searchable). Employees: add AND email = ANY($team_emails)
 SELECT employee_id, display_name, email, total_points, rank, previous_rank, last_activity_at
-FROM recognition.standing
+FROM recognition_standing
 WHERE period_key = $period
   AND ($q IS NULL OR display_name % $q OR display_name ILIKE $q || '%')
 ORDER BY rank, display_name

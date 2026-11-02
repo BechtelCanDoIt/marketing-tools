@@ -14,10 +14,10 @@ The Choreo API proxy validates the Asgardeo access token and forwards a backend 
 
 1. **Own verifier** (`amplify-api/modules/auth`): RS256 only (`none`/HS* rejected), signature checked against the gateway JWKS before any claim is trusted, then `exp`/`nbf` (60 s skew), `iss`, `aud` (any of a configured list), `sub` (EmployeeId) and `email`. Claim names for roles, email and name are configurable because the backend JWT may rename them.
 2. **JWKS cache**: keys refreshed on age (1 h) or an unknown `kid`, at most once per 30 s once keys exist; HTTP client with a circuit breaker and 5 s timeout. A failed refresh keeps the last good keys. No keys at all → **503 `DEPENDENCY_UNAVAILABLE`**, not 401, so an IdP outage doesn't look like a sign-out.
-3. **Activity matrix as one table** (`modules/auth/matrix.bal`), row for row with activity-matrix.md. The request interceptor enforces role × method × route; a route not in the table is denied (**default deny**, `ROUTE_NOT_PERMITTED`). State, ownership and kill-switch conditions (`PENDING` only, own claim, `employeeId` = caller, `sharing.enabled`, ...) stay in the use cases; the table carries them as a `useCase` note so reviewers see where each check lives.
+3. **Activity matrix as one table** (`modules/auth/matrix.bal`), row for row with activity-matrix.md. The request interceptor enforces role × method × route; a route not in the table is denied (**default deny**, `ROUTE_NOT_PERMITTED`). State, ownership and kill-switch conditions (`PENDING` only, own claim, `employeeId` = caller, `sharing_enabled`, ...) stay in the use cases; the table carries them as a `useCase` note so reviewers see where each check lives.
 4. **Roles** come only from the roles claim (default `groups`), filtered to the four `amplify_*` names. **A missing claim means a plain employee**, not a 401: employees have no group (Roles table).
-5. **Identity from claims, not userinfo.** `email` and `name` must be in the backend JWT; `GET /me` upserts `identity.employee` from them. No userinfo call, so no extra dependency or token handling in the backend. A token without `email` is rejected (`TOKEN_CLAIMS_INVALID`).
-6. **Denials**: 401/403 as problem details (`application/problem+json`, stable `code`), an `audit.audit_log` row with `outcome = DENIED` (actor `anonymous` for 401), and a log line with code, route template and correlation id only. No token, email or claim values in logs (iss/aud only at debug, for setup).
+5. **Identity from claims, not userinfo.** `email` and `name` must be in the backend JWT; `GET /me` upserts `identity_employee` from them. No userinfo call, so no extra dependency or token handling in the backend. A token without `email` is rejected (`TOKEN_CLAIMS_INVALID`).
+6. **Denials**: 401/403 as problem details (`application/problem+json`, stable `code`), an `audit_log` row with `outcome = DENIED` (actor `anonymous` for 401), and a log line with code, route template and correlation id only. No token, email or claim values in logs (iss/aud only at debug, for setup).
 7. `GET /me` capabilities are derived from the same table plus two use-case capabilities (`campaigns.read_any_status`, `team.history.read_any`).
 
 ## Consequences
@@ -26,7 +26,7 @@ The Choreo API proxy validates the Asgardeo access token and forwards a backend 
 - Unknown routes answer 403 instead of 404 for an authenticated caller (less route probing).
 - Denial audit writes are synchronous. Behind the proxy, 401s are rare; if bypass traffic ever floods the backend, move denials to a sampled or async writer.
 - An outage of both the IdP and our cache (cold start during an IdP outage) means 503 until the JWKS answers.
-- If the proxy can't carry `email`/`groups` claims, revisit item 5 (userinfo once, cached in `identity.employee`).
+- If the proxy can't carry `email`/`groups` claims, revisit item 5 (userinfo once, cached in `identity_employee`).
 
 ## Links
 

@@ -26,6 +26,10 @@ x-db-common: &db-common
   BAL_CONFIG_VAR_DBHOST: postgres
   BAL_CONFIG_VAR_DBNAME: amplify
   BAL_CONFIG_VAR_DBSSLMODE: DISABLE
+  # One database login for every component (as in staging and production); each service switches to its own
+  # group role (BAL_CONFIG_VAR_DBROLE) and puts the schema named after the login first on the search_path.
+  BAL_CONFIG_VAR_DBUSER: amplify_local_user
+  BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_DB_PASSWORD:?}
 
 services:
   postgres:
@@ -35,12 +39,16 @@ services:
       POSTGRES_DB: amplify
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in local/.env (make env)}
+      # The stand-in for the DBA's setup (login user, schema, roles, extensions), run on a fresh volume
+      AMPLIFY_DB_USER: amplify_local_user
+      AMPLIFY_DB_PASSWORD: ${AMPLIFY_DB_PASSWORD:?set AMPLIFY_DB_PASSWORD in local/.env (make env)}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d amplify"]
       interval: 5s
       retries: 10
     volumes:
       - pgdata:/var/lib/postgresql
+      - ./local/db-init:/docker-entrypoint-initdb.d:ro
     networks: [internal]
 
   # Amplify DB Migrate: one-shot, migrations then seeds (idempotent; `make seed` reruns it).
@@ -49,11 +57,6 @@ services:
       context: amplify-database
     environment:
       <<: *db-common
-      BAL_CONFIG_VAR_DBUSER: postgres
-      BAL_CONFIG_VAR_DBPASSWORD: ${POSTGRES_PASSWORD:?}
-      BAL_CONFIG_VAR_APIDBPASSWORD: ${AMPLIFY_API_DB_PASSWORD:?}
-      BAL_CONFIG_VAR_JOBSDBPASSWORD: ${AMPLIFY_JOBS_DB_PASSWORD:?}
-      BAL_CONFIG_VAR_READONLYDBPASSWORD: ${AMPLIFY_READONLY_DB_PASSWORD:-}
     depends_on:
       postgres: {condition: service_healthy}
     networks: [internal]
@@ -65,7 +68,7 @@ services:
       dockerfile: amplify-api/Dockerfile
     environment:
       <<: *db-common
-      BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_API_DB_PASSWORD:?}
+      BAL_CONFIG_VAR_DBROLE: amplify_api
       # Identity (ADR-022). Default profile: no gateway, dev JWT from local/dev-jwt (ADR-023, local only).
       BAL_CONFIG_VAR_ENVIRONMENT: local
       # The default must start with http://localhost: the dev-JWT switch is refused otherwise (ADR-023, config.bal).
@@ -152,7 +155,7 @@ services:
       dockerfile: amplify/amplify-jobs/Dockerfile
     environment:
       <<: *db-common
-      BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_JOBS_DB_PASSWORD:?}
+      BAL_CONFIG_VAR_DBROLE: amplify_jobs
       BAL_CONFIG_VAR_LINKEDINCLIENTID: ${LINKEDIN_APP_CLIENT_ID:-${LINKEDIN_CLIENT_ID:?}}
       BAL_CONFIG_VAR_LINKEDINAPIBASEURL: ${LINKEDIN_API_BASE_URL:-http://mock-linkedin:9090}
       BAL_CONFIG_VAR_LINKEDINAUTHBASEURL: ${LINKEDIN_OAUTH_BASE_URL:-http://mock-linkedin:9091}
