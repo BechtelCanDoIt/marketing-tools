@@ -91,9 +91,45 @@ function linkedInUrlsWithoutAPostUrnKeepUrlNormalization() returns error? {
     EvidenceUrl company = check parseEvidenceUrl("https://www.linkedin.com/company/wso2/?utm_source=x");
     test:assertEquals(company.normalized, "https://www.linkedin.com/company/wso2");
     test:assertEquals(company.resourceUrn, ());
-    EvidenceUrl shortLink = check parseEvidenceUrl("https://lnkd.in/eAbCdEf");
-    test:assertEquals(shortLink.normalized, "https://lnkd.in/eAbCdEf");
-    test:assertEquals(shortLink.provider, EVIDENCE_PROVIDER_LINKEDIN);
+}
+
+// A lnkd.in short link can't be tied to a post URN without fetching it, so one post could be claimed
+// twice (once by its short link, once by its full URL). Rejected in every form.
+@test:Config
+function lnkdInShortLinksAreRejected() {
+    foreach string url in ["https://lnkd.in/eAbCdEf", "https://LNKD.IN/eAbCdEf/", "https://lnkd.in:443/eAbCdEf?utm_source=x",
+            "https://lnkd.in/posts/x-activity-42-z"] {
+        EvidenceUrl|DomainError r = parseEvidenceUrl(url);
+        test:assertTrue(r is DomainError, url);
+        if r is DomainError {
+            test:assertEquals(r.detail().code, ERR_INVALID_EVIDENCE_URL, url);
+        }
+    }
+    // Only that host: lookalikes are ordinary hosts.
+    test:assertTrue(parseEvidenceUrl("https://notlnkd.in/x") is EvidenceUrl);
+}
+
+@test:Config
+function linkedInPostNumberBuildsTheCanonicalEvidenceUrl() returns error? {
+    string url = check linkedInPostEvidenceUrl(" 7123456789012345678 ");
+    test:assertEquals(url, "https://www.linkedin.com/feed/update/urn:li:activity:7123456789012345678");
+    EvidenceUrl parsed = check parseEvidenceUrl(url);
+    test:assertEquals(parsed.normalized, url, "already canonical");
+    test:assertEquals(parsed.submitted, url);
+    test:assertEquals(parsed.resourceUrn, "urn:li:activity:7123456789012345678");
+    EvidenceUrl full = check parseEvidenceUrl(
+            "https://www.linkedin.com/posts/avery_x-activity-7123456789012345678-AbCd?utm_source=share");
+    test:assertEquals(full.normalized, parsed.normalized, "the number and the full URL claim the same post");
+}
+
+@test:Config
+function linkedInPostNumberMustBeDigits() {
+    foreach string bad in ["", "  ", "abc", "12a", "-5", "1.5", "urn:li:activity:123", "https://www.linkedin.com/x", "٣٤"] {
+        string|DomainError r = linkedInPostEvidenceUrl(bad);
+        test:assertTrue(r is DomainError, bad);
+    }
+    string tooLong = "".padEnd(300, "7");
+    test:assertTrue(linkedInPostEvidenceUrl(tooLong) is DomainError, "an id longer than a URN allows");
 }
 
 function rejectedUrls() returns map<[string, string]> => {
@@ -175,7 +211,7 @@ function evidencePostsUrnKeepsTheUrnInvariant() returns error? {
     }
     EvidenceUrl long = check parseEvidenceUrl(string `https://www.linkedin.com/posts/avery_x-activity-${digits}-AbCd`);
     test:assertEquals(long.resourceUrn, (), "an id longer than a URN allows is not a resource URN");
-    EvidenceUrl short = check parseEvidenceUrl("https://lnkd.in/posts/x-activity-42-z");
+    EvidenceUrl short = check parseEvidenceUrl("https://www.linkedin.com/posts/x-activity-42-z");
     test:assertEquals(short.provider, EVIDENCE_PROVIDER_LINKEDIN);
     test:assertEquals(short.resourceUrn, "urn:li:activity:42");
     EvidenceUrl other = check parseEvidenceUrl("https://www.linkedin.com/feed/update/urn:li:person:abc");
