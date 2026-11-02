@@ -93,6 +93,10 @@ for row in "${COMPONENTS[@]}"; do
     seen_contexts="$seen_contexts $ctx_abs"
     schema="$(awk '/^ +schemaFilePath:/{print $2}' "$desc" | head -1)"
     [[ -z "$schema" || -f "$ctx/$schema" ]] || err "$name" "schemaFilePath $schema does not exist under context $ctx"
+    # Choreo only sees files inside the Docker context, so a schema that resolves outside it is as good as missing.
+    if [[ -n "$schema" && -f "$ctx/$schema" ]]; then
+      case "$(norm "$ctx/$schema")" in "$ctx_abs"/*) ;; *) err "$name" "schemaFilePath $schema resolves outside context $ctx" ;; esac
+    fi
     read -r c_ctx c_df <<<"$(compose_build "$svc")"
     if [[ -z "${c_ctx:-}" ]]; then err "$name" "compose service $svc has no build context"
     else
@@ -106,12 +110,13 @@ for row in "${COMPONENTS[@]}"; do
   [[ "$(epnames "$desc")" == "$(epnames "$wl")" ]] || err "$name" "endpoint names differ"
   [[ "$(ports "$desc")" == "$(exposed "$dockerfile")" ]] || err "$name" "Dockerfile EXPOSE $(exposed "$dockerfile" | xargs) != descriptor ports $(ports "$desc" | xargs)"
   # The final stage only: a USER set in a build stage does not carry into the image that runs.
-  final_stage="$(awk '/^FROM /{s=""} {s=s $0 "\n"} END{printf "%s", s}' "$dockerfile")"
-  [[ "$(grep -E '^USER ' <<<"$final_stage" | tail -1)" == "USER 10014" ]] || err "$name" "the final stage must end as USER 10014"
+  # Dockerfile instruction names are case-insensitive (`from`, `User`), so both scans match them that way.
+  final_stage="$(awk 'tolower($1)=="from"{s=""} {s=s $0 "\n"} END{printf "%s", s}' "$dockerfile")"
+  [[ "$(grep -iE '^USER ' <<<"$final_stage" | tail -1 | tr 'a-z' 'A-Z')" == "USER 10014" ]] || err "$name" "the final stage must end as USER 10014"
   # Base images pinned by digest (tag kept for readers), mock-linkedin included (same digests, jobs H5). A bare
   # `FROM name` passes only when `name` is an earlier stage (`AS name`), never as an unpinned base image.
   stages="$(grep -iE '^FROM .* AS ' "$dockerfile" | awk '{print tolower($NF)}')"
-  unpinned=$(grep -E '^FROM ' "$dockerfile" | grep -v '@sha256:[0-9a-f]\{64\}' | while read -r _ ref rest; do
+  unpinned=$(grep -iE '^FROM ' "$dockerfile" | grep -v '@sha256:[0-9a-f]\{64\}' | while read -r _ ref rest; do
     [[ "$(tr 'A-Z' 'a-z' <<<"$ref")" == "scratch" ]] && continue        # no digest exists for scratch
     if [[ -z "$rest" ]] && grep -qxF "$(tr 'A-Z' 'a-z' <<<"$ref")" <<<"$stages"; then continue; fi
     echo "FROM $ref $rest"
@@ -124,7 +129,7 @@ for row in "${COMPONENTS[@]}"; do
 done
 # Every compose image and the local-only Dockerfiles (chat-stub, people-stub) are pinned by digest too.
 for f in local/chat-stub/Dockerfile local/people-stub/Dockerfile; do
-  unpinned=$(grep -E '^FROM ' "$f" | grep -v '@sha256:[0-9a-f]\{64\}' || true)
+  unpinned=$(grep -iE '^FROM ' "$f" | grep -v '@sha256:[0-9a-f]\{64\}' || true)
   [[ -z "$unpinned" ]] || err "$f" "base image not pinned by digest: $(echo $unpinned)"
 done
 unpinned=$(grep -E '^\s+image: ' compose.yaml | grep -v '@sha256:[0-9a-f]\{64\}' || true)
@@ -245,8 +250,32 @@ PYFIX
   expect_drift "an unpinned base image" "base image not pinned by digest"
 
   fixture
+  printf 'from ubuntu:24.04\n' >> "$SELFTEST_TMP/root/amplify-api/Dockerfile"
+  expect_drift "an unpinned lowercase from" "base image not pinned by digest"
+
+  fixture
   sed -i.bak 's/^USER 10014$//' "$SELFTEST_TMP/root/amplify-api/Dockerfile"
   expect_drift "USER 10014 only in the build stage" "the final stage must end as USER 10014"
+
+  # A lowercase `from` starts the final stage too: the USER in the pinned build stage before it does not count.
+  fixture
+  cat > "$SELFTEST_TMP/root/amplify-api/Dockerfile" <<EOF
+FROM alpine:3.20@$DIGEST_A AS build
+USER 10014
+EXPOSE 9090
+from alpine:3.20@$DIGEST_B
+EOF
+  expect_drift "a lowercase final from after a USER in the build stage" "the final stage must end as USER 10014"
+
+  # schemaFilePath: a file inside the context is fine, one that resolves outside it is not.
+  fixture
+  : > "$SELFTEST_TMP/root/schema.yaml"
+  printf '    schemaFilePath: schema.yaml\n' >> "$SELFTEST_TMP/root/.choreo/component.yaml"
+  expect_ok "a schemaFilePath inside the Docker context"
+  fixture
+  : > "$SELFTEST_TMP/outside.yaml"
+  printf '    schemaFilePath: ../outside.yaml\n' >> "$SELFTEST_TMP/root/.choreo/component.yaml"
+  expect_drift "a schemaFilePath that resolves outside the Docker context" "resolves outside context"
 
   fixture
   sed -i.bak '/BAL_CONFIG_FOO/d' "$SELFTEST_TMP/root/amplify-api/workload.yaml"

@@ -1218,7 +1218,7 @@ components:
           example: "urn:li:share:7123"
           description: >-
             New post id, same rules as registration. Allowed only while nothing is recorded against the campaign
-            (no share requests, reposts or external shares); otherwise 409 `POST_HAS_ACTIVITY`. An id another
+            (no share requests, reposts, external shares or points entries for the campaign); otherwise 409 `POST_HAS_ACTIVITY`. An id another
             campaign already has answers 409 `CAMPAIGN_ALREADY_REGISTERED`.
         resourceUrl:
           type: string
@@ -1327,11 +1327,14 @@ components:
       type: object
       additionalProperties: false
       required: [certified]
-      description: "Send exactly one of `evidenceUrl` and `activityId` (both or neither is a `VALIDATION_FAILED` 400)."
+      description: "Send exactly one of `evidenceUrl` and `activityId` (both or neither is a `VALIDATION_FAILED` 400), and `certified` must be true."
+      oneOf:
+        - required: [evidenceUrl]
+        - required: [activityId]
       properties:
         evidenceUrl: {type: string, minLength: 1, maxLength: 2048, description: "Any public HTTPS URL; never fetched. `lnkd.in` short links are refused (`INVALID_EVIDENCE_URL`): one post could otherwise be claimed twice"}
         activityId: {type: string, minLength: 1, maxLength: 100, pattern: "^[0-9]+$", description: "A LinkedIn post number (the activity id: the digits in `urn:li:activity:<number>` or `...-activity-<number>-...`). Amplify builds the canonical post URL from it, stores that as `evidenceUrl`, and so it collides with any other form of the same post (`EVIDENCE_ALREADY_CLAIMED`)"}
-        certified: {type: boolean, description: "\"I certify this is related to WSO2\" (must be true)"}
+        certified: {type: boolean, enum: [true], description: "\"I certify this is related to WSO2\" (must be true)"}
         campaignId: {type: string, format: uuid}
     ExternalShare:
       type: object
