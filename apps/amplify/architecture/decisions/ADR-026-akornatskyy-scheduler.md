@@ -23,9 +23,9 @@ ADR-003 had `amplify-cron` (a Ballerina `main()` run as a Choreo Scheduled Task)
 
 - **The scheduler API and UI have no authentication.** Whoever reaches port 8080 can create a job that calls any URL, from inside the cell. So: **Project visibility only (Choreo), `project` visibility (OpenChoreo), internal Compose network with no host port. Never published, never behind the API proxy, no Organization visibility.**
 - **Only amplify-api calls the scheduler API.** No UI or user path reaches it; admins change schedules through `PUT /admin/settings` (activity matrix, audited).
-- **The scheduler calls amplify-jobs internally** over the Project network (jobs stays unpublished). No secrets in job definitions (bodies are empty).
+- **The scheduler calls amplify-jobs internally** over the Project network (jobs stays unpublished). Job bodies are empty; each job carries the scoped scheduler key as a header (ADR-039, amended 2026-11-01), which opens only `POST /runs` and `POST /maintenance/partitions`.
 - **Own database and user** (`DSN` secret): its own Postgres database (Choreo: a separate database and user on the managed server, or its own instance; local: `scheduler-db`). Never Amplify's database or schemas; the scheduler auto-migrates unqualified table names.
-- Threat model (M10) covers "no auth on the scheduler API" and the interaction "Run + maintenance (scheduler → jobs)". Residual risk: a compromised component in the same project could rewrite jobs (for example to call jobs in a loop: jobs' run lock and LinkedIn ceilings bound the damage) or read the job list (no secrets in it).
+- Threat model (M10) covers "no auth on the scheduler API" and the interaction "Run + maintenance (scheduler → jobs)". Residual risk: a compromised component in the same project could rewrite jobs (for example to call jobs in a loop: jobs' run lock and LinkedIn ceilings bound the damage) or read the job list (which holds the scheduler key, a scoped secret: ADR-039).
 
 ## Risks and mitigations
 
@@ -47,3 +47,19 @@ From deep review round 1 (jobs-db-infra I2, J1).
 
 - **Scheduler history retention.** "Job history grows" above is now handled without a new caller: `amplify-scheduler/history-retention.sql` installs an `AFTER INSERT` statement trigger (plus an index on `started`) on the scheduler's **own** database that deletes `job_history` rows older than 30 days whenever the scheduler writes one. Compose applies it with the `scheduler-retention` one-shot (amplify-api waits for it); in Choreo it runs once from the scheduler DB console after the first start and after every version bump ([operations.md](../../docs/runbooks/operations.md) §7). `scripts/it-scheduler-history.sh` checks it against the pinned image in `test-all`.
 - **amplify-jobs has `GET /ready`.** It gates on the database only (breaker not open and `SELECT 1` answers); the LinkedIn and Chat breakers and `runInProgress` are reported, not fatal. Compose's jobs healthcheck uses it; point the Choreo readiness probe at it.
+
+## Amendment (2026-11-01): open question, can the Choreo Scheduled Task replace the scheduler 100%?
+
+Not decided. Written down so the replacement conversation starts from the same list.
+
+Lost if the Choreo Scheduled Task replaces `akornatskyy/scheduler`:
+
+- **Admin-editable schedule.** Today `PUT /admin/settings` (`run.schedule`, `run.enabled`, `maintenance.schedule`) changes the job live through `SchedulerSync`. A Choreo task's schedule is set in Choreo. Whether Choreo has an API amplify-api could call to change it is **unverified**; without one the admin settings screen would lose those fields (or become read-only).
+- **One tool everywhere.** Local Docker and OpenChoreo run the same scheduler as dev and prod; a Choreo task exists only in Choreo, so local runs would need a separate cron container and the e2e and `it-scheduler.sh` coverage would not match prod.
+- **Interval.** The minimum interval of a Choreo task is unknown; today's run is `@every 5m` (and tests use seconds).
+
+Gained:
+
+- **No unauthenticated service or database** to keep behind Project visibility, and no job headers stored outside Choreo: the key would live only in Choreo secrets (or the task could use no static key at all if Choreo can authenticate the call itself).
+
+Next step if anyone picks this up: confirm the task's API and minimum interval with Choreo, then decide whether the admin-editable schedule is worth keeping. Jobs stay plain HTTP either way (no change to amplify-jobs).

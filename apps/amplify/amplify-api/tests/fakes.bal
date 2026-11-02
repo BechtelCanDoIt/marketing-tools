@@ -132,6 +132,22 @@ isolated class FakeCampaigns {
     private map<campaign:Campaign> rows = {};
     private int inserts = 0;
     private string? bumpOnRead = ();
+    private string[] active = [];
+
+    # A share (or other activity) now exists for the campaign.
+    #
+    # + id - Campaign id
+    isolated function markActive(string id) {
+        lock {
+            self.active.push(id);
+        }
+    }
+
+    public isolated function hasActivity(string id, string resourceUrn) returns boolean|error {
+        lock {
+            return self.active.indexOf(id) !is ();
+        }
+    }
 
     public isolated function findById(string id) returns campaign:Campaign|error? {
         lock {

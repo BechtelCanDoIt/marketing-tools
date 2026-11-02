@@ -18,9 +18,9 @@ Locally there is no Choreo API proxy to mint `x-jwt-assertion`. M8a plans a loca
 Keep option 2 as the default way and add option 3 behind hard guards:
 
 - `devLocalJwtEnabled` (default `false`) plus `devJwksFile` (local JWKS) and `devIssuer` (default `amplify-local-dev`).
-- **Startup refuses** the switch unless `environment = "local"`; `environment` defaults to `prod`, so a missing setting fails closed. It also refuses a `devIssuer` that is empty or equal to `gatewayIssuer`.
+- **Startup refuses** the switch unless `environment = "local"`, the database connection is unencrypted (`dbSslMode = DISABLE`) and `gatewayJwksUrl` starts with `http://localhost` (three signs of a local stack, so one stray variable on a deployed environment is not enough; amended 2026-11-01 after review); `environment` defaults to `prod`, so a missing setting fails closed. It also refuses a `devIssuer` that is empty or equal to `gatewayIssuer`.
 - Dev keys only verify tokens whose `iss` is `devIssuer`; gateway tokens only verify against the gateway JWKS. Signature, `exp`, `aud` and claim checks still run; nothing is skipped.
-- A WARN line at startup says the switch is on.
+- An ERROR line at startup says the switch is on.
 - `local/dev-jwt/mint-dev-jwt.sh` creates the key and JWKS (both gitignored) and mints 30-minute tokens.
 
 ## Security caveats
