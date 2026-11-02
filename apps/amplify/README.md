@@ -108,6 +108,7 @@ Every setting is a Ballerina `configurable`, set through `BAL_CONFIG_VAR_<NAME>`
 | `LINKEDINAPIBASEURL`, `LINKEDINAUTHBASEURL` | ✓ | ✓ | | | `http://mock-linkedin:9090`, `http://mock-linkedin:9091` |
 | `LINKEDINAUTHORIZEBASEURL` | ✓ | | | | `http://localhost:19091` (browser-facing; local only, empty = `LINKEDINAUTHBASEURL`) |
 | `LINKEDINIDTOKENVALIDATION` | ✓ | | | | `false` (`LINKEDIN_ID_TOKEN_VALIDATION`; the mock issues no ID token). `LINKEDINJWKSURL` / `LINKEDINOIDCISSUER` default to LinkedIn's |
+| `LINKEDINNONCEMODE` | ✓ | | | | `OFF` (`LINKEDIN_NONCE_MODE`). OIDC nonce on connect, only with `LINKEDINIDTOKENVALIDATION=true`: `SEND` puts it on the authorize URL and checks it when the ID token carries one (logs `nonce not echoed` otherwise), `REQUIRE` refuses a token without the same nonce. LinkedIn documents neither a nonce parameter nor a nonce claim, so stay at `SEND` until a real app is seen to echo it |
 | `TOKENKEYS`, `TOKENCURRENTKEYID` | ✓ | ✓ | | ✓ (keys) | `local-1:<random base64 32 bytes>`, `local-1` |
 | `CHATWEBHOOKURL` | | ✓ | | ✓ | chat-stub URL (or the dev test space) |
 | `CHATSPACE`, `CHATCARDAVATARURL`, `SHAREPAGEBASEURL` | | ✓ | | | `dev-test`, empty, One WSO2 Celebrate page |
