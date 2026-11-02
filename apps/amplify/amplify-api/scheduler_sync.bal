@@ -115,7 +115,8 @@ type SchedulerSyncResult record {|
 # + s - Settings
 # + return - Job specs
 isolated function desiredJobs(Settings s) returns scheduler:JobSpec[] {
-    string base = schedulerJobsUrl != "" ? schedulerJobsUrl : jobsUrl;
+    string preferred = schedulerJobsUrl.trim();
+    string base = preferred != "" ? preferred : jobsUrl.trim();
     if base.endsWith("/") {
         base = base.substring(0, base.length() - 1);
     }
