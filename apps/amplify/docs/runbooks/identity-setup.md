@@ -82,4 +82,4 @@ Treat the token as a secret: don't paste it in chats, tickets or web decoders.
 2. `AMPLIFY_DEV_LOCAL_JWT=true` in `local/.env`; compose sets `environment=local` and mounts `local/dev-jwt`.
 3. `TOKEN=$(local/dev-jwt/mint-dev-jwt.sh token emp-1 ada@wso2.com amplify_po)`, then call as above. Groups are optional (none = plain employee).
 
-The API refuses to start with this switch unless `environment = local`, and logs a WARN when it's on.
+The API refuses to start with this switch unless `environment = local`, `dbSslMode = DISABLE` and `gatewayJwksUrl` starts with `http://localhost` (compose defaults `GATEWAY_JWKS_URL` to `http://localhost:1/unset`, so leave it empty here; a real Asgardeo JWKS URL means Option A, with the switch off). It logs at ERROR when the switch is on.

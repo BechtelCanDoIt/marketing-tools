@@ -30,6 +30,9 @@ public type Rule record {|
     string capability;
     # State and ownership conditions the use case checks (not the interceptor)
     string useCase = "";
+    # False while the route has no resource yet: the row keeps the grant in place for when it lands,
+    # but `GET /me` does not advertise a capability the UI could not use (it would 404).
+    boolean built = true;
 |};
 
 # The matrix. First match wins; a route that isn't here is denied (default deny).
@@ -79,10 +82,10 @@ public final Rule[] & readonly ACTIVITY_MATRIX = [
     {method: "GET", path: "/dashboards/scorecard", requires: CAN_DASHBOARD, capability: "dashboards.scorecard.read", useCase: "Scorecard against the scorecard.* targets"},
     {method: "GET", path: "/me/points", requires: EMPLOYEE, capability: "points.read_own"},
     {method: "GET", path: "/team", requires: EMPLOYEE, capability: "team.read", useCase: "Roster team or company per ADR-014/ADR-019; CAN_ADJUST_POINTS company"},
-    {method: "GET", path: "/team/{employeeId}/history", requires: EMPLOYEE, capability: "team.history.read", useCase: "Without CAN_ADJUST_POINTS: the caller, or a member of the caller's roster team (any employee when team.visibility = COMPANY), else 403 TEAM_SCOPE (leaderboards.md); CAN_ADJUST_POINTS any (team.history.read_any)"},
+    {method: "GET", path: "/team/{employeeId}/history", requires: EMPLOYEE, capability: "team.history.read", useCase: "Without CAN_ADJUST_POINTS: the caller, or a member of the caller's roster team (team.visibility = COMPANY does not widen it, ADR-035), else 403 TEAM_SCOPE (leaderboards.md); CAN_ADJUST_POINTS any (team.history.read_any)"},
     {method: "GET", path: "/po/dashboard", requires: CAN_PO_DASHBOARD, capability: "po.dashboard"},
-    {method: "GET", path: "/reports/participation", requires: CAN_REPORTS, capability: "reports.read", useCase: "Phase 2"},
-    {method: "GET", path: "/reports/campaigns", requires: CAN_REPORTS, capability: "reports.read", useCase: "Phase 2"},
+    {method: "GET", path: "/reports/participation", requires: CAN_REPORTS, capability: "reports.read", useCase: "Phase 2", built: false},
+    {method: "GET", path: "/reports/campaigns", requires: CAN_REPORTS, capability: "reports.read", useCase: "Phase 2", built: false},
     // S5 / Admin
     {method: "GET", path: "/admin/announcements", requires: CAN_ADMIN, capability: "admin.announcements"},
     {method: "POST", path: "/admin/announcements/{id}/retry", requires: CAN_ADMIN, capability: "admin.announcements", useCase: "Only while FAILED; announcements.enabled"},
@@ -127,11 +130,11 @@ public isolated function isAllowed(Rule rule, Access[] grants) returns boolean =
 # Capabilities for `GET /me`, derived from the matrix (route rows plus use-case rows).
 #
 # + grants - The caller's grants (`grantsOf`)
-# + return - Distinct capability ids, sorted
+# + return - Distinct capability ids, sorted; rows for routes that are not built yet are left out
 public isolated function capabilities(Access[] grants) returns string[] {
     string[] result = [];
     foreach Rule rule in [...ACTIVITY_MATRIX, ...USE_CASE_CAPABILITIES] {
-        if isAllowed(rule, grants) && result.indexOf(rule.capability) is () {
+        if rule.built && isAllowed(rule, grants) && result.indexOf(rule.capability) is () {
             result.push(rule.capability);
         }
     }
