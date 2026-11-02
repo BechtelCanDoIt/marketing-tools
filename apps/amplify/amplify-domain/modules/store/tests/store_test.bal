@@ -65,7 +65,7 @@ function pageWindowNormalizesBadInput() {
 @test:Config {}
 function auditOfCarriesBeforeAndAfter() {
     Actor actor = {actorId: "po-1", roles: ["amplify_po"], correlationId: "c-1"};
-    AuditEntry e = auditOf(actor, "ExternalShareApproved", "external_sharing.external_share", "id-1",
+    AuditEntry e = auditOf(actor, "ExternalShareApproved", "external_sharing_external_share", "id-1",
             {status: "APPROVED"}, "why", {status: "PENDING"});
     test:assertEquals(e.before, {status: "PENDING"});
     test:assertEquals(e.after, {status: "APPROVED"});
@@ -73,7 +73,7 @@ function auditOfCarriesBeforeAndAfter() {
     test:assertEquals(e.correlationId, "c-1");
     test:assertEquals(e.actorRoles, ["amplify_po"]);
     test:assertEquals(e.outcome, "SUCCESS");
-    AuditEntry insert = auditOf(SYSTEM, "CampaignRegistered", "campaign.campaign", "id-2", {title: "t"});
+    AuditEntry insert = auditOf(SYSTEM, "CampaignRegistered", "campaign", "id-2", {title: "t"});
     test:assertEquals(insert.before, (), "an insert has no before");
     test:assertEquals(insert.actorId, "system");
 }
@@ -134,4 +134,26 @@ function tlsWarningOnlyForUnverifiedRemoteHosts() {
     }
     test:assertEquals(tlsWarning({host: "", database: "amplify", user: "u", password: "x",
         sslMode: postgresql:DISABLE}), (), "not configured");
+}
+
+@test:Config {}
+function databaseNameCarriesTheRoleAndSchemaAsStartupOptions() {
+    test:assertEquals(databaseOf(cfg()), "amplify", "no role or schema: the plain database name");
+    DbConfig withRole = {host: "db", database: "amplify", user: "amplify_stg_user", password: "x",
+        role: "amplify_api", schema: "amplify_stg_user"};
+    test:assertEquals(databaseOf(withRole), "amplify?options=-c%20role%3Damplify_api"
+        + "%20-c%20search_path%3Damplify_stg_user,public%20-c%20idle_in_transaction_session_timeout%3D30000");
+    DbConfig roleOnly = {host: "db", database: "amplify", user: "u", password: "x", role: " amplify_jobs "};
+    test:assertEquals(databaseOf(roleOnly), "amplify?options=-c%20role%3Damplify_jobs"
+        + "%20-c%20idle_in_transaction_session_timeout%3D30000");
+}
+
+@test:Config {}
+function databaseNameRefusesAnIdentifierThatIsNotPlain() {
+    foreach string bad in ["amplify_api; DROP TABLE x", "Amplify", "a b", "role=x", "1abc", "a-b"] {
+        DbConfig badRole = {host: "db", database: "amplify", user: "u", password: "x", role: bad};
+        test:assertTrue(databaseOf(badRole) is sql:Error, "role " + bad);
+        DbConfig badSchema = {host: "db", database: "amplify", user: "u", password: "x", schema: bad};
+        test:assertTrue(databaseOf(badSchema) is sql:Error, "schema " + bad);
+    }
 }

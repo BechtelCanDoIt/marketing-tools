@@ -26,6 +26,6 @@
 
 SET LOCAL ROLE amplify_migrate;
 
-ALTER TABLE campaign.campaign DROP CONSTRAINT campaign_resource_url_check;
-ALTER TABLE campaign.campaign ADD CONSTRAINT campaign_resource_url_check
+ALTER TABLE campaign DROP CONSTRAINT campaign_resource_url_check;
+ALTER TABLE campaign ADD CONSTRAINT campaign_resource_url_check
     CHECK (resource_url LIKE 'https://%' OR resource_url LIKE 'http://localhost:19091/%');

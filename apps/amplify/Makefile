@@ -25,11 +25,11 @@
 
 COMPOSE := scripts/compose.sh $(if $(PROFILE),--profile $(PROFILE))
 
-.PHONY: env up down seed e2e logs ps check test-all load-test
+.PHONY: env up down seed e2e logs ps check test-all load-test dba-setup
 
 local/.env:
 	@cp local/.env.example local/.env
-	@for k in POSTGRES_PASSWORD AMPLIFY_API_DB_PASSWORD AMPLIFY_JOBS_DB_PASSWORD AMPLIFY_READONLY_DB_PASSWORD \
+	@for k in POSTGRES_PASSWORD AMPLIFY_DB_PASSWORD \
 	          SCHEDULER_DB_PASSWORD LINKEDIN_CLIENT_SECRET; do \
 	  v=$$(openssl rand -hex 16); sed -i.bak "s|^$$k=$$|$$k=$$v|" local/.env; done
 	@v=$$(openssl rand -hex 24); sed -i.bak "s|^AMPLIFY_INTERNAL_API_KEY=$$|AMPLIFY_INTERNAL_API_KEY=$$v|" local/.env
@@ -86,6 +86,11 @@ env-mock-admin-key: local/.env
 
 up: env
 	$(COMPOSE) up -d --build --wait
+
+# The stand-in for the DBA's setup (login user, schema, roles, extensions). Runs by itself on a fresh volume;
+# this reruns it on an existing one. Idempotent.
+dba-setup: env
+	$(COMPOSE) exec -T postgres sh /docker-entrypoint-initdb.d/10-amplify-dba-setup.sh
 
 seed: env
 	$(COMPOSE) run --rm --build amplify-db-migrate

@@ -20,7 +20,7 @@
 
 SET LOCAL ROLE amplify_migrate;
 
-INSERT INTO config.app_setting (key, value)
+INSERT INTO config_app_setting (key, value)
 VALUES ('run.schedule', '"@every 5m"'),             -- job amplify-run -> amplify-jobs POST /runs
        ('run.enabled', 'true'),                     -- false disables the scheduler job (no Runs)
        ('maintenance.schedule', '"0 2 * * *"')      -- job amplify-maintenance-partitions, daily 02:00 UTC

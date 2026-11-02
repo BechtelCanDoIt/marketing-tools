@@ -132,7 +132,7 @@ Privacy: the employee's commentary is held only until the job posts it, then cle
 
 | Aggregate | Key | Invariants |
 | --- | --- | --- |
-| `LinkedInConnection` | employee (SSO `sub`), `member_urn` unique | Created by OAuth 2.0 with the scopes `openid profile w_member_social` (Sign In with LinkedIn using OpenID Connect + Share on LinkedIn). `member_urn` = `urn:li:person:{sub}` from the ID token (B13). Stored as `connection.member_connection` (provider-agnostic; an `org_connection` for Community Management comes in a future phase). LinkedIn returns a plain bearer token; **we** encrypt it (AES-256-GCM, our key, the same approach as Novera and Coin) into the daily-partitioned `provider_token` table, and decrypt it in memory only to call LinkedIn. It expires in about 60 days. Expiry (time-derived, no event) or a 401 from LinkedIn (`ConnectionRevoked`) means `NEEDS_RECONNECT` (derived from `access_expires_at` / `revoked_at`), and the employee sees Link Me again. **Remove Connection** deletes the token and stops sharing |
+| `LinkedInConnection` | employee (SSO `sub`), `member_urn` unique | Created by OAuth 2.0 with the scopes `openid profile w_member_social` (Sign In with LinkedIn using OpenID Connect + Share on LinkedIn). `member_urn` = `urn:li:person:{sub}` from the ID token (B13). Stored as `connection_member_connection` (provider-agnostic; an `org_connection` for Community Management comes in a future phase). LinkedIn returns a plain bearer token; **we** encrypt it (AES-256-GCM, our key, the same approach as Novera and Coin) into the daily-partitioned `provider_token` table, and decrypt it in memory only to call LinkedIn. It expires in about 60 days. Expiry (time-derived, no event) or a 401 from LinkedIn (`ConnectionRevoked`) means `NEEDS_RECONNECT` (derived from `access_expires_at` / `revoked_at`), and the employee sees Link Me again. **Remove Connection** deletes the token and stops sharing |
 
 Self-serve apps don't get programmatic refresh tokens, so expect a reconnect every 60 days. Plan a reminder (a card or banner) before expiry.
 
@@ -146,7 +146,7 @@ This merges the earlier **Submit Post** screen (own posts) with external shares 
 
 ### S4 · Recognition (read models)
 
-Projections over the C2 ledger, stored as **pre-built tables** (`recognition.standing`, ranks precomputed) and updated in the same transaction as each ledger insert (by jobs for automatic awards, by `amplify-api` for PO decisions and corrections, B12), so One WSO2 reads are single indexed lookups with ETag caching. Nothing is written back; everything is rebuildable from the ledger.
+Projections over the C2 ledger, stored as **pre-built tables** (`recognition_standing`, ranks precomputed) and updated in the same transaction as each ledger insert (by jobs for automatic awards, by `amplify-api` for PO decisions and corrections, B12), so One WSO2 reads are single indexed lookups with ETag caching. Nothing is written back; everything is rebuildable from the ledger.
 - **Leaderboards** (B15, ADR-014; spec: [leaderboards.md](leaderboards.md)): three views. **Company top N** (`leaderboard.top_n`, default 3, B16), **personal** (own rank, points and `points_to_top_n`), and **My Team** (ranked within the viewer's team, team from One WSO2 data, ADR-009). There is no full company list for employees (2026-10-15 review: a long list reads as gossip, not motivation).
 - **Team** (was Coins): searchable, paged, with an expandable history per person. Employees see their own team; `amplify_po` sees the whole company and is the only role that can adjust or reverse (ADR-010, [leaderboards.md](leaderboards.md#visibility)). Team and department data come from One WSO2, so Amplify stays HR-free in phase 1.
 - **My points:** total, rank, monthly history across shares, external shares and adjustments, and the employee's own shares. **Points only, no Coin value** (A11). Per-share metrics are a future phase (ADR-018).
@@ -188,14 +188,14 @@ Schema-qualified names: one Postgres schema per context. A module writes only to
 
 | Context | Deployable | Postgres |
 | --- | --- | --- |
-| S1 Campaign | `amplify-api` (`/campaigns`) | `campaign.campaign`, `campaign.campaign_tag`, `campaign.category`, `messaging.outbox` |
-| S2 Connection | `amplify-api` (`/connections/linkedin`: start, complete, remove) | `connection.member_connection`, `connection.provider_token` (encrypted, daily partitions), `connection.oauth_state`; future: `connection.org_connection` |
-| C1 Sharing | `amplify-api` (`/campaigns/{id}/shares`) + `amplify-jobs` LinkedIn provider adapter | `sharing.share_request`, `sharing.engagement`, `sharing.engagement_verification`, `messaging.outbox`; future: `engagement_metric`, `sync_cursor` |
-| S3 External Sharing | `amplify-api` (`/external-shares`, `/po/external-shares`) | `external_sharing.external_share` |
-| C2 Scoring | `amplify-api` (`/po/point-rules` A5, `/po/points`) + `amplify-jobs` score pass | `scoring.point_rule`, `scoring.points_ledger`, `audit.audit_log` |
-| S4 Recognition | `amplify-api` (`/leaderboard`, `/team`, `/me/points`, `/po/dashboard`) + `amplify-jobs` score pass (both write, B12) | `recognition.standing`, `recognition.standing_version`, `recognition.employee_points_monthly`, `recognition.campaign_participation` (pre-built tables) |
-| S5 Announcements | `amplify-jobs` chat notifier | `announcement.announcement`, `messaging.outbox` |
-| (shared) | `amplify-api` | `identity.employee`, `config.app_setting` |
+| S1 Campaign | `amplify-api` (`/campaigns`) | `campaign`, `campaign_tag`, `campaign_category`, `messaging_outbox` |
+| S2 Connection | `amplify-api` (`/connections/linkedin`: start, complete, remove) | `connection_member_connection`, `connection_provider_token` (encrypted, daily partitions), `connection_oauth_state`; future: `connection.org_connection` |
+| C1 Sharing | `amplify-api` (`/campaigns/{id}/shares`) + `amplify-jobs` LinkedIn provider adapter | `sharing_share_request`, `sharing_engagement`, `sharing_engagement_verification`, `messaging_outbox`; future: `engagement_metric`, `sync_cursor` |
+| S3 External Sharing | `amplify-api` (`/external-shares`, `/po/external-shares`) | `external_sharing_external_share` |
+| C2 Scoring | `amplify-api` (`/po/point-rules` A5, `/po/points`) + `amplify-jobs` score pass | `scoring_point_rule`, `scoring_points_ledger`, `audit_log` |
+| S4 Recognition | `amplify-api` (`/leaderboard`, `/team`, `/me/points`, `/po/dashboard`) + `amplify-jobs` score pass (both write, B12) | `recognition_standing`, `recognition_standing_version`, `recognition_employee_points_monthly`, `recognition_campaign_participation` (pre-built tables) |
+| S5 Announcements | `amplify-jobs` chat notifier | `announcement`, `messaging_outbox` |
+| (shared) | `amplify-api` | `identity_employee`, `config_app_setting` |
 
 Deployables: **One WSO2 Amplify module** (UI), **Amplify API Proxy** (cell ingress), **Amplify Backend** (`amplify-api`, Choreo service), **Amplify Jobs** (`amplify-jobs`, one worker that runs the provider adapters, the chat notifier and scoring), **Amplify Scheduler** (`amplify-scheduler`, the pinned `akorn/scheduler` image with its own Postgres database; it triggers runs and the daily `/maintenance/partitions` call: token partitions, audit partitions, outbox purge, B10; amplify-api pushes the schedules from admin settings, ADR-026). One Choreo-managed **Postgres**.
 
@@ -218,15 +218,15 @@ Deployables: **One WSO2 Amplify module** (UI), **Amplify API Proxy** (cell ingre
 | --- | --- |
 | `amplify-agent`, Novera tools, Anthropic | Later phase |
 | 5 scheduled jobs, TypeScript | One Ballerina `amplify-jobs` worker (provider adapters + chat notifier + scoring), triggered by the scheduler (ADR-026) |
-| `post` | `campaign.campaign` |
-| `employee_link` | `connection.member_connection` + `identity.employee` |
-| `announcement_outbox` | `messaging.outbox` + `announcement.announcement` |
+| `post` | `campaign` |
+| `employee_link` | `connection_member_connection` + `identity_employee` |
+| `announcement_outbox` | `messaging_outbox` + `announcement` |
 | B5 engagement sync (Community Management API) | Later. Replaced by verified shares (C1) and external shares (S3) |
 | B7 announcements through Novera | Club space incoming webhook (S5) |
 | B8 Coin issuer, `coin_issue` | Later. Points held in `points_ledger` |
 | B6 HR Entity, `org_dim` | Later. Team grouping for My Team comes from One WSO2's employee data instead (ADR-009) |
 | No member tokens (org-admin token only) | Member `w_member_social` tokens, encrypted in the token store |
-| `engagement_event`, `sync_cursor` | `sharing.engagement` (same idea, any API/origin), `sharing.sync_cursor` (future); `submission` becomes `external_sharing.external_share` |
+| `engagement_event`, `sync_cursor` | `sharing_engagement` (same idea, any API/origin), `sharing.sync_cursor` (future); `submission` becomes `external_sharing_external_share` |
 
 ## Open questions
 

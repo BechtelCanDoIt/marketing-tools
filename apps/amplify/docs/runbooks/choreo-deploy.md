@@ -29,7 +29,12 @@ Inside marketing-tools the order is: databases, DB Migrate, Jobs, Scheduler, Bac
 
 1. **B1** Create a Choreo-managed PostgreSQL **18** server per environment (dev, prod) on a paid plan with backups (Hobbyist has none). If 18 isn't offered, stop: M3 depends on native `uuidv7()` (fallback: UUIDv7 generated in Ballerina, never v4).
    - **B1a Extension check (plan D2).** On each new server run `apps/amplify/amplify-database/checks/d2_extensions.sql` (marketing-tools repo): it lists `pg_partman`, `pg_cron`, `pgaudit`, `citext`, `pg_trgm` and `SELECT version()`. Record the output in the plan's D2 line. `citext` and `pg_trgm` are required; if either is missing, stop and raise it (B18) before running DB Migrate.
-2. **B2** Database `amplify`; bootstrap admin credentials go only into the DB Migrate component's secrets (C5).
+2. **B2** Database `amplify` with **one login user and one schema named after it** (staging `amplify_stg_user`, production its own name; ADR-042). Ask the DBA for, once per environment:
+   - four NOLOGIN roles: `CREATE ROLE amplify_migrate NOLOGIN` (and `amplify_api`, `amplify_jobs`, `amplify_readonly`);
+   - the login user as a member of each, with the right to switch: `GRANT amplify_migrate, amplify_api, amplify_jobs, amplify_readonly TO <login> WITH SET TRUE, INHERIT FALSE`;
+   - the schema, owned by the login user: `CREATE SCHEMA <login> AUTHORIZATION <login>`;
+   - `citext` and `pg_trgm` installed.
+   Then connect as the login user and run `apps/amplify/amplify-database/checks/d3_single_user_roles.sql`: every row must say `OK`. The login's credentials go into every Amplify component (C1, C2, C5); there are no per-role passwords.
 3. **B3** Database `scheduler` with its own user (ADR-026). Never Amplify's users.
 4. **B4** Record backup frequency and retention; restore one backup into dev once (plan M3 "Backups").
 
@@ -47,11 +52,11 @@ The Docker context is where Choreo reads `.choreo/component.yaml`, so each compo
 
 After each build, confirm the endpoint Choreo shows matches the descriptor (name, port, visibility). If Choreo shows the wrong port, the Docker context is wrong (Jobs on `apps/amplify` would read the Backend's descriptor and show 9090).
 
-1. **C1 Amplify DB Migrate** (Manual Task). Config form: `BAL_CONFIG_VAR_DBHOST/DBPORT/DBNAME/DBUSER` from B1/B2, secrets `BAL_CONFIG_VAR_DBPASSWORD` (bootstrap admin), `APIDBPASSWORD`, `JOBSDBPASSWORD`, `READONLYDBPASSWORD` (generate, 16+ chars, store only in Choreo). Run it once per environment, then after every release that adds a `V###`/`S###` script. Check the log ends with `Migration run done`.
-2. **C2 Amplify Jobs** (Project visibility only). `INTERNALAPIKEY` (full access) and `SCHEDULERAPIKEY` (only `POST /runs` and `POST /maintenance/partitions`): each a secret of at least 32 characters (`openssl rand -hex 24`), **different values**, each the **same value** on Amplify Backend (C5) and here, one pair per environment (ADR-039). Without both Jobs does not start; the Backend needs the internal key when `JOBSURL` is set and the scheduler key when `SCHEDULERURL` is set. DB: user `amplify_jobs` + its password. `TOKENKEYS` (`keyId:base64Key`, `openssl rand -base64 32`, one per environment, never shared dev↔prod) + `TOKENCURRENTKEYID`. Chat: `CHATWEBHOOKURL` secret (dev = test space, prod = WSO2 Club; see `google-chat-webhook.md`), `CHATSPACE` (`dev-test` / `club`), `CHATCARDAVATARURL` and `CHATDEFAULTIMAGEURL` (both optional; the default image is a public HTTPS PNG/JPEG pinned to a commit, see `google-chat-webhook.md` section C), `SHAREPAGEBASEURL` (the One WSO2 Celebrate page, e.g. `https://one.wso2.com/amplify/celebrate`; the card button adds `?share=<campaignId>`). LinkedIn: dev = LinkedIn Mock URLs + mock client id; prod = `https://api.linkedin.com`, `https://www.linkedin.com` + prod app client id. **Never** set `CHATALLOWINSECUREHTTP`.
+1. **C1 Amplify DB Migrate** (Manual Task). Config form: `BAL_CONFIG_VAR_DBHOST/DBPORT/DBNAME/DBUSER` from B1/B2, `DBUSER` is the login user, secret `BAL_CONFIG_VAR_DBPASSWORD` its password (the DBA's, store only in Choreo); `DBSCHEMA` only when the schema isn't named after the user. Run it once per environment, then after every release that adds a `V###`/`S###` script. Check the log ends with `Migration run done`.
+2. **C2 Amplify Jobs** (Project visibility only). `INTERNALAPIKEY` (full access) and `SCHEDULERAPIKEY` (only `POST /runs` and `POST /maintenance/partitions`): each a secret of at least 32 characters (`openssl rand -hex 24`), **different values**, each the **same value** on Amplify Backend (C5) and here, one pair per environment (ADR-039). Without both Jobs does not start; the Backend needs the internal key when `JOBSURL` is set and the scheduler key when `SCHEDULERURL` is set. DB: the login user (B2) with `DBROLE=amplify_jobs`. `TOKENKEYS` (`keyId:base64Key`, `openssl rand -base64 32`, one per environment, never shared dev↔prod) + `TOKENCURRENTKEYID`. Chat: `CHATWEBHOOKURL` secret (dev = test space, prod = WSO2 Club; see `google-chat-webhook.md`), `CHATSPACE` (`dev-test` / `club`), `CHATCARDAVATARURL` and `CHATDEFAULTIMAGEURL` (both optional; the default image is a public HTTPS PNG/JPEG pinned to a commit, see `google-chat-webhook.md` section C), `SHAREPAGEBASEURL` (the One WSO2 Celebrate page, e.g. `https://one.wso2.com/amplify/celebrate`; the card button adds `?share=<campaignId>`). LinkedIn: dev = LinkedIn Mock URLs + mock client id; prod = `https://api.linkedin.com`, `https://www.linkedin.com` + prod app client id. **Never** set `CHATALLOWINSECUREHTTP`.
 3. **C3 Amplify Scheduler** (Project visibility only, no auth upstream, never published, never behind the proxy). Secret `DSN` = `postgres://<user>:<pw>@<host>:<port>/scheduler?sslmode=require` (B3).
 4. **C4 Connections from Amplify Backend.** Backend > Connections > create `amplify-jobs` (to Amplify Jobs, Project) and `amplify-scheduler` (to Amplify Scheduler, Project). Open each connection's developer guide and copy its `resourceRef` into `apps/amplify/.choreo/component.yaml` (marketing-tools repo) (replace `REPLACE_WITH_ID`), commit, push. Both `BAL_CONFIG_VAR_JOBSURL` and `BAL_CONFIG_VAR_SCHEDULERJOBSURL` read the jobs connection's `ServiceURL`.
-5. **C5 Amplify Backend** (endpoint `Project`, schema `amplify-api/openapi.yaml`). `ENVIRONMENT` = `dev` or `prod` (**never `local`**; that and `DEVLOCALJWTENABLED` stay unset, ADR-023). `INTERNALAPIKEY` = the same secret as Jobs (C2); the Backend sends it on its own calls to Jobs. `SCHEDULERAPIKEY` = the scheduler secret, the same as Jobs; the Backend sets it (not the internal key) as a header on the jobs it registers with the scheduler (ADR-039). `GATEWAYJWKSURL` / `GATEWAYISSUER` / `GATEWAYAUDIENCES` from the Choreo gateway's backend JWT (identity-setup runbook). DB user `amplify_api`. LinkedIn client id/secret (secret), redirect URI = the One WSO2 callback page for that environment. Same `TOKENKEYS` as Jobs in that environment. Team rosters: `PEOPLEDIRECTORYURL`, `PEOPLEDIRECTORYTOKENURL`, `PEOPLEDIRECTORYCLIENTID` and `PEOPLEDIRECTORYCLIENTSECRET` (secret) from the people-app connection (C7). Left empty, My Team answers `UNAVAILABLE` and the rest works.
+5. **C5 Amplify Backend** (endpoint `Project`, schema `amplify-api/openapi.yaml`). `ENVIRONMENT` = `dev` or `prod` (**never `local`**; that and `DEVLOCALJWTENABLED` stay unset, ADR-023). `INTERNALAPIKEY` = the same secret as Jobs (C2); the Backend sends it on its own calls to Jobs. `SCHEDULERAPIKEY` = the scheduler secret, the same as Jobs; the Backend sets it (not the internal key) as a header on the jobs it registers with the scheduler (ADR-039). `GATEWAYJWKSURL` / `GATEWAYISSUER` / `GATEWAYAUDIENCES` from the Choreo gateway's backend JWT (identity-setup runbook). DB: the login user (B2) with `DBROLE=amplify_api`. LinkedIn client id/secret (secret), redirect URI = the One WSO2 callback page for that environment. Same `TOKENKEYS` as Jobs in that environment. Team rosters: `PEOPLEDIRECTORYURL`, `PEOPLEDIRECTORYTOKENURL`, `PEOPLEDIRECTORYCLIENTID` and `PEOPLEDIRECTORYCLIENTSECRET` (secret) from the people-app connection (C7). Left empty, My Team answers `UNAVAILABLE` and the rest works.
 6. **C6 LinkedIn Mock** (dev only; never promote to prod). Endpoints: api `Project`, www `Public` (the browser follows the OAuth redirect). `CLIENTID`/`CLIENTSECRET` = made-up values matching Backend/Jobs in dev, `WWWBASEURL` = the www endpoint's public URL, `BAL_CONFIG_DATA` = `redirectUris = ["<dev One WSO2 callback>"]`. In dev, Backend `LINKEDINAUTHBASEURL` = the mock's **public** www URL (the authorization URL is shown to the browser).
 
 7. **C7 People directory connection** (team rosters, ADR-019). Needs the people-app service-client change merged and deployed first (people-ops-suite PR).
@@ -98,8 +103,10 @@ Same names in two components (`DBHOST`, `DBPORT`, `DBNAME`, `DBUSER`, `DBPASSWOR
 | `GATEWAYAUDIENCES` | cfg | R | `amplify-local` | TBD, same source |
 | `DBHOST` / `DBPORT` | cfg | R | compose Postgres | TBD, from the Choreo server (B1) |
 | `DBNAME` | cfg | R | | `amplify` |
-| `DBUSER` | cfg | R | | `amplify_api` |
-| `DBPASSWORD` | secret | R | | Ops-generated (`APIDBPASSWORD` from C1) |
+| `DBUSER` | cfg | R | | The login user (B2), same as C1 |
+| `DBPASSWORD` | secret | R | | The login user's password (B2) |
+| `DBROLE` | cfg | R | `amplify_api` | Group role to act as. The client sends `SET ROLE` at connect (with the schema as `search_path` and a 30 s idle-in-transaction limit); a role the login can't take fails at start-up |
+| `DBSCHEMA` | cfg | O | | Empty = the login user's name |
 | `DBSSLROOTCERT` | cfg | O | | File-mount path of the managed Postgres CA PEM, e.g. `/home/choreo/db-ca/ca.pem`. TBD until mounted |
 | `JOBSURL` | conn | R | | `amplify-jobs` connection `ServiceURL` |
 | `SCHEDULERURL` | conn | R | | `amplify-scheduler` connection `ServiceURL` |
@@ -146,8 +153,10 @@ Same names in two components (`DBHOST`, `DBPORT`, `DBNAME`, `DBUSER`, `DBPASSWOR
 |---|---|---|---|---|
 | `DBHOST` / `DBPORT` | cfg | R | compose Postgres | TBD (B1) |
 | `DBNAME` | cfg | R | | `amplify` |
-| `DBUSER` | cfg | R | | `amplify_jobs` |
-| `DBPASSWORD` | secret | R | | Ops-generated (`JOBSDBPASSWORD` from C1) |
+| `DBUSER` | cfg | R | | The login user (B2), same as C1 |
+| `DBPASSWORD` | secret | R | | The login user's password (B2) |
+| `DBROLE` | cfg | R | `amplify_jobs` | Group role to act as, as in C5 |
+| `DBSCHEMA` | cfg | O | | Empty = the login user's name |
 | `DBSSLROOTCERT` | cfg | O | | Same file-mount path as Backend |
 | `LINKEDINCLIENTID` | cfg | R | `amplify-local` (mock) | TBD, same as Backend |
 | `LINKEDINAPIBASEURL` | cfg | R | mock API URL | `https://api.linkedin.com` |
@@ -186,12 +195,10 @@ Same names in two components (`DBHOST`, `DBPORT`, `DBNAME`, `DBUSER`, `DBPASSWOR
 |---|---|---|---|
 | `DBHOST` / `DBPORT` | cfg | R | TBD (B1) |
 | `DBNAME` | cfg | R | `amplify` |
-| `DBUSER` | cfg | R | Bootstrap admin user, TBD |
-| `DBPASSWORD` | secret | R | Bootstrap admin password, from the Choreo server |
+| `DBUSER` | cfg | R | The login user (B2) |
+| `DBPASSWORD` | secret | R | The login user's password (B2) |
+| `DBSCHEMA` | cfg | O | Empty = the login user's name |
 | `DBSSLROOTCERT` | cfg | O | Same file-mount path |
-| `APIDBPASSWORD` | secret | R | Ops-generated, 16+ chars |
-| `JOBSDBPASSWORD` | secret | R | Ops-generated, 16+ chars |
-| `READONLYDBPASSWORD` | secret | O | Ops-generated, 16+ chars |
 
 ### G5. LinkedIn Mock (dev only)
 

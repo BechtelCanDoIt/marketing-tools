@@ -10,7 +10,7 @@
 
 ## Decision
 
-Three views from `recognition.standing`: **company top N**, **personal** (own rank, points, gap to the top N), **My Team** (ranked within the viewer's team, team from One WSO2 per ADR-009). Top N is configurable, `leaderboard.top_n = 3` for phase 1.
+Three views from `recognition_standing`: **company top N**, **personal** (own rank, points, gap to the top N), **My Team** (ranked within the viewer's team, team from One WSO2 per ADR-009). Top N is configurable, `leaderboard.top_n = 3` for phase 1.
 
 ## Consequences
 

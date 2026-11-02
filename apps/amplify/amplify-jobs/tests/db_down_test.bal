@@ -120,7 +120,7 @@ function testDbDownMidRunBreakerOpensAndRecovers() returns error? {
     string tag = "it-dbdown-" + types:newUuidV7().substring(24);
     foreach int i in 0 ..< 6 {
         string key = string `${tag}-${i}`;
-        _ = check jobsDb->execute(`INSERT INTO messaging.outbox (aggregate_type, aggregate_id, event_type, payload,
+        _ = check jobsDb->execute(`INSERT INTO messaging_outbox (aggregate_type, aggregate_id, event_type, payload,
                 idempotency_key, correlation_id) VALUES ('ExternalShare', ${key}, 'ExternalShareApproved', '{}'::jsonb,
                 ${key}, ${tag})`);
     }
@@ -161,8 +161,8 @@ function testDbDownMidRunBreakerOpensAndRecovers() returns error? {
             cfg);
     RunReport|RunSkipped|error recovered = runOnce(again, tag + "-recover");
     test:assertTrue(recovered is RunReport, "the run after recovery completes");
-    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM messaging.outbox
+    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM messaging_outbox
             WHERE correlation_id = ${tag} AND status = 'DONE'`), 6);
-    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM messaging.outbox
+    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM messaging_outbox
             WHERE correlation_id = ${tag} AND status <> 'DONE'`), 0);
 }

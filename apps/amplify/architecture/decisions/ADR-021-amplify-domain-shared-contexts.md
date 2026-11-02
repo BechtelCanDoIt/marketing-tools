@@ -19,7 +19,7 @@ Option 3. `apps/amplify/amplify-domain` is published to the local repository lik
 
 - Repository port methods are `public`, so the services can call them from another package.
 - A repository is built with the shared client and a `store:Actor` (api: the caller per request; jobs: `store:SYSTEM`). Every write commits aggregate row + outbox row + audit row in one transaction.
-- The ledger append also applies the row to `recognition` in that transaction (B12), through the SQL function `recognition.apply_ledger_entry`. That's the one cross-schema write, and it is by design: recognition is a projection of the ledger.
+- The ledger append also applies the row to `recognition` in that transaction (B12), through the SQL function `recognition_apply_ledger_entry`. That's the one cross-schema write, and it is by design: recognition is a projection of the ledger.
 - Dependency direction: services → `amplify_domain` → `amplify_common`. `amplify_common` stays free of DB code.
 
 ## Consequences

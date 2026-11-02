@@ -72,11 +72,11 @@ IDs are assigned here; the requirements doc has none.
 | R1 | **Met** (with A6) | Campaign (S1): post URN, title, summary, image, category, tags, priority flag, window. Save / Save & Share Now. `amplify_marketing` **and `amplify_po`** can register | domains S1; data model `campaign.*`; plan M5 S1, M7 Campaigns | A6 |
 | R2 | **Met** | Announcements (S5): cardsV2 card through an incoming webhook to the company-wide **WSO2 Club Group** space (the one Marketing uses today), sent by `amplify-jobs`, retried via outbox | domains S5; data model `announcement`; plan M6a | A7 |
 | R3 | **Met, different mechanism** | Employee signs in to One WSO2 with Asgardeo, then connects LinkedIn by OAuth + OIDC (`openid profile w_member_social`) to `amplify-api`. **May move to Asgardeo federation** if it can hold the token encrypted and hand it to jobs (A8 research) | domains S2, D4; data model `connection.*`; plan M5 S2, M7 Connect | A8 |
-| R4 | **Partial** | `w_member_social` only covers reposts made **through Amplify** (`REPOST`, `REPOST_COMMENTARY`). Reactions, comments and native LinkedIn reposts come in a future phase with Community Management access | domains C1, D7; data model `sharing.engagement` | A3, B5 |
+| R4 | **Partial** | `w_member_social` only covers reposts made **through Amplify** (`REPOST`, `REPOST_COMMENTARY`). Reactions, comments and native LinkedIn reposts come in a future phase with Community Management access | domains C1, D7; data model `sharing_engagement` | A3, B5 |
 | R5 | **Met** | External Sharing (S3, UI "My Campaign"): any HTTPS evidence URL, certify checkbox, PO review | domains S3; data model `external_sharing`; plan M5 S3, M7 My Campaign | C4 |
 | R6 | **Deviates** (stricter) | Verified in-app reposts are scored automatically, `ON CONFLICT DO NOTHING` on the ledger reference. Phase 1 allows **one repost per campaign per employee**, so "once per action" becomes "once per post". Revisited with Community Management access | domains C1/C2; data model `share_request` UK | A4 |
 | R7 | **Met** (with A5) | `amplify_po` edits point rules, adjusts and reverses with a reason, all audited | plan Roles, M5 C2 | A5 |
-| R8 | **Deferred** | Points are `HELD` in `scoring.points_ledger`. No Coin issuer | domains scope; data model settlement status | A11 |
+| R8 | **Deferred** | Points are `HELD` in `scoring_points_ledger`. No Coin issuer | domains scope; data model settlement status | A11 |
 | R9 | **Partial** | `/me/points` (total, rank, monthly history), own shares, My Campaign portfolio. **Points only, no Coin value** in phase 1 | plan M5 S4, M7 Leaderboard | A11 |
 | R10 | **Partial → Met once B15 lands** | Three leaderboards: company top N (default 3), personal (own rank and gap), and **My Team**. Team grouping uses One WSO2 team data (D13) | domains S4; plan M7 Leaderboard, Team, M0c | A10, B15 |
 | R11 | **Partial** | PO dashboard stays in phase 1 (to be defined, B6). SLT reports are phase 2. Reach needs the analytics API (future phase) | plan MVP #4, M0b, M0c | A13, B6, B7 |
@@ -84,10 +84,10 @@ IDs are assigned here; the requirements doc has none.
 | T2 | **Met** | `REPOST_COMMENTARY` | data model `point_rule` | — |
 | T3 | **Met** | `OWN_POST` via External Sharing, PO-approved | data model `point_rule`, `external_share` | — |
 | T4 | **Met** (with C4) | `OWN_POST_AMPLIFIED`, set by PO (`/amplified`) on an approved claim only. Awarded as a top-up row on top of the T3 award | plan M5 S3; data model `external_share.amplified_at` | C4 |
-| K1 | **Met** | Pre-built `recognition.standing`, p95 < 50 ms target, load test with 1k employees / 50k ledger rows | data model recognition; plan M11 | — |
+| K1 | **Met** | Pre-built `recognition_standing`, p95 < 50 ms target, load test with 1k employees / 50k ledger rows | data model recognition; plan M11 | — |
 | K2 | **Met** | Asgardeo, roles from groups, JWT verified at proxy and in an interceptor | plan Roles, M4 | — |
 | K3 | **Deviates** (pending Legal) | Opt-in: yes. Phase 1 also holds a `w_member_social` token that can post on the employee's behalf. Consent copy placeholder in M0c until Legal signs off | domains S2; plan M10, M0c | A9 |
-| K4 | **Met** | Ledger reference + unique keys + idempotency keys; `audit.audit_log` for every write, 5-year retention | data model scoring, audit | C1, C5 |
+| K4 | **Met** | Ledger reference + unique keys + idempotency keys; `audit_log` for every write, 5-year retention | data model scoring, audit | C1, C5 |
 | P1 | **Partial** | Go-live 31 Oct 2026. Dated milestones added (2026-10-16), with a high go-live risk and a minimum pilot cut for PO | plan [Suggested order](../../../docs/requirements/phase1-planned-todos.md#dated-milestones-to-go-live-31-oct-2026) | A1 |
 | P2 | **Met** | Pilot group in Asgardeo + preview flag | plan M12 | — |
 | P3 | **Met** | Provider-agnostic tables (`provider`, `provider_api`, resource URN), `ProviderAdapter` port | data model design rule 9; domains C1 | — |
@@ -182,7 +182,7 @@ Placeholder. Phase numbers come from the documents where they say one; the rest 
 | C5 | Medium | **Duplicate claims across employees** for the same evidence URL | data model L463 | PO-visible warning or unique on `(evidence_url, action)` | **Unique in the DB** on `(evidence_url, action)`. On conflict the API returns a stable code (`EVIDENCE_ALREADY_CLAIMED`) and My Campaign shows: *"Someone else already submitted this url, contact PO Team for review"*. Normalize the URL before the check (scheme, host case, trailing slash, tracking params) or the key is easy to dodge |
 | C6 | Medium | **Pre-coin verification is written as fact but unproven** | domains L154; data model L368–375; plan L112 | Mark "pending M0b research" | Recommendation |
 | C7 | Low | **Campaign window has no default** (`closes_at`) | plan L287; data model L201, L697 | Seed a default window | Phase 1's only API (`w_member_social`) reads no stats, so there's no provider limit to inherit. **Default `closes_at` = `opens_at` + 1 month**, from config key `campaign.default_window_days = 30`. Todo in M0c: when Community Management / analytics access arrives, check its stats look-back limit and align the default to it |
-| C8 | Low | **Team summary row needs headcount Amplify doesn't have** | plan L292; data model design rule 6 | Use One WSO2 employee data | Recommendation. Headcount is **derived per team on each request** from One WSO2's employee data (not stored in Amplify); "active" comes from `recognition.standing` |
+| C8 | Low | **Team summary row needs headcount Amplify doesn't have** | plan L292; data model design rule 6 | Use One WSO2 employee data | Recommendation. Headcount is **derived per team on each request** from One WSO2's employee data (not stored in Amplify); "active" comes from `recognition_standing` |
 
 ## Audit D · Stale and drifted artifacts
 
