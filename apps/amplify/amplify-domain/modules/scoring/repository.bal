@@ -16,7 +16,7 @@
 
 // PostgreSQL implementations of `LedgerRepository` and `PointRuleRepository` (schema `scoring`).
 // `append` also applies the row to the S4 read models in the same transaction (B12) through
-// `recognition.apply_ledger_entry` (V010): recognition is a projection of this ledger, never a source.
+// `recognition_apply_ledger_entry` (V010): recognition is a projection of this ledger, never a source.
 
 import amplify_common.types;
 import amplify_domain.store;
@@ -24,7 +24,7 @@ import amplify_domain.store;
 import ballerina/time;
 import ballerinax/postgresql;
 
-const string LEDGER_TABLE = "scoring.points_ledger";
+const string LEDGER_TABLE = "scoring_points_ledger";
 
 type LedgerRow record {|
     string reference;
@@ -97,7 +97,7 @@ public isolated class PgLedgerRepository {
             SELECT reference, employee_id, campaign_id::text AS campaign_id, source_type, source_id::text AS source_id,
                    action, points, rule_id::text AS rule_id, reverses_reference, reason, actor_id, correlation_id,
                    created_at, status, status_changed_at, paid_at, coin_reference
-            FROM scoring.points_ledger WHERE reference = ${reference}`);
+            FROM scoring_points_ledger WHERE reference = ${reference}`);
         return toEntry(row);
     }
 
@@ -106,7 +106,7 @@ public isolated class PgLedgerRepository {
             SELECT reference, employee_id, campaign_id::text AS campaign_id, source_type, source_id::text AS source_id,
                    action, points, rule_id::text AS rule_id, reverses_reference, reason, actor_id, correlation_id,
                    created_at, status, status_changed_at, paid_at, coin_reference
-            FROM scoring.points_ledger WHERE reverses_reference = ${reference}`);
+            FROM scoring_points_ledger WHERE reverses_reference = ${reference}`);
         return toEntry(row);
     }
 
@@ -121,7 +121,7 @@ public isolated class PgLedgerRepository {
         transaction {
             // Only the settlement columns: the column-level grant refuses anything else.
             record {|string? status;|}|error before = self.db->queryRow(`
-                UPDATE scoring.points_ledger SET status = ${status}, status_changed_at = CAST(${store:ts(changedAt)} AS timestamptz)
+                UPDATE scoring_points_ledger SET status = ${status}, status_changed_at = CAST(${store:ts(changedAt)} AS timestamptz)
                 WHERE reference = ${reference}
                 RETURNING old.status`);
             if before is error {
@@ -151,7 +151,7 @@ public isolated class PgPointRuleRepository {
     public isolated function all() returns PointRule[]|error {
         stream<RuleRow, error?> rows = self.db->query(`
             SELECT id::text AS id, action, points, effective_from, created_by, created_at
-            FROM scoring.point_rule ORDER BY action, effective_from`);
+            FROM scoring_point_rule ORDER BY action, effective_from`);
         return from RuleRow r in rows
             select {
                 id: r.id,
@@ -175,10 +175,10 @@ public isolated class PgPointRuleRepository {
     private isolated function insertTx(PointRule rule) returns error? {
         transaction {
             _ = check self.db->execute(`
-                INSERT INTO scoring.point_rule (id, action, points, effective_from, created_by, created_at)
+                INSERT INTO scoring_point_rule (id, action, points, effective_from, created_by, created_at)
                 VALUES (CAST(${rule.id} AS uuid), ${rule.action}, ${rule.points}, CAST(${store:ts(rule.effectiveFrom)} AS timestamptz),
                         ${rule.createdBy}, CAST(${store:ts(rule.createdAt)} AS timestamptz))`);
-            check store:writeAudit(self.db, store:auditOf(self.actor, "PointRuleVersionAdded", "scoring.point_rule",
+            check store:writeAudit(self.db, store:auditOf(self.actor, "PointRuleVersionAdded", "scoring_point_rule",
                     rule.id, {action: rule.action, points: rule.points}));
             check commit;
         }
@@ -229,7 +229,7 @@ public isolated transactional function appendInTransaction(postgresql:Client db,
     // violation - a new constraint, a bad reference - is a real error and surfaces as one. The other
     // expected conflict, a second reversal of the same row, is caught in `append`, outside the transaction.
     var result = check db->execute(`
-        INSERT INTO scoring.points_ledger (reference, employee_id, campaign_id, source_type, source_id, action,
+        INSERT INTO scoring_points_ledger (reference, employee_id, campaign_id, source_type, source_id, action,
             points, rule_id, reverses_reference, reason, actor_id, correlation_id, created_at, status,
             status_changed_at, paid_at, coin_reference)
         VALUES (${e.reference}, ${e.employeeId}, CAST(${e.campaignId} AS uuid), ${e.sourceType},
@@ -247,7 +247,7 @@ public isolated transactional function appendInTransaction(postgresql:Client db,
         // first, then apply_ledger_entry takes the SQL-level one (1634561133). Called inside the transaction
         // gate (R-13), so the poll gives up after 2 s instead of stalling every other write.
         check store:lockRecognition(db);
-        _ = check db->queryRow(`SELECT recognition.apply_ledger_entry(${e.reference}, CAST(${topN} AS int))`, int);
+        _ = check db->queryRow(`SELECT recognition_apply_ledger_entry(${e.reference}, CAST(${topN} AS int))`, int);
     }
     return inserted;
 }

@@ -185,7 +185,7 @@ function testM6RunAnnouncesSharesAndScores() returns error? {
     // Connect through the mock OAuth flow; seal the token into today's partition (amplify-api side).
     linkedin:TokenGrant grant = check mockAccessToken(adapter);
     linkedin:MemberProfile me = check adapter.userInfo(grant.accessToken);
-    _ = check jobsDb->execute(`DELETE FROM connection.member_connection WHERE member_urn = ${me.memberUrn}`);
+    _ = check jobsDb->execute(`DELETE FROM connection_member_connection WHERE member_urn = ${me.memberUrn}`);
     connection:StoredToken sealed = check connection:sealToken(check testCipher(), grant.accessToken, emp,
             time:utcAddSeconds(now, <decimal>grant.expiresInSeconds), now);
     check (new connection:PgTokenRepository(apiDb)).insert(sealed);
@@ -204,7 +204,7 @@ function testM6RunAnnouncesSharesAndScores() returns error? {
     test:assertEquals(report.failed, 0);
 
     // Announced once, threaded, correlation id propagated.
-    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM announcement.announcement_v
+    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM announcement_v
             WHERE campaign_id = CAST(${c.id} AS uuid) AND status = 'SENT' AND chat_message_name IS NOT NULL
               AND chat_thread_name IS NOT NULL`), 1);
     ChatLog log = chatSnapshot();
@@ -213,29 +213,29 @@ function testM6RunAnnouncesSharesAndScores() returns error? {
     test:assertEquals(log.correlationIds[log.correlationIds.length() - 1], "it-corr-campaign");
     // Published once on LinkedIn, commentary cleared, engagement + points + standing.
     test:assertEquals(check mockPostCount(), postsBefore + 1);
-    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM sharing.share_request_v
+    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM sharing_share_request_v
             WHERE id = CAST(${share.id} AS uuid) AND status = 'PUBLISHED'`), 1);
-    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM sharing.share_request
+    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM sharing_share_request
             WHERE id = CAST(${share.id} AS uuid) AND commentary IS NULL`), 1, "commentary cleared on publish");
-    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM sharing.engagement
+    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM sharing_engagement
             WHERE employee_id = ${emp} AND activity_urn LIKE 'urn:li:share:%'`), 1);
-    int points = check itCount(jobsDb, `SELECT coalesce(sum(points), 0)::int FROM scoring.points_ledger
+    int points = check itCount(jobsDb, `SELECT coalesce(sum(points), 0)::int FROM scoring_points_ledger
             WHERE employee_id = ${emp}`);
     test:assertTrue(points > 0);
     recognition:Standing? standing = check recognition:standingOf(jobsDb, emp);
     test:assertTrue(standing is recognition:Standing && standing.totalPoints == points, "standing updated in the award tx");
-    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM audit.audit_log
+    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM audit_log
             WHERE correlation_id = ${"it-corr-share-" + emp} AND action = 'EngagementRecorded'`), 1,
             "jobs writes carry the outbox row's correlation id");
 
     // Rerun safety: redeliver every row of this flow, run twice more. No second post, card or ledger row.
-    _ = check jobsDb->execute(`UPDATE messaging.outbox SET status = 'PENDING', next_attempt_at = now()
+    _ = check jobsDb->execute(`UPDATE messaging_outbox SET status = 'PENDING', next_attempt_at = now()
             WHERE aggregate_id IN (${c.id}, ${share.id}) AND status = 'DONE'`);
     _ = check itRun(deps, "it-rerun-1");
     _ = check itRun(deps, "it-rerun-2");
     test:assertEquals(check mockPostCount(), postsBefore + 1, "no double post");
     test:assertEquals(chatSnapshot().posts, chatBefore + 1, "no second card");
-    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM scoring.points_ledger WHERE employee_id = ${emp}`), 1,
+    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM scoring_points_ledger WHERE employee_id = ${emp}`), 1,
             "no double ledger row");
 }
 
@@ -260,17 +260,17 @@ function testM6OneRunAcrossReplicasStaleLocksAndPurge() returns error? {
 
     // A row left IN_PROGRESS by a dead run is released and handled.
     string key = "ConnectionReady:it-stale-" + types:newUuidV7();
-    _ = check jobsDb->execute(`INSERT INTO messaging.outbox (aggregate_type, aggregate_id, event_type, payload,
+    _ = check jobsDb->execute(`INSERT INTO messaging_outbox (aggregate_type, aggregate_id, event_type, payload,
             idempotency_key, status, attempts, locked_by, locked_until)
         VALUES ('member_connection', 'it', 'ConnectionReady', '{}'::jsonb, ${key}, 'IN_PROGRESS', 1, 'dead-run',
             now() - interval '1 minute')`);
     RunReport report = check itRun(deps, "it-stale");
     test:assertTrue(report.staleReleased >= 1);
-    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM messaging.outbox
+    test:assertEquals(check itCount(jobsDb, `SELECT count(*)::int FROM messaging_outbox
             WHERE idempotency_key = ${key} AND status = 'DONE'`), 1);
 
     // Expired Idempotency-Key rows are purged by the maintenance pass.
-    _ = check jobsDb->execute(`INSERT INTO messaging.idempotency_key (employee_id, key, request_hash, expires_at)
+    _ = check jobsDb->execute(`INSERT INTO messaging_idempotency_key (employee_id, key, request_hash, expires_at)
         VALUES ('it', ${key}, 'h', now() - interval '1 hour')`);
     test:assertTrue(check store:purgeExpiredIdempotencyKeys(jobsDb) >= 1);
 }

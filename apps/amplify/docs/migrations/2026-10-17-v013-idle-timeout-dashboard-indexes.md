@@ -22,10 +22,10 @@ review (`docs/reviews/2026-10-17-round2-handoffs.md`): domain review H-3b and H-
 - `ALTER ROLE amplify_api SET idle_in_transaction_session_timeout = '30s'` and the same for `amplify_jobs`
   (runs as the bootstrap admin, the roles' creator, before `SET LOCAL ROLE amplify_migrate`). New sessions
   pick it up; pools recycle connections within `maxConnectionLifeTime` (30 min).
-- `points_ledger_created_at_idx` on `scoring.points_ledger (created_at)`.
-- `share_request_failed_at_idx` on `sharing.share_request (failed_at) WHERE failed_at IS NOT NULL`.
-- `COMMENT ON FUNCTION` for `recognition.apply_ledger_entry(varchar, int)`, `recognition.rerank(text, int)`,
-  `recognition.rebuild(int)`, naming the lock order.
+- `points_ledger_created_at_idx` on `scoring_points_ledger (created_at)`.
+- `share_request_failed_at_idx` on `sharing_share_request (failed_at) WHERE failed_at IS NOT NULL`.
+- `COMMENT ON FUNCTION` for `recognition_apply_ledger_entry(varchar, int)`, `recognition_rerank(text, int)`,
+  `recognition_rebuild(int)`, naming the lock order.
 
 Plain `CREATE INDEX` (the runner wraps each script in a transaction, so `CONCURRENTLY` isn't possible). Both
 tables are small in phase 1, so the build takes milliseconds; on a large table this would need its own
@@ -147,7 +147,7 @@ SELECT r.rolname, s.setconfig FROM pg_db_role_setting s JOIN pg_roles r ON r.oid
 WHERE r.rolname IN ('amplify_api', 'amplify_jobs');
 SELECT indexname, indexdef FROM pg_indexes
 WHERE indexname IN ('points_ledger_created_at_idx', 'share_request_failed_at_idx');
-SELECT obj_description('recognition.apply_ledger_entry(varchar, int)'::regprocedure, 'pg_proc');
+SELECT obj_description('recognition_apply_ledger_entry(varchar, int)'::regprocedure, 'pg_proc');
 ```
 
 ## Revert

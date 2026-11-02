@@ -5,8 +5,8 @@ review of jobs/db/infra (`docs/reviews/2026-10-26-code-review-backend.md`, findi
 
 ## Context
 
-1. **Concurrent ledger appends left stale ranks.** `recognition.apply_ledger_entry` upserts the employee's
-   standing row and then `recognition.rerank` re-ranks the whole period in one `UPDATE`. The ranking CTE
+1. **Concurrent ledger appends left stale ranks.** `recognition_apply_ledger_entry` upserts the employee's
+   standing row and then `recognition_rerank` re-ranks the whole period in one `UPDATE`. The ranking CTE
    reads the statement snapshot, so when the jobs score pass and an amplify-api PO decision commit at the
    same time, each ranks without the other's row. The later commit keeps ranks computed without the
    earlier one's points (two people at rank 1, wrong `points_to_top_n`) until the next append, and the two
@@ -14,17 +14,17 @@ review of jobs/db/infra (`docs/reviews/2026-10-26-code-review-backend.md`, findi
    `testConcurrentLedgerAppendsKeepRanksConsistent` (fails on V011, passes on V012).
 2. **Partition upkeep could stall the app.** `CREATE TABLE ... PARTITION OF` (every day: a new token day
    and, monthly, an audit month) and `DETACH PARTITION` take `ACCESS EXCLUSIVE` on the parent
-   (`connection.provider_token`, `audit.audit_log`) and hold it until the whole upkeep commits. Behind any
+   (`connection_provider_token`, `audit_log`) and hold it until the whole upkeep commits. Behind any
    long reader that request queued forever, and every audit insert and token write in amplify-api queued
    behind it. Reproduced by `testUpkeepGivesUpOnALockInsteadOfQueueing` (V011: waits until
    `statement_timeout`; V012: fails with `lock timeout` after 5 s).
 
 ## What changed
 
-- `recognition.rerank`, `recognition.apply_ledger_entry`, `recognition.rebuild`: `CREATE OR REPLACE` with
+- `recognition_rerank`, `recognition_apply_ledger_entry`, `recognition_rebuild`: `CREATE OR REPLACE` with
   the same bodies plus `pg_advisory_xact_lock(1634561133)` first, so recognition writers run one at a time.
   The lock lasts to the end of the ledger transaction (one insert, one upsert, one UPDATE).
-- `messaging.run_partition_maintenance`: same body plus `pg_advisory_xact_lock(1634561134)`, so two
+- `messaging_run_partition_maintenance`: same body plus `pg_advisory_xact_lock(1634561134)`, so two
   concurrent upkeep calls don't race on the same `CREATE TABLE`.
 - `ALTER FUNCTION ... SET lock_timeout = '5s'` on `run_partition_maintenance`, `create_token_partitions`,
   `drop_expired_token_partitions`, `create_audit_partitions`, `drop_old_audit_partitions`,

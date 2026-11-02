@@ -19,6 +19,6 @@
 
 SET LOCAL ROLE amplify_migrate;
 
-INSERT INTO config.app_setting (key, value)
+INSERT INTO config_app_setting (key, value)
 VALUES ('leaderboard.top_min_points', '100')
 ON CONFLICT (key) DO NOTHING;

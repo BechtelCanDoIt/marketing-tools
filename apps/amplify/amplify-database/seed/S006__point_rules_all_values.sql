@@ -28,7 +28,7 @@
 
 SET LOCAL ROLE amplify_migrate;
 
-INSERT INTO scoring.point_rule (action, points, effective_from, created_by)
+INSERT INTO scoring_point_rule (action, points, effective_from, created_by)
 VALUES ('SHARE_COMMENTARY', 5, '2026-10-19T00:00:00Z', 'system'),
        ('REACTION', 1, '2026-10-19T00:00:00Z', 'system'),
        ('COMMENT', 1, '2026-10-19T00:00:00Z', 'system'),

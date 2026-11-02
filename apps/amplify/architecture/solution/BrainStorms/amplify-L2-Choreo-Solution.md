@@ -7,7 +7,7 @@
 > - **An API proxy sits at the cell edge** (ADR-004); this L2 has none.
 > - **Engagement sync (B5), Novera announcements (B7), the Coin issuer (B8), HR Entity `org_dim` (B6) and the agent** are all later phases. Phase 1 uses in-app shares through `w_member_social`, PO-reviewed external shares, a Google Chat incoming webhook, and points held in the ledger.
 > - **Member tokens:** phase 1 stores encrypted `w_member_social` member tokens; this L2 assumed an org-admin token only.
-> - **Tables renamed and split** (`post` → `campaign.campaign`, `employee_link` → `connection.member_connection`, `submission` → `external_sharing.external_share`, …). See [phase1-data-model.md](../Phase%201/phase1-data-model.md).
+> - **Tables renamed and split** (`post` → `campaign`, `employee_link` → `connection_member_connection`, `submission` → `external_sharing_external_share`, …). See [phase1-data-model.md](../Phase%201/phase1-data-model.md).
 >
 > Phase 1 scope and design: [phase1-domains.md](../Phase%201/phase1-domains.md) · plan: [phase1-planned-todos.md](../../../docs/requirements/phase1-planned-todos.md). The rest of this doc stays as the later-phase reference (engagement sync, Coin, HR Entity, agent).
 

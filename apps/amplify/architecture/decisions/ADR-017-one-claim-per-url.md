@@ -10,7 +10,7 @@ Two employees could claim points for the same evidence URL.
 
 ## Decision
 
-`UNIQUE (evidence_url, action)` on `external_sharing.external_share`, with the URL normalized first (scheme, host case, trailing slash, tracking params). On conflict the API returns `EVIDENCE_ALREADY_CLAIMED`; My Campaign shows *"Someone else already submitted this url, contact PO Team for review"*.
+`UNIQUE (evidence_url, action)` on `external_sharing_external_share`, with the URL normalized first (scheme, host case, trailing slash, tracking params). On conflict the API returns `EVIDENCE_ALREADY_CLAIMED`; My Campaign shows *"Someone else already submitted this url, contact PO Team for review"*.
 
 ## Consequences
 
