@@ -95,7 +95,8 @@ paths:
         people, or more leavers than `leaverMaxPerRun`, erases nobody. ADR-040.
       responses:
         "200": {description: What the sweep did}
-        "401": {description: Missing or wrong internal key}
+        "401": {description: Missing or wrong key}
+        "403": {description: Scheduler key on a route it may not call}
         "503": {description: Database unavailable}
   /maintenance/rebuild-recognition:
     post:
@@ -119,8 +120,10 @@ components:
       in: header
       name: X-Amplify-Internal-Key
       description: >-
-        Shared secret (at least 32 characters) held by the scheduler's jobs, amplify-api and amplify-jobs. Every call
-        except the two probes needs it; a missing or wrong key is 401. ADR-039.
+        Two secrets (each at least 32 characters, different values). The internal key, held by amplify-api, opens
+        every route. The scheduler key, held by the scheduler's jobs, opens only POST /runs and
+        POST /maintenance/partitions; on any other route it is 403. Every call except the two probes needs one;
+        a missing or wrong key is 401. ADR-039.
   schemas:
     HealthStatus:
       type: object

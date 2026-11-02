@@ -569,6 +569,9 @@ isolated class FakeLinkedIn {
 
     public isolated function authorizationUrl(string state) returns string|linkedin:ProviderError => "http://mock";
 
+    public isolated function authorizationUrlWithNonce(string state, string? nonce) returns string|linkedin:ProviderError =>
+        "http://mock";
+
     public isolated function exchangeCode(string code) returns linkedin:TokenGrant|linkedin:ProviderError =>
         {accessToken: "x", expiresInSeconds: 60, scopes: []};
 
@@ -593,6 +596,18 @@ isolated class FakeLinkedIn {
                 }
                 "422" => {
                     return providerError(linkedin:REJECTED, 422, false);
+                }
+                "503" => {
+                    return providerError(linkedin:UNAVAILABLE, 503, true);
+                }
+                "timeout" => {
+                    // The call timed out before LinkedIn took anything (adapter: OUTCOME_UNKNOWN).
+                    return providerError(linkedin:OUTCOME_UNKNOWN, 0, false);
+                }
+                "timeout-after-post" => {
+                    // LinkedIn took the post but the answer never came back (the adapter's OUTCOME_UNKNOWN).
+                    self.posts += 1;
+                    return providerError(linkedin:OUTCOME_UNKNOWN, 0, false);
                 }
             }
             self.posts += 1;

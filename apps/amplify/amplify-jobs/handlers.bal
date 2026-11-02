@@ -358,7 +358,12 @@ isolated function handleLinkedInFailure(HandlerContext ctx, sharing:ShareRequest
         }
         return failShare(ctx, cleared, types:NEEDS_RECONNECT, d.code, note);
     }
-    if d.retryable {
+    // `OUTCOME_UNKNOWN` (timeout, dropped connection, 502/504) is not `retryable` in the adapter because the post may
+    // be live, but the owner's decision (board thread 36, 2026-11-01) is that a lost answer leaves the row pending
+    // and the outbox retries (ADR-025). The window that accepts: LinkedIn took the post and only the answer was lost,
+    // so the retry can post a second time. The marker covers the other case, a failed record write after a
+    // *received* acceptance, which is never retried.
+    if d.retryable || d.code == linkedin:OUTCOME_UNKNOWN {
         // 429, 5xx, timeout or open breaker: the share stays QUEUED (B14) and the outbox retries.
         return ctx.finalAttempt ? failShare(ctx, cleared, types:RETRIES_EXHAUSTED, d.code, note) : retryLater(note);
     }
