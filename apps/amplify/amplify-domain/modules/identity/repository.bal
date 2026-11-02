@@ -57,6 +57,45 @@ public isolated class PgEmployeeRepository {
         };
     }
 
+    public isolated function findByEmail(string email) returns Employee|error? {
+        EmployeeRow|error row = self.db->queryRow(`
+            SELECT employee_id, email::text AS email, display_name, first_seen_at, last_seen_at
+            FROM identity.employee WHERE email = CAST(${email} AS citext)`);
+        if row is error {
+            return store:isNoRows(row) ? () : row;
+        }
+        return {
+            employeeId: row.employee_id,
+            email: row.email,
+            displayName: row.display_name,
+            firstSeenAt: row.first_seen_at,
+            lastSeenAt: row.last_seen_at
+        };
+    }
+
+    public isolated function findAlias(string sub) returns types:EmployeeId|error? {
+        string|error id = self.db->queryRow(`SELECT employee_id FROM identity.employee_alias WHERE alias_sub = ${sub}`);
+        if id is error {
+            return store:isNoRows(id) ? () : id;
+        }
+        return id;
+    }
+
+    // One statement, so the mapping and its audit row are written together without a transaction: the audit row is
+    // only written by the call that created the mapping. The audit row names ids, never an email.
+    public isolated function addAlias(string sub, types:EmployeeId employeeId) returns types:EmployeeId|error {
+        _ = check self.db->execute(`
+            WITH created AS (
+                INSERT INTO identity.employee_alias (alias_sub, employee_id) VALUES (${sub}, ${employeeId})
+                ON CONFLICT (alias_sub) DO NOTHING RETURNING alias_sub, employee_id)
+            INSERT INTO audit.audit_log (actor_id, actor_roles, action, entity_type, entity_id, outcome, after)
+            SELECT ${sub}, ARRAY['amplify_api']::text[], 'EMPLOYEE_ALIASED', 'employee', employee_id, 'SUCCESS',
+                   jsonb_build_object('aliasSub', alias_sub, 'employeeId', employee_id)
+            FROM created`);
+        string mapped = check self.db->queryRow(`SELECT employee_id FROM identity.employee_alias WHERE alias_sub = ${sub}`);
+        return mapped;
+    }
+
     public isolated function upsert(Employee e) returns error? {
         _ = check self.db->execute(`
             INSERT INTO identity.employee (employee_id, email, display_name, first_seen_at, last_seen_at)
