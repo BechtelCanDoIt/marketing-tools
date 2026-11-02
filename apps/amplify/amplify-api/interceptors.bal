@@ -69,7 +69,8 @@ isolated service class AuthInterceptor {
                     correlationId);
         }
         if employeeId is error {
-            log:printError("Could not resolve the employee", employeeId, correlationId = correlationId);
+            log:printError("Could not resolve the employee", resilience:loggable(employeeId),
+                    correlationId = correlationId);
             recordDbFailure(employeeId);
             return unavailable(DEPENDENCY_UNAVAILABLE, correlationId);
         }
