@@ -2,8 +2,8 @@
 
 One OpenAPI 3.0.3 file per LinkedIn Postman collection, in `openapi/`. They are a reading aid for the LinkedIn APIs
 Amplify touches (and the ones it might later), not a contract LinkedIn publishes. The source collections are in
-`../postman-exports/`. The specs were generated from them by a script, not written by hand, so a change to a
-collection means regenerating its spec, not editing the YAML.
+`../postman-exports/`. The specs were produced from them once, on 2026-10-15, and are maintained by hand from now on. There is no generator
+in the repo, so when LinkedIn's collections change, edit the YAML (or redo the conversion) and update the notes below.
 
 | Spec | Covers |
 | --- | --- |
