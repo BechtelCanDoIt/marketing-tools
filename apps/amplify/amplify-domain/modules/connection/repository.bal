@@ -125,16 +125,25 @@ public isolated class PgConnectionRepository {
                         CAST(${tokenId} AS uuid), CAST(${issuedOn} AS date), CAST(${store:ts(c.accessExpiresAt)} AS timestamptz), CAST(${store:ts(c.connectedAt)} AS timestamptz),
                         CAST(${store:ts(c.revokedAt)} AS timestamptz), CAST(${store:ts(c.removedAt)} AS timestamptz), CAST(${store:ts(c.lastRemindedAt)} AS timestamptz), ${c.version})`);
             } else {
+                // Read and lock the row in the same statement that changes it (`RETURNING old.*` needs PostgreSQL 18).
                 record {|string member_urn; int version; boolean revoked; boolean removed;|}|error old = self.db->queryRow(`
+                    WITH prev AS (
+                        SELECT employee_id, provider, member_urn AS old_member_urn, version AS old_version,
+                               revoked_at IS NOT NULL AS old_revoked, removed_at IS NOT NULL AS old_removed
+                        FROM connection_member_connection
+                        WHERE employee_id = ${c.employeeId} AND provider = ${c.provider} AND version = ${expectedVersion}
+                        FOR UPDATE)
                     UPDATE connection_member_connection
                     SET member_urn = ${c.memberUrn}, provider_api = ${c.providerApi}, scopes = CAST(${scopes} AS text[]),
                         current_token_id = CAST(${tokenId} AS uuid), current_token_issued_on = CAST(${issuedOn} AS date),
                         access_expires_at = CAST(${store:ts(c.accessExpiresAt)} AS timestamptz), connected_at = CAST(${store:ts(c.connectedAt)} AS timestamptz),
                         revoked_at = CAST(${store:ts(c.revokedAt)} AS timestamptz), removed_at = CAST(${store:ts(c.removedAt)} AS timestamptz),
                         last_reminded_at = CAST(${store:ts(c.lastRemindedAt)} AS timestamptz), version = ${c.version}
-                    WHERE employee_id = ${c.employeeId} AND provider = ${c.provider} AND version = ${expectedVersion}
-                    RETURNING old.member_urn, old.version, old.revoked_at IS NOT NULL AS revoked,
-                              old.removed_at IS NOT NULL AS removed`);
+                    FROM prev
+                    WHERE connection_member_connection.employee_id = prev.employee_id
+                      AND connection_member_connection.provider = prev.provider
+                    RETURNING prev.old_member_urn AS member_urn, prev.old_version AS version, prev.old_revoked AS revoked,
+                              prev.old_removed AS removed`);
                 if old is error {
                     fail store:isNoRows(old) ? store:versionConflict("connection") : old;
                 }

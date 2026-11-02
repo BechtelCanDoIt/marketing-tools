@@ -123,7 +123,14 @@ public isolated class PgCampaignRepository {
 
     private isolated function updateTx(Campaign campaign, int expectedVersion) returns error? {
         transaction {
+            // Read and lock the row in the same statement that changes it (`RETURNING old.*` needs PostgreSQL 18).
             record {|string resource_urn; string title; boolean archived; int version;|}|error old = self.db->queryRow(`
+                WITH prev AS (
+                    SELECT id, resource_urn AS old_resource_urn, title AS old_title,
+                           archived_at IS NOT NULL AS old_archived, version AS old_version
+                    FROM campaign
+                    WHERE id = CAST(${campaign.id} AS uuid) AND version = ${expectedVersion}
+                    FOR UPDATE)
                 UPDATE campaign
                 SET resource_urn = ${campaign.resourceUrn}, resource_type = ${campaign.resourceType},
                     resource_url = ${campaign.resourceUrl}, title = ${campaign.title}, summary = ${campaign.summary}, image_url = ${campaign.imageUrl},
@@ -131,8 +138,10 @@ public isolated class PgCampaignRepository {
                     opens_at = CAST(${store:ts(campaign.opensAt)} AS timestamptz), closes_at = CAST(${store:ts(campaign.closesAt)} AS timestamptz),
                     archived_at = CAST(${store:ts(campaign.archivedAt)} AS timestamptz), updated_at = CAST(${store:ts(campaign.updatedAt)} AS timestamptz),
                     version = ${campaign.version}
-                WHERE id = CAST(${campaign.id} AS uuid) AND version = ${expectedVersion}
-                RETURNING old.resource_urn, old.title, old.archived_at IS NOT NULL AS archived, old.version`);
+                FROM prev
+                WHERE campaign.id = prev.id
+                RETURNING prev.old_resource_urn AS resource_urn, prev.old_title AS title, prev.old_archived AS archived,
+                          prev.old_version AS version`);
             if old is error {
                 fail store:isNoRows(old) ? store:versionConflict("campaign") : old;
             }

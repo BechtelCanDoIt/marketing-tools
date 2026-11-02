@@ -35,4 +35,9 @@ SELECT 'extension ' || e, coalesce((SELECT extversion FROM pg_extension WHERE ex
 FROM unnest(ARRAY['citext', 'pg_trgm']) AS e
 UNION ALL
 SELECT 'server version', current_setting('server_version_num'),
-       CASE WHEN current_setting('server_version_num')::int >= 180000 THEN 'OK' ELSE 'NEEDS PG 18 (uuidv7)' END;
+       CASE WHEN current_setting('server_version_num')::int >= 150000 THEN 'OK' ELSE 'NEEDS PG 15 or later' END
+UNION ALL
+SELECT 'uuidv7()', CASE WHEN EXISTS (SELECT 1 FROM pg_proc p WHERE p.proname = 'uuidv7' AND p.pronamespace = 'pg_catalog'::regnamespace)
+                        THEN 'native (PostgreSQL 18)' ELSE 'not native' END,
+       CASE WHEN current_setting('server_version_num')::int >= 180000 THEN 'OK'
+            ELSE 'OK, the runner installs bootstrap/uuidv7_compat.sql; by hand, apply that file first' END;

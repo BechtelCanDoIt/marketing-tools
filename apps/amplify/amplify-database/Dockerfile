@@ -30,5 +30,6 @@ WORKDIR /app
 COPY --from=build /home/ballerina/amplify-database/target/bin/amplify_database.jar app.jar
 COPY --from=build --chown=10014:10014 /home/ballerina/amplify-database/migrations migrations
 COPY --from=build --chown=10014:10014 /home/ballerina/amplify-database/seed seed
+COPY --from=build --chown=10014:10014 /home/ballerina/amplify-database/bootstrap bootstrap
 USER 10014
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

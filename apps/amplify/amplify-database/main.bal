@@ -27,6 +27,9 @@ import ballerinax/postgresql.driver as _;
 configurable string migrationsDir = "migrations";
 # Folder holding the reference-data scripts, applied after the migrations.
 configurable string seedDir = "seed";
+# Folder holding the compatibility scripts the runner applies first when the server needs them (`uuidv7()` before
+# PostgreSQL 18). Not versioned and not recorded: each is idempotent.
+configurable string bootstrapDir = "bootstrap";
 # Connect and report each script as pending, applied or changed; apply nothing. Fails on a changed script or
 # a pending one that sorts below an applied one (out of order). Creates nothing either: `schema_version`
 # is only read, and a database without it reports every script as pending.
@@ -63,8 +66,11 @@ const int MIGRATE_LOCK_KEY = 4242001;
 # TLS mode when `dbSslMode` is not configured: verify the server, like amplify-api and amplify-jobs.
 const postgresql:SSLMode DEFAULT_SSL_MODE = postgresql:VERIFY_FULL;
 
-# Oldest server the scripts run on: V002 uses `uuidv7()` (PostgreSQL 18).
-const int MIN_SERVER_VERSION_NUM = 180000;
+# Oldest server the scripts run on: the views use `security_invoker` (PostgreSQL 15).
+const int MIN_SERVER_VERSION_NUM = 150000;
+
+# First server with a native `uuidv7()`. Older ones get `bootstrap/uuidv7_compat.sql`.
+const int NATIVE_UUIDV7_VERSION_NUM = 180000;
 
 # Kind of a recorded script.
 public type ScriptKind "MIGRATION"|"SEED";
@@ -164,11 +170,13 @@ function isLocalHost(string host) returns boolean {
 # + migrationsPath - Migrations folder
 # + seedPath - Seed folder
 # + schema - Schema every table lives in
+# + bootstrapPath - Compatibility scripts folder
 # + return - What ran, or the first error
-public function migrate(postgresql:Client db, string migrationsPath, string seedPath, string schema)
-        returns RunSummary|error {
+public function migrate(postgresql:Client db, string migrationsPath, string seedPath, string schema,
+        string bootstrapPath = bootstrapDir) returns RunSummary|error {
     check useSchema(db, schema, false);
     check checkServerVersion(db);
+    check ensureCompat(db, schema, bootstrapPath);
     check ensureVersionTable(db, schema);
     string[] migrations = check listMigrations(migrationsPath);
     string[] seeds = check listScripts(seedPath, SEED_FILE);
@@ -339,8 +347,34 @@ function versionOf(string script) returns string => script.substring(0, script.l
 function checkServerVersion(postgresql:Client db) returns error? {
     int versionNum = check db->queryRow(`SELECT current_setting('server_version_num')::int`);
     if versionNum < MIN_SERVER_VERSION_NUM {
-        return error(string `Amplify needs PostgreSQL 18 or later (uuidv7); the server reports version number ${versionNum}`);
+        return error(string `Amplify needs PostgreSQL 15 or later (security_invoker views); the server reports version number ${versionNum}`);
     }
+}
+
+# Installs the compatibility scripts a server older than PostgreSQL 18 needs, before the first migration: `uuidv7()`.
+# Idempotent, under the same advisory lock the scripts use, and a no-op on 18 and later.
+#
+# + db - Client connected as the login user
+# + schema - Schema every table lives in
+# + bootstrapPath - Folder holding `uuidv7_compat.sql`
+# + return - An error when the file can't be read or applied
+function ensureCompat(postgresql:Client db, string schema, string bootstrapPath) returns error? {
+    int versionNum = check db->queryRow(`SELECT current_setting('server_version_num')::int`);
+    if versionNum >= NATIVE_UUIDV7_VERSION_NUM {
+        return;
+    }
+    string content = check io:fileReadString(check file:joinPath(bootstrapPath, "uuidv7_compat.sql"));
+    transaction {
+        _ = check db->queryRow(`SELECT 1 FROM (SELECT pg_advisory_xact_lock(${MIGRATE_LOCK_KEY})) l`, int);
+        check useSchema(db, schema, true);
+        sql:ProcedureCallResult|sql:Error result = db->call(scriptQuery(content));
+        if result is sql:Error {
+            fail error(string `bootstrap/uuidv7_compat.sql failed: ${result.message()}`, result);
+        }
+        check result.close();
+        check commit;
+    }
+    log:printInfo(string `PostgreSQL ${versionNum} has no native uuidv7(); the compatible one is installed in ${schema}`);
 }
 
 # Creates `schema_version` (in the schema) once. Under the same advisory lock the scripts use, so two runners starting
