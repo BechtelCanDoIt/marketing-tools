@@ -1,6 +1,6 @@
 # Test-only configuration. No secrets: the gateway JWKS is served by tests/jwt_support.bal.
 [wso2.amplify_api]
-environment = "test"
+environment = "local"  # the test stack is a local stack: plain-http localhost JWKS is allowed only here
 gatewayJwksUrl = "http://localhost:9591/jwks"
 gatewayIssuer = "https://gateway.test/amplify"
 gatewayAudiences = "amplify-test-client, another-client"
