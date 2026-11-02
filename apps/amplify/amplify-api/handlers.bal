@@ -253,7 +253,8 @@ isolated function completeConnect(auth:Principal p, string? correlationId, Conne
         // strand the person on an error page after LinkedIn.
         error? consentRecorded = recordConsent(p.employeeId, connection:CONSENTED, (), now);
         if consentRecorded is error {
-            log:printWarn("Could not record LinkedIn consent", 'error = consentRecorded, correlationId = correlationId);
+            log:printWarn("Could not record LinkedIn consent", errorKind = errorKind(consentRecorded),
+                    sqlState = sqlStateOf(consentRecorded), correlationId = correlationId);
         }
         return <http:Ok>{
             body: {
