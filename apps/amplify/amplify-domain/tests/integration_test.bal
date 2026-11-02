@@ -510,6 +510,15 @@ function testPatchPostIdFrozenByEachKindOfActivity() returns error? {
     assertCode(campaign:updateCampaign(repo, withClaim.id, 1, {resourceUrn: "urn:li:share:" + uniq()}, now),
             types:ERR_POST_HAS_ACTIVITY);
 
+    // 4. a points adjustment that names the campaign (nothing matches by post id, only by the campaign id)
+    campaign:Campaign withPoints = check registerCampaign(db, po);
+    scoring:PgLedgerRepository pointsRepo = new (db, poActor(po), 3);
+    _ = check scoring:adjustPoints(pointsRepo, emp, 10, "IT adjustment for a post", po, withPoints.id,
+            "it-adj-" + uniq(), time:utcNow());
+    test:assertTrue(check repo.hasActivity(withPoints.id, withPoints.resourceUrn));
+    assertCode(campaign:updateCampaign(repo, withPoints.id, 1, {resourceUrn: "urn:li:share:" + uniq()}, now),
+            types:ERR_POST_HAS_ACTIVITY);
+
     // The transaction re-checks: activity that lands after the caller's check still stops the change.
     campaign:Campaign late = check registerCampaign(db, po);
     campaign:Campaign wantsNew = late.clone();

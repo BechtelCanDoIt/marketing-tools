@@ -40,13 +40,16 @@ perl -e '
         my @lines = <$fh>; close $fh;
         for (my $i = 0; $i < @lines; $i++) {
             next unless $lines[$i] =~ /\blog:print(Info|Warn|Error|Debug)\s*\(/;
-            my $start = $i; my $call = $lines[$i];
+            # A trailing `//` comment is not code: dropped (outside string literals) before the call is joined, so a
+            # bracket in it cannot close the call early and a word in it is not mistaken for a field.
+            my $nocomment = sub { my $s = shift; $s =~ s{("(?:[^"\\]|\\.)*"|`[^`]*`)|//[^\n]*}{defined $1 ? $1 : ""}ge; return $s; };
+            my $start = $i; my $call = $nocomment->($lines[$i]);
             # Brackets inside string literals ("user )") are not call brackets.
             my $code = sub { my $s = shift; $s =~ s/"(?:[^"\\]|\\.)*"//g; $s =~ s/`[^`]*`//g; return $s; };
             my $depth = () = $code->($call) =~ /\(/g; $depth -= () = $code->($call) =~ /\)/g;
             while ($depth > 0 && $i + 1 < @lines) {
-                $i++; $call .= $lines[$i];
-                $depth += () = $code->($lines[$i]) =~ /\(/g; $depth -= () = $code->($lines[$i]) =~ /\)/g;
+                $i++; my $more = $nocomment->($lines[$i]); $call .= $more;
+                $depth += () = $code->($more) =~ /\(/g; $depth -= () = $code->($more) =~ /\)/g;
             }
             $calls++;
             next if $lines[$start] =~ m{//\s*log-pii:\s*ok};
@@ -85,8 +88,12 @@ if [ "${1:-}" = "--self-test" ]; then
 
   write ok 'public function f() { log:printInfo("amplify run finished"); }'
   write ok2 'public function g(string email) { log:printInfo("user email sent"); }'
-  write exc 'public function h(string e) { log:printInfo(e); } // log-pii: ok e is a run id'
+  write exc 'public function h(string email) { log:printInfo(email); } // log-pii: ok a test fixture, not a real address'
   if ! scan "$fx" >/dev/null; then echo "self-test: a clean call, or a reviewed exception, was flagged"; exit 1; fi
+  # The same call without the marker must be flagged, or the exception above proves nothing.
+  write nomark 'public function h(string email) { log:printInfo(email); }'
+  if scan "$fx" >/dev/null; then echo "self-test: the exception fixture passes without its marker"; exit 1; fi
+  rm "$fx/nomark.bal"
 
   write field 'public function f() { log:printInfo("x", email = e); }'
   if scan "$fx" >/dev/null; then echo "self-test: a sensitive key-value field passed"; exit 1; fi
@@ -109,6 +116,16 @@ public function f(P user) {
 BAL
   if scan "$fx" >/dev/null; then echo "self-test: a parenthesis inside a string hid a later field"; exit 1; fi
   rm "$fx/bracket.bal"
+
+  # A `)` in a trailing comment must not close the call early and hide the field on the next line.
+  cat > "$fx/comment.bal" <<'BAL'
+public function f(P user) {
+    log:printInfo("x", // done )
+        email = user.email);
+}
+BAL
+  if scan "$fx" >/dev/null; then echo "self-test: a parenthesis inside a comment hid a later field"; exit 1; fi
+  rm "$fx/comment.bal"
 
   echo "check-logs-pii self-test passed."
   exit 0
