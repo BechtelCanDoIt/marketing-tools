@@ -96,10 +96,10 @@ Every setting is a Ballerina `configurable`, set through `BAL_CONFIG_VAR_<NAME>`
 | `JOBSURL`, `SCHEDULERJOBSURL` | ✓ | | | | `http://amplify-jobs:9091` (Choreo: jobs connection `ServiceURL`) |
 | `SCHEDULERURL` | ✓ | | | | `http://scheduler:8080` (Choreo: scheduler connection) |
 | `MINRUNINTERVALSECONDS`, `RECONCILEDELAYSECONDS` | ✓ | | | | 10, 5 (local only; defaults 60, 15) |
-| `PEOPLEDIRECTORYURL` | ✓ | | | | `http://people-stub:9096/employees/basic-info` (Choreo: unset until D13's service credential, `teamStatus: UNAVAILABLE`). people-app `GET /employees/basic-info`; teams cached 3 days |
+| `PEOPLEDIRECTORYURL` | ✓ | | | | `http://people-stub:9096/employees/basic-info` (Choreo: unset until D13's service credential, `teamStatus: UNAVAILABLE`). people-app `GET /employees/basic-info`; directory results (teams, names, houses) cached 24 hours |
 | `CAMPAIGNLINKORIGINS` | ✓ | | | | `https://www.linkedin.com,https://linkedin.com,http://localhost:19091` (Choreo prod: unset = LinkedIn only; dev may add the mock's public www URL). Origins a campaign's post link may use |
-| `ROSTERCACHESECONDS` | ✓ | | | | unset (default 259200 = 3 days). Team-roster TTL: how long a team move takes to show without a restart |
-| `HEADCOUNTCACHESECONDS` | ✓ | | | | unset (default 604800 = 7 days). How long the employee count ("of N") reuses one directory read |
+| `ROSTERCACHESECONDS` | ✓ | | | | unset (default 86400 = 24 hours). TTL of the directory results (teams, names, houses): how long a team move or new hire takes to show without a restart. Only a successful read is kept; a failed refresh keeps serving the last result and asks again on the next call |
+| `HEADCOUNTCACHESECONDS` | ✓ | | | | unset (default 86400 = 24 hours). How long the employee count ("of N") reuses one directory read |
 | `SCORECARDTARGETCONNECTEDPCT`, `SCORECARDMAXEXPIREDPCT`, `SCORECARDTARGETSHARESUCCESSPCT`, `SCORECARDTARGETPRIORITYREACHPCT`, `SCORECARDTARGETACTIVE30D`, `SCORECARDTARGETREPOSTSPERMONTH` | ✓ | | | | unset (defaults 25, 5, 98, 25, 100, 600). The scorecard lines; local `.env` names are `SCORECARD_TARGET_CONNECTED_PCT` etc. |
 | `PEOPLEDIRECTORYTOKENURL`, `PEOPLEDIRECTORYCLIENTID`, `PEOPLEDIRECTORYCLIENTSECRET` | ✓ | | | | unset. OAuth2 client credentials for the people-app API (Choreo connection) |
 | `LINKEDINCLIENTID` | ✓ | ✓ | | | `amplify-local` (mock) |

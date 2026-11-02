@@ -105,7 +105,7 @@ services:
       # Post links: LinkedIn, plus the mock's browser-facing origin for local demos.
       BAL_CONFIG_VAR_CAMPAIGNLINKORIGINS: ${CAMPAIGN_LINK_ORIGINS:-https://www.linkedin.com,https://linkedin.com,http://localhost:19091}
       # Employee count cache and the scorecard lines (ADR-036): local/.env overrides, these are the defaults.
-      BAL_CONFIG_VAR_HEADCOUNTCACHESECONDS: ${HEADCOUNT_CACHE_SECONDS:-604800}
+      BAL_CONFIG_VAR_HEADCOUNTCACHESECONDS: ${HEADCOUNT_CACHE_SECONDS:-86400}
       # Celebrate top three: monthly totals shared by all callers (ADR-037).
       BAL_CONFIG_VAR_TOPBOARDCACHESECONDS: ${TOP_BOARD_CACHE_SECONDS:-7200}
       BAL_CONFIG_VAR_SCORECARDTARGETCONNECTEDPCT: ${SCORECARD_TARGET_CONNECTED_PCT:-25}

@@ -690,7 +690,7 @@ paths:
       tags: [S4 Recognition]
       operationId: getHeadcount
       x-access: EMPLOYEE
-      description: "Current employee count, overall and by BU and team, counted from the people directory (everyone it returns with a work email). Kept in memory for `headcountCacheSeconds` (7 days); when that runs out the directory is read again, and a failed read keeps serving the last count. Never stored in the database."
+      description: "Current employee count, overall and by BU and team, counted from the people directory (everyone it returns with a work email). Kept in memory for `headcountCacheSeconds` (24 hours); when that runs out the directory is read again, and a failed read keeps serving the last count. Never stored in the database."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
       responses:
@@ -724,7 +724,7 @@ paths:
       tags: [S4 Recognition]
       operationId: getTeamPage
       x-access: EMPLOYEE
-      description: Team page. Employees see their own team (roster from One WSO2, server side); `CAN_ADJUST_POINTS` sees the company. `team.visibility = COMPANY` widens it for everyone (ADR-019).
+      description: "Team page. Employees see their own team (roster from the people directory, server side); `CAN_ADJUST_POINTS` sees the company. `team.visibility = COMPANY` widens it for everyone (ADR-019). The list is the whole roster from the directory (names included), joined to the standings: a person nobody has recorded points for is an entry with `points` 0, `employeeId` null and `rank` null, whether or not they ever signed in. Directory results are reused for 24 hours (`rosterCacheSeconds`). With the directory down and nothing cached, the team view lists only the caller (`teamStatus` UNAVAILABLE) and the company view only people with points (`teamStatus` UNAVAILABLE, `headcount` null)."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
         - {$ref: "#/components/parameters/Period"}
@@ -1478,12 +1478,12 @@ components:
                 type: object
                 required: [employeeId, displayName, email, points, teamRank, companyRank, isMe]
                 properties:
-                  employeeId: {type: string}
-                  displayName: {type: string}
+                  employeeId: {type: string, nullable: true, description: "Null for a team member nobody has recorded points for (no standing row), whether or not they ever signed in. Such an entry has points 0 and no companyRank."}
+                  displayName: {type: string, description: "The people directory's name, else the standing's, else the email"}
                   email: {type: string}
                   points: {type: integer}
-                  teamRank: {type: integer}
-                  companyRank: {type: integer}
+                  teamRank: {type: integer, description: "Dense rank within the team; every zero-point member shares the last rank"}
+                  companyRank: {type: integer, nullable: true, description: "Null without a standing row"}
                   houseName: {type: string, nullable: true, description: "The member's house from the people directory"}
                   isMe: {type: boolean}
         teamStatus: {type: string, enum: [OK, NO_TEAM, UNAVAILABLE]}
@@ -1528,20 +1528,20 @@ components:
           type: object
           required: [activeCount]
           properties:
-            headcount: {type: integer, nullable: true, description: Roster size from One WSO2; null on the company view}
-            activeCount: {type: integer}
+            headcount: {type: integer, nullable: true, description: "Roster size from the people directory; on the company view everyone the directory lists. Null when the directory cannot supply it (no roster, or the company view falling back to standings)"}
+            activeCount: {type: integer, description: "People in the roster with points"}
         entries:
           type: array
           items:
             type: object
             required: [employeeId, displayName, email, points, rank, teamRank, actions]
             properties:
-              employeeId: {type: string}
-              displayName: {type: string}
+              employeeId: {type: string, nullable: true, description: "Null for a person nobody has recorded points for (no standing row), whether or not they ever signed in. Such an entry has points 0 and no rank. Do not link to a person page or history for it."}
+              displayName: {type: string, description: "The people directory's name, else the standing's, else the email"}
               email: {type: string}
               points: {type: integer}
-              rank: {type: integer}
-              teamRank: {type: integer}
+              rank: {type: integer, nullable: true, description: "Company rank; null without a standing row"}
+              teamRank: {type: integer, description: "Dense rank within the list; every zero-point person shares the last rank. Ties order by name, then email"}
               previousRank: {type: integer, nullable: true}
               lastActivityAt: {type: string, format: date-time, nullable: true}
               actions:
