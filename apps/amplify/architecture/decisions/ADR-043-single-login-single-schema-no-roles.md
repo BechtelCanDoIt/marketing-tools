@@ -12,7 +12,7 @@ The first design used one schema per bounded context and four login roles (`ampl
 ## Decision
 
 1. **One schema.** Every table, view and function lives in the schema named after the login user. Names carry the old schema as a prefix: `sharing.share_request` is `sharing_share_request`. A name that already starts with its context isn't doubled (`audit_log`, `campaign`, `campaign_tag`). Scripts and application SQL name no schema; the `search_path` does.
-2. **No roles.** No script creates, grants to or switches to a role. The login user owns every object and every component (api, jobs, the migrate runner) connects as it. The scripts contain no `GRANT` to a role and no `SET LOCAL ROLE`. V017 (narrow token grants) was removed because it only held grants.
+2. **No roles.** No script creates, grants to or switches to a role. The login user owns every object and every component (api, jobs, the migrate runner) connects as it. The scripts contain no `GRANT` to a role and no `SET LOCAL ROLE`. V017 (narrow token grants) was removed because it only held grants. V021 (added after this ADR was accepted) adds the immutability triggers below.
 3. **The migrate runner** connects as the login user and puts the schema first on the `search_path` (`dbSchema`, default the user name). V001 checks that the schema exists and that `citext` and `pg_trgm` are installed; it creates nothing else. `checks/d3_single_user.sql` lists what the DBA still has to do before the first run.
 4. **Services** connect as the login user. `store:newClient` takes `dbSchema` and sends the `search_path` and `idle_in_transaction_session_timeout=30000` as the PostgreSQL startup options in the JDBC URL (`?options=-c search_path=<schema>,public ...`). The `PGOPTIONS` environment variable works for `psql` but the Java driver ignores it, which we tested.
 5. **SECURITY DEFINER functions** keep `SET search_path FROM CURRENT`, which captures the runner's `<schema>, public, pg_temp`, so no function hard-codes a schema. With one identity they no longer elevate anything; they stay as the one audited way to run partition upkeep and erase an employee.
@@ -33,9 +33,11 @@ The first design used one schema per bounded context and four login roles (`ampl
 - Partitions share one namespace with every table; their names (`provider_token_pYYYYMMDD`, `audit_log_pYYYYMM`) don't collide.
 - A reader for phase 2 reports can't be a separate database identity. It would need a read replica, a separate schema of views, or another user the DBA agrees to create.
 
-## Compensating controls (recommended follow-up, not in this change)
+## Compensating controls
 
-Roles are not needed to protect the two append-only tables. A `BEFORE UPDATE OR DELETE` trigger on `scoring_points_ledger` that rejects any change except the settlement columns, and one on `audit_log` that rejects every update and delete (partition drops are unaffected), keep the ledger and the audit trail immutable for every component, the owner included. Not done here so this change stays a mechanical removal of roles.
+Roles are not needed to protect the two append-only tables. **V021** adds row triggers: `scoring_points_ledger` may only change its settlement columns (`status`, `status_changed_at`, `paid_at`, `coin_reference`) and is never deleted; `audit_log` is never changed or deleted (retention drops whole partitions, which fire no row trigger). They hold for every component and for the owner. They do not stop a person who has the login's password and drops the trigger, and they leave `TRUNCATE` alone. The one local fixture that clears ledger rows (`scripts/load/seed-load.sql`) uses the superuser-only `session_replication_role` bypass.
+
+Still open: the other limits in the list above (who may call the upkeep and rebuild functions, narrowed token access, a phase 2 reader) have no database enforcement and live in code.
 
 ## Links
 
