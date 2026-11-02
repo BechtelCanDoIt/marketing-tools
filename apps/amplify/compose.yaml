@@ -68,15 +68,19 @@ services:
       BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_API_DB_PASSWORD:?}
       # Identity (ADR-022). Default profile: no gateway, dev JWT from local/dev-jwt (ADR-023, local only).
       BAL_CONFIG_VAR_ENVIRONMENT: local
-      BAL_CONFIG_VAR_GATEWAYJWKSURL: ${GATEWAY_JWKS_URL:-http://127.0.0.1:1/unset}
+      # The default must start with http://localhost: the dev-JWT switch is refused otherwise (ADR-023, config.bal).
+      BAL_CONFIG_VAR_GATEWAYJWKSURL: ${GATEWAY_JWKS_URL:-http://localhost:1/unset}
       BAL_CONFIG_VAR_GATEWAYISSUER: ${GATEWAY_ISSUER:-unset-gateway-issuer}
       BAL_CONFIG_VAR_GATEWAYAUDIENCES: ${GATEWAY_AUDIENCES:-amplify-local}
       BAL_CONFIG_VAR_DEVLOCALJWTENABLED: ${AMPLIFY_DEV_LOCAL_JWT:-false}
       BAL_CONFIG_VAR_DEVJWKSFILE: /dev-jwt/jwks.json
       # amplify-jobs ("Save & Share Now") and the scheduler (ADR-026)
       BAL_CONFIG_VAR_JOBSURL: http://amplify-jobs:9091
-      # Shared with amplify-jobs (security review): jobs refuses every call but its probes without it.
+      # Shared with amplify-jobs (security review): jobs refuses every call but its probes without a key. The
+      # internal key opens every route (amplify-api's own triggers); the scheduler key, set on the jobs registered
+      # with the scheduler, opens only POST /runs and POST /maintenance/partitions (ADR-039).
       BAL_CONFIG_VAR_INTERNALAPIKEY: ${AMPLIFY_INTERNAL_API_KEY:?set AMPLIFY_INTERNAL_API_KEY in local/.env (make env)}
+      BAL_CONFIG_VAR_SCHEDULERAPIKEY: ${AMPLIFY_SCHEDULER_API_KEY:?set AMPLIFY_SCHEDULER_API_KEY in local/.env (make env)}
       BAL_CONFIG_VAR_SCHEDULERURL: http://scheduler:8080
       BAL_CONFIG_VAR_SCHEDULERJOBSURL: http://amplify-jobs:9091
       BAL_CONFIG_VAR_MINRUNINTERVALSECONDS: ${AMPLIFY_MIN_RUN_INTERVAL_SECONDS:-60}
@@ -93,6 +97,7 @@ services:
       BAL_CONFIG_VAR_LINKEDINAUTHORIZEBASEURL: ${LINKEDIN_AUTHORIZE_BASE_URL-http://localhost:19091}
       # The mock issues no ID token, so this only makes sense against real LinkedIn.
       BAL_CONFIG_VAR_LINKEDINIDTOKENVALIDATION: ${LINKEDIN_ID_TOKEN_VALIDATION:-false}
+      BAL_CONFIG_VAR_LINKEDINNONCEMODE: ${LINKEDIN_NONCE_MODE:-OFF}
       # The company page posts must belong to. Default = WSO2's page; local/.env can point at a test page.
       BAL_CONFIG_VAR_WSO2ORGANIZATIONURN: ${WSO2_ORGANIZATION_URN:-urn:li:organization:1477}
       # Team rosters (D13) = people-stub by default: copy local/people-stub/directory.json.example to directory.json (gitignored) and edit it.
@@ -100,7 +105,7 @@ services:
       # Post links: LinkedIn, plus the mock's browser-facing origin for local demos.
       BAL_CONFIG_VAR_CAMPAIGNLINKORIGINS: ${CAMPAIGN_LINK_ORIGINS:-https://www.linkedin.com,https://linkedin.com,http://localhost:19091}
       # Employee count cache and the scorecard lines (ADR-036): local/.env overrides, these are the defaults.
-      BAL_CONFIG_VAR_HEADCOUNTCACHESECONDS: ${HEADCOUNT_CACHE_SECONDS:-604800}
+      BAL_CONFIG_VAR_HEADCOUNTCACHESECONDS: ${HEADCOUNT_CACHE_SECONDS:-86400}
       # Celebrate top three: monthly totals shared by all callers (ADR-037).
       BAL_CONFIG_VAR_TOPBOARDCACHESECONDS: ${TOP_BOARD_CACHE_SECONDS:-7200}
       BAL_CONFIG_VAR_SCORECARDTARGETCONNECTEDPCT: ${SCORECARD_TARGET_CONNECTED_PCT:-25}
@@ -143,8 +148,8 @@ services:
   # Worker: internal only, never published (cell rules). Healthy = `GET /ready` (the database answers).
   amplify-jobs:
     build:
-      context: .
-      dockerfile: amplify-jobs/Dockerfile
+      context: ..
+      dockerfile: amplify/amplify-jobs/Dockerfile
     environment:
       <<: *db-common
       BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_JOBS_DB_PASSWORD:?}
@@ -152,6 +157,7 @@ services:
       BAL_CONFIG_VAR_LINKEDINAPIBASEURL: ${LINKEDIN_API_BASE_URL:-http://mock-linkedin:9090}
       BAL_CONFIG_VAR_LINKEDINAUTHBASEURL: ${LINKEDIN_OAUTH_BASE_URL:-http://mock-linkedin:9091}
       BAL_CONFIG_VAR_INTERNALAPIKEY: ${AMPLIFY_INTERNAL_API_KEY:?set AMPLIFY_INTERNAL_API_KEY in local/.env (make env)}
+      BAL_CONFIG_VAR_SCHEDULERAPIKEY: ${AMPLIFY_SCHEDULER_API_KEY:?set AMPLIFY_SCHEDULER_API_KEY in local/.env (make env)}
       # Leaver sweep (ADR-040): off unless local/.env says otherwise; reads the same people-stub as amplify-api.
       BAL_CONFIG_VAR_LEAVERSWEEPMODE: ${LEAVER_SWEEP_MODE:-OFF}
       BAL_CONFIG_VAR_PEOPLEDIRECTORYURL: ${PEOPLE_DIRECTORY_URL:-http://people-stub:9096/employees/basic-info}
