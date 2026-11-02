@@ -109,15 +109,17 @@ public isolated class PgCampaignRepository {
         return found;
     }
 
-    // Read-only look at the other contexts' tables (`amplify_api` has SELECT on all three). Deleted engagements
-    // count: they were recorded against the post.
+    // Read-only look at the other contexts' tables (`amplify_api` has SELECT on all four). Deleted engagements
+    // count: they were recorded against the post. A ledger row carries the campaign id (a points adjustment can name
+    // one), and changing the post id under it would leave those points on a different post.
     private isolated function activityQuery(string id, string resourceUrn) returns sql:ParameterizedQuery => `
         SELECT EXISTS (SELECT 1 FROM sharing.share_request
                        WHERE campaign_id = CAST(${id} AS uuid) OR target_resource_urn = ${resourceUrn})
             OR EXISTS (SELECT 1 FROM sharing.engagement
                        WHERE campaign_id = CAST(${id} AS uuid) OR target_resource_urn = ${resourceUrn})
             OR EXISTS (SELECT 1 FROM external_sharing.external_share
-                       WHERE campaign_id = CAST(${id} AS uuid) OR resource_urn = ${resourceUrn})`;
+                       WHERE campaign_id = CAST(${id} AS uuid) OR resource_urn = ${resourceUrn})
+            OR EXISTS (SELECT 1 FROM scoring.points_ledger WHERE campaign_id = CAST(${id} AS uuid))`;
 
     private isolated function updateTx(Campaign campaign, int expectedVersion) returns error? {
         transaction {
