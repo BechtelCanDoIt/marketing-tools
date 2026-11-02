@@ -26,6 +26,8 @@ root="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 dir="$root/amplify-common/modules/googlechat"
 [ -d "$dir" ] || { echo "check-chat-transport: $dir not found" >&2; exit 2; }
 files=$(find "$dir" -name '*.bal' -not -path '*/tests/*' | sort)
+# Nothing to scan means the module moved or was renamed: say so, never print "ok" after looking at nothing.
+[ -n "$files" ] || { echo "check-chat-transport: no .bal files under $dir" >&2; exit 2; }
 bad=0
 # Executable lines only: comments may talk about http:Client.
 if grep -nE '^[^/]*(http:Client\b|new http:|ballerina/http\.client)' $files; then
