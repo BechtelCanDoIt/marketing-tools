@@ -16,7 +16,7 @@
 
 // Integration tests against a real PostgreSQL 18 (group `integration`). Off unless `itEnabled = true`
 // (for example `BAL_CONFIG_VAR_ITENABLED=true`), so `bal test` without a database still passes. They drop and recreate the database `itDbName`, run the
-// runner fresh and again, then check partition upkeep as amplify_jobs. See docs/migrations/README.md.
+// runner fresh and again, then check partition upkeep. See docs/migrations/README.md.
 
 import ballerina/crypto;
 import ballerina/io;
@@ -39,14 +39,6 @@ configurable string itAdminPassword = "postgres";
 configurable string itLoginUser = "amplify_it_user";
 # Its password.
 configurable string itLoginPassword = "it-login-password-0001";
-
-# Login password the tests give `amplify_jobs`. In staging and production the roles stay NOLOGIN and the services
-# `SET ROLE`; the tests log in as each role instead so the grants are exercised exactly as written. Roles live on
-# the server, not the database, so this only ever runs against a local throwaway server (see the guard in
-# `testFreshRunThenIdempotentRerun`).
-configurable string itJobsPassword = "it-jobs-password-0001";
-# Login password the tests give `amplify_api`.
-configurable string itApiPassword = "it-api-password-00001";
 
 # Says so in the test output when the integration tests are off, so a green run isn't mistaken for a real one.
 #
@@ -72,21 +64,12 @@ function loginClient() returns postgresql:Client|error =>
     new (host = dbHost, username = itLoginUser, password = itLoginPassword, database = itDbName, port = dbPort,
         options = {ssl: {mode: dbSslMode}}, connectionPool = {maxOpenConnections: 1, minIdleConnections: 1});
 
-// What the DBA does before the first run: the NOLOGIN roles, the login user (member of each role WITH SET TRUE), the
-// schema named after it, the extensions, and the throwaway database's default search_path. Constant identifiers.
+// What the DBA does before the first run: the login user, the schema named after it, the extensions, and the
+// throwaway database's default search_path. No roles (ADR-043). Constant identifiers.
 function dbaSetup(postgresql:Client admin) returns error? {
-    foreach string role in ["amplify_migrate", "amplify_api", "amplify_jobs", "amplify_readonly"] {
-        boolean exists = check admin->queryRow(`SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${role})`);
-        if !exists {
-            check ddl(admin, string `CREATE ROLE ${role} NOLOGIN`);
-        }
-    }
     boolean loginExists = check admin->queryRow(`SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${itLoginUser})`);
     if !loginExists {
         check ddl(admin, string `CREATE ROLE ${itLoginUser} LOGIN PASSWORD '${itLoginPassword}'`);
-    }
-    foreach string role in ["amplify_migrate", "amplify_api", "amplify_jobs", "amplify_readonly"] {
-        check ddl(admin, string `GRANT ${role} TO ${itLoginUser} WITH SET TRUE, INHERIT FALSE`);
     }
     check ddl(admin, string `CREATE SCHEMA ${itLoginUser} AUTHORIZATION ${itLoginUser}`);
     check ddl(admin, string `GRANT CONNECT ON DATABASE ${itDbName} TO ${itLoginUser}`);
@@ -95,20 +78,13 @@ function dbaSetup(postgresql:Client admin) returns error? {
     check ddl(admin, string `ALTER DATABASE ${itDbName} SET search_path TO ${itLoginUser}, public`);
 }
 
-// Test-only: lets the app roles log in so the grant tests run as written. Staging and production keep them NOLOGIN.
-function enableRoleLogins(postgresql:Client admin) returns error? {
-    check ddl(admin, string `ALTER ROLE amplify_api WITH LOGIN PASSWORD '${itApiPassword}'`);
-    check ddl(admin, string `ALTER ROLE amplify_jobs WITH LOGIN PASSWORD '${itJobsPassword}'`);
-    check ddl(admin, string `ALTER ROLE amplify_readonly WITH LOGIN PASSWORD '${IT_READONLY_PASSWORD}'`);
-}
-
 function ddl(postgresql:Client db, string text) returns error? {
     sql:ProcedureCallResult r = check db->call(scriptQuery(text));
     check r.close();
 }
 
 function jobsClient() returns postgresql:Client|error =>
-    new (host = dbHost, username = "amplify_jobs", password = itJobsPassword, database = itDbName, port = dbPort,
+    new (host = dbHost, username = itLoginUser, password = itLoginPassword, database = itDbName, port = dbPort,
         options = {ssl: {mode: dbSslMode}}, connectionPool = {maxOpenConnections: 2, minIdleConnections: 0});
 
 function utcDay(int offsetDays) returns string =>
@@ -127,7 +103,7 @@ function testFreshRunThenIdempotentRerun() returns error? {
     if itSkipped("testFreshRunThenIdempotentRerun") {
         return;
     }
-    // The tests reset cluster-wide role passwords (amplify_api, amplify_jobs, amplify_readonly), so they must
+    // The tests create a cluster-wide login user, so they must
     // never touch a shared or managed server.
     if !isLocalHost(dbHost) {
         return error(string `integration tests reset cluster-wide role passwords; refusing to run against ${dbHost}`);
@@ -171,18 +147,14 @@ function testFreshRunThenIdempotentRerun() returns error? {
     string retention = check su->queryRow(`SELECT value::text FROM config_app_setting WHERE key = 'audit.retention_months'`);
     test:assertEquals(retention, "60");
 
-    // App roles own nothing; amplify_migrate owns every table (the runner's schema_version is the login's).
+    // The login owns every table.
     int notMigrateOwned = check su->queryRow(`
         SELECT count(*)::int FROM pg_tables
-        WHERE schemaname = ${itLoginUser} AND tableowner <> 'amplify_migrate'
-          AND tablename <> 'schema_version'`); // the runner's own bookkeeping table is the login's
+        WHERE schemaname = ${itLoginUser} AND tableowner <> ${itLoginUser}`);
     test:assertEquals(notMigrateOwned, 0);
 
     check su.close();
     check db.close();
-    postgresql:Client roles = check adminClient(itDbName);
-    check enableRoleLogins(roles);
-    check roles.close();
 }
 
 @test:Config {groups: ["integration"], dependsOn: [testFreshRunThenIdempotentRerun]}
@@ -220,7 +192,7 @@ function testPartitionsCreatedAhead() returns error? {
     // Idempotent: a second call creates nothing new.
     int created = check jobs->queryRow(`SELECT connection_create_token_partitions(7)`);
     test:assertEquals(created, 0);
-    // The daily call works as amplify_jobs and reports counts.
+    // The daily call works and reports counts.
     string result = check jobs->queryRow(`SELECT messaging_run_partition_maintenance()::text`);
     json counts = check result.fromJsonString();
     test:assertEquals(check counts.token_partitions_created, 0);
@@ -233,7 +205,7 @@ function testTokenDayDropRuleAndAudit() returns error? {
         return;
     }
     postgresql:Client jobs = check jobsClient();
-    // The fixture rows are seeded as the admin: since V017 amplify_jobs no longer inserts tokens.
+    // The fixture rows are seeded as the admin.
     postgresql:Client admin = check adminClient(itDbName);
     // Three past days: expired beyond grace, still valid (long-lived token), and empty.
     foreach int offset in [-70, -10, -20] {
@@ -325,18 +297,5 @@ function testAuditRetentionAndOutboxPurge() returns error? {
     test:assertEquals(purged, 1, "only DONE rows older than 30 days go");
     int left = check jobs->queryRow(`SELECT count(*)::int FROM messaging_outbox WHERE idempotency_key LIKE 'it:%'`);
     test:assertEquals(left, 2);
-    check jobs.close();
-}
-
-@test:Config {groups: ["integration"], dependsOn: [testFreshRunThenIdempotentRerun]}
-function testAppRolesCannotRunDdlOrOtherUpkeep() returns error? {
-    if itSkipped("testAppRolesCannotRunDdlOrOtherUpkeep") {
-        return;
-    }
-    postgresql:Client jobs = check jobsClient();
-    sql:ExecutionResult|error ddl = jobs->execute(`DROP TABLE connection_oauth_state`);
-    test:assertTrue(ddl is error, "app roles can't drop tables");
-    sql:ExecutionResult|error rewrite = jobs->execute(`UPDATE scoring_points_ledger SET points = 0`);
-    test:assertTrue(rewrite is error, "ledger facts are immutable to app roles");
     check jobs.close();
 }

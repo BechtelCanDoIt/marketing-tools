@@ -17,8 +17,6 @@
 -- V007: S4 Recognition read models (phase1-data-model › recognition, leaderboards.md, B12, B15, B16).
 -- Plain tables kept current in the ledger insert's transaction; rebuildable from the ledger (V010).
 
-SET LOCAL ROLE amplify_migrate;
-
 CREATE TABLE recognition_standing_version (
     period_key   text        PRIMARY KEY,
     version      bigint      NOT NULL DEFAULT 1,
@@ -64,7 +62,3 @@ CREATE TABLE recognition_campaign_participation (
 );
 
 -- amplify_api writes here too, so PO adjust/reverse/approve updates standings in its transaction (B12).
-GRANT SELECT, INSERT, UPDATE, DELETE ON recognition_standing, recognition_standing_version,
-    recognition_employee_points_monthly, recognition_campaign_participation TO amplify_api, amplify_jobs;
-GRANT SELECT ON recognition_standing, recognition_standing_version, recognition_employee_points_monthly,
-    recognition_campaign_participation TO amplify_readonly;

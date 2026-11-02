@@ -17,8 +17,6 @@
 -- V002: identity (shared kernel) and S1 Campaign (phase1-data-model › identity, campaign).
 -- Enums are text + CHECK so a later phase can widen them with a plain constraint swap.
 
-SET LOCAL ROLE amplify_migrate;
-
 -- ---- identity ------------------------------------------------------------------------------------
 
 CREATE TABLE identity_employee (
@@ -29,9 +27,6 @@ CREATE TABLE identity_employee (
     last_seen_at  timestamptz NOT NULL DEFAULT now(),
     CHECK (last_seen_at >= first_seen_at)
 );
-
-GRANT SELECT, INSERT, UPDATE ON identity_employee TO amplify_api;
-GRANT SELECT ON identity_employee TO amplify_jobs, amplify_readonly;
 
 -- ---- campaign ------------------------------------------------------------------------------------
 
@@ -88,8 +83,3 @@ SELECT c.*,
 FROM campaign c;
 
 -- "Delete" archives: no DELETE on campaign. Tags are replaced on edit, so they can be deleted.
-GRANT SELECT, INSERT, UPDATE ON campaign, campaign_category TO amplify_api;
-GRANT SELECT, INSERT, DELETE ON campaign_tag TO amplify_api;
-GRANT SELECT ON campaign_v TO amplify_api;
-GRANT SELECT ON campaign, campaign_category, campaign_tag, campaign_v
-    TO amplify_jobs, amplify_readonly;

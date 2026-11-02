@@ -33,9 +33,7 @@
 --    so a missed day is harmless). `run_partition_maintenance` also takes an advisory lock, so two
 --    concurrent calls don't race on the same CREATE TABLE.
 --
--- Same signatures, owner (amplify_migrate) and grants: CREATE OR REPLACE and ALTER FUNCTION keep both.
-
-SET LOCAL ROLE amplify_migrate;
+-- Same signatures and owner: CREATE OR REPLACE and ALTER FUNCTION keep both.
 
 -- ---- 1. recognition: one writer at a time -------------------------------------------------------
 

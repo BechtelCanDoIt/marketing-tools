@@ -15,20 +15,17 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# Local stand-in for what the DBA does in staging and production: one login user, a schema named after it, the
-# four NOLOGIN group roles granted to that user WITH SET TRUE, and the extensions. Idempotent. Postgres runs it
-# on a fresh volume (docker-entrypoint-initdb.d); `make dba-setup` runs it on an existing one.
+# Local stand-in for what the DBA does in staging and production: one login user, a schema named after it, and the
+# extensions. There are no roles (ADR-043): the login owns everything and every component connects as it. Idempotent.
+# Postgres runs it on a fresh volume (docker-entrypoint-initdb.d); `make dba-setup` runs it on an existing one.
 # Needs AMPLIFY_DB_USER and AMPLIFY_DB_PASSWORD; POSTGRES_USER and POSTGRES_DB come from the postgres image.
 set -eu
 : "${AMPLIFY_DB_USER:?}" "${AMPLIFY_DB_PASSWORD:?}"
 psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-amplify}" \
   -v dbuser="$AMPLIFY_DB_USER" -v dbpass="$AMPLIFY_DB_PASSWORD" <<'SQL'
-SELECT format('CREATE ROLE %I NOLOGIN', r) FROM unnest(ARRAY['amplify_migrate', 'amplify_api', 'amplify_jobs', 'amplify_readonly']) r
- WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) \gexec
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'dbuser', :'dbpass')
  WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'dbuser') \gexec
 SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'dbuser', :'dbpass') \gexec
-SELECT format('GRANT %I TO %I WITH SET TRUE, INHERIT FALSE', r, :'dbuser') FROM unnest(ARRAY['amplify_migrate', 'amplify_api', 'amplify_jobs', 'amplify_readonly']) r \gexec
 SELECT format('CREATE SCHEMA IF NOT EXISTS %I AUTHORIZATION %I', :'dbuser', :'dbuser') \gexec
 SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), :'dbuser') \gexec
 -- Local convenience only: psql sessions (e2e, unlink and load scripts) find the tables without naming the schema.

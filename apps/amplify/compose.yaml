@@ -26,8 +26,8 @@ x-db-common: &db-common
   BAL_CONFIG_VAR_DBHOST: postgres
   BAL_CONFIG_VAR_DBNAME: amplify
   BAL_CONFIG_VAR_DBSSLMODE: DISABLE
-  # One database login for every component (as in staging and production); each service switches to its own
-  # group role (BAL_CONFIG_VAR_DBROLE) and puts the schema named after the login first on the search_path.
+  # One database login for every component, as in staging and production (ADR-043). The schema named after the
+  # login is first on the search_path (BAL_CONFIG_VAR_DBSCHEMA empty = the user name).
   BAL_CONFIG_VAR_DBUSER: amplify_local_user
   BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_DB_PASSWORD:?}
 
@@ -68,7 +68,6 @@ services:
       dockerfile: amplify-api/Dockerfile
     environment:
       <<: *db-common
-      BAL_CONFIG_VAR_DBROLE: amplify_api
       # Identity (ADR-022). Default profile: no gateway, dev JWT from local/dev-jwt (ADR-023, local only).
       BAL_CONFIG_VAR_ENVIRONMENT: local
       # The default must start with http://localhost: the dev-JWT switch is refused otherwise (ADR-023, config.bal).
@@ -155,7 +154,6 @@ services:
       dockerfile: amplify/amplify-jobs/Dockerfile
     environment:
       <<: *db-common
-      BAL_CONFIG_VAR_DBROLE: amplify_jobs
       BAL_CONFIG_VAR_LINKEDINCLIENTID: ${LINKEDIN_APP_CLIENT_ID:-${LINKEDIN_CLIENT_ID:?}}
       BAL_CONFIG_VAR_LINKEDINAPIBASEURL: ${LINKEDIN_API_BASE_URL:-http://mock-linkedin:9090}
       BAL_CONFIG_VAR_LINKEDINAUTHBASEURL: ${LINKEDIN_OAUTH_BASE_URL:-http://mock-linkedin:9091}

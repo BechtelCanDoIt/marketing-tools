@@ -17,15 +17,13 @@
 -- V009: partition upkeep (ADR-002, B10, B11, B17). Called once a day by amplify-cron → amplify-jobs
 -- `POST /maintenance/partitions`, which runs `messaging_run_partition_maintenance()`.
 --
--- SECURITY DEFINER functions owned by amplify_migrate (the table owner), so app roles get partition DDL
+-- SECURITY DEFINER functions owned by the login (the table owner); the jobs worker alone calls them, so partition DDL
 -- only through these functions, never ALTER/DROP on the tables. search_path is pinned to the schema the script ran in (SET search_path FROM CURRENT, set by the runner); every identifier
 -- is unqualified and partition names go through format(%I). Every drop writes an audit row.
 --
 -- Drops use plain DETACH + DROP: DETACH ... CONCURRENTLY can't run inside a function or transaction. The
 -- lock is brief because the partition dropped is old (no live readers).
 -- UTC days and months: partition bounds are computed in UTC whatever the session time zone.
-
-SET LOCAL ROLE amplify_migrate;
 
 -- ---- helpers -------------------------------------------------------------------------------------
 
@@ -260,10 +258,6 @@ REVOKE ALL ON FUNCTION audit_drop_old_audit_partitions(int) FROM PUBLIC;
 REVOKE ALL ON FUNCTION messaging_purge_done_outbox(int) FROM PUBLIC;
 REVOKE ALL ON FUNCTION connection_sweep_oauth_state() FROM PUBLIC;
 REVOKE ALL ON FUNCTION messaging_run_partition_maintenance() FROM PUBLIC;
-
-GRANT EXECUTE ON FUNCTION connection_create_token_partitions(int, date), connection_drop_expired_token_partitions(int),
-    audit_create_audit_partitions(int, date), audit_drop_old_audit_partitions(int), messaging_purge_done_outbox(int),
-    connection_sweep_oauth_state(), messaging_run_partition_maintenance() TO amplify_jobs;
 
 -- Partitions exist from the first deploy: this month + 3, today + 14.
 SELECT audit_create_audit_partitions(3);

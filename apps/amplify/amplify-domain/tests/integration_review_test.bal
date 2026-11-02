@@ -46,8 +46,8 @@ isolated function adjustOnce(postgresql:Client db, string emp, int points) retur
 // computed from a snapshot without the other's row.
 @test:Config {groups: ["integration"], enable: itEnabled}
 function testConcurrentLedgerAppendsNeitherDeadlockNorMisrank() returns error? {
-    postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: "amplify_api",
-        password: apiDbPassword, sslMode: dbSslMode, maxOpenConnections: 12});
+    postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: loginUser,
+        password: loginPassword, sslMode: dbSslMode, maxOpenConnections: 12});
     string[] emps = [];
     foreach int i in 0 ..< 8 {
         emps.push(check newEmployee(db, "conc" + i.toString()));
@@ -122,8 +122,8 @@ isolated function approveAs(postgresql:Client db, string claimId, string po) ret
 // row exist. Also proves a row-lock wait between two transactions in one process completes.
 @test:Config {groups: ["integration"], enable: itEnabled}
 function testTwoWritersOneWinsTheOtherConflicts() returns error? {
-    postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: "amplify_api",
-        password: apiDbPassword, sslMode: dbSslMode, maxOpenConnections: 6});
+    postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: loginUser,
+        password: loginPassword, sslMode: dbSslMode, maxOpenConnections: 6});
     string emp = check newEmployee(db, "tw");
     string po1 = check newEmployee(db, "twpo1");
     string po2 = check newEmployee(db, "twpo2");
@@ -354,8 +354,8 @@ isolated function probeTx(postgresql:Client db, string tag, int i) returns error
 // `AMPLIFY_IT=true bal test --groups runtime-probe`; it prints the counts and asserts nothing.
 @test:Config {groups: ["runtime-probe"], enable: itEnabled}
 function testRuntimeProbeConcurrentTransactions() returns error? {
-    postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: "amplify_api",
-        password: apiDbPassword, sslMode: dbSslMode, maxOpenConnections: 12});
+    postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: loginUser,
+        password: loginPassword, sslMode: dbSslMode, maxOpenConnections: 12});
     string tag = "probe-" + uniq();
     int errors = 0;
     string firstErr = "";

@@ -31,13 +31,13 @@ Legal / Privacy confirms these targets before go-live.
 3. **Ask Legal / Privacy what to keep.** Default for the pilot: delete the LinkedIn link and token, remove name and email everywhere, keep ledger and audit rows keyed only by the pseudonymous `sub`. Record their answer in the ticket.
 4. **Prepare the call** (below). A second engineer reviews it. Run it in **non-prod first** against a test user.
 5. **Back up** the affected rows to an encrypted file in the restricted project store, kept only until the change is confirmed (max 7 days), then delete it. Note the deletion in the ticket.
-6. **Run in prod** as `amplify_migrate` (the only user allowed to change these columns), inside one transaction, with the second engineer watching.
+6. **Run in prod** as the Amplify DB login, inside one transaction, with the second engineer watching.
 7. **Check the result** (queries at the end), then confirm to the requester and close the ticket.
 8. **Tell the requester** to also remove the "WSO2 Amplify" app in LinkedIn › Settings › Data privacy › Permitted services. Amplify can't do that from our side.
 
 ## The erase function
 
-Run as `amplify_migrate` (the schema owner). The work is one function, `identity_erase_employee`, added in V018 and
+Run as the Amplify DB login (the schema owner). The work is one function, `identity_erase_employee`, added in V018 and
 covered by an integration test, so the manual runbook and the worker's leaver sweep erase exactly the same things.
 Replace `:sub` with the employee's `employee_id`, `:operator_sub` with your own, `:ticket_id` with the ticket.
 
