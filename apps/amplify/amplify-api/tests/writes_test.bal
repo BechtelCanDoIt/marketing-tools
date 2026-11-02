@@ -288,6 +288,28 @@ function testSettingsReadBeforeASaveIsNotCached() returns error? {
     runtime:sleep(0.01);
 }
 
+// A share on a campaign that exists but is not open stays 409 CAMPAIGN_CLOSED (the UI says "this post closed");
+// only an archived campaign is a 404 for a non-editor. Pinned on purpose: it is the answer, not an oversight.
+@test:Config {groups: ["writes"]}
+function testShareOnNonOpenCampaignIsCampaignClosed() returns error? {
+    string token = check po();
+    string emp = check employee("emp-closed-1");
+    connect("emp-closed-1");
+    map<json> scheduled = <map<json>>registerBody("urn:li:share:9130").clone();
+    scheduled["opensAt"] = "2999-01-01T00:00:00Z";
+    scheduled["closesAt"] = "2999-02-01T00:00:00Z";
+    map<json> closed = <map<json>>registerBody("urn:li:share:9131").clone();
+    closed["opensAt"] = "2020-01-01T00:00:00Z";
+    closed["closesAt"] = "2020-02-01T00:00:00Z";
+    foreach json body in [scheduled, closed] {
+        http:Response created = check send("POST", "/campaigns", body, token);
+        test:assertEquals(created.statusCode, 201, body.toJsonString());
+        string id = (check (check created.getJsonPayload()).campaign.id).toString();
+        http:Response res = check send("POST", string `/campaigns/${id}/shares`, {kind: "REPOST"}, emp);
+        test:assertEquals(res.statusCode, 409, body.toJsonString());
+        test:assertEquals(check codeIn(res), "CAMPAIGN_CLOSED", body.toJsonString());
+    }
+}
 // ---- PATCH /campaigns/{id}: post link and id ------------------------------------------------------------
 
 @test:Config {groups: ["writes"]}

@@ -23,6 +23,7 @@ import amplify_api.scheduler;
 import amplify_common.crypto;
 import amplify_common.linkedin;
 import amplify_common.resilience;
+import amplify_domain.recognition;
 
 import ballerina/http;
 import ballerina/log;
@@ -34,33 +35,46 @@ import ballerina/time;
 configurable string jobsUrl = "";
 # Trigger timeout, seconds.
 configurable decimal jobsTimeoutSeconds = 3;
-# Shared secret amplify-jobs requires on every call but its probes (a Choreo secret; locally
-# `AMPLIFY_INTERNAL_API_KEY`). Sent on the triggers below and set as a header on the jobs registered with the
-# scheduler. Required whenever `jobsUrl` or `schedulerUrl` is set.
+# Secret amplify-jobs accepts on every route (a Choreo secret; locally `AMPLIFY_INTERNAL_API_KEY`). Sent on the
+# triggers below only. Required whenever `jobsUrl` is set. Never put on the scheduler's jobs (ADR-039).
 configurable string internalApiKey = "";
 
-# Shortest internal key accepted (a 24-byte random value as hex is 48 characters).
+# Secret amplify-jobs accepts only on `POST /runs` and `POST /maintenance/partitions` (a Choreo secret; locally
+# `AMPLIFY_SCHEDULER_API_KEY`). Set as a header on the jobs registered with the scheduler. Required whenever
+# `schedulerUrl` is set, and must differ from `internalApiKey`.
+configurable string schedulerApiKey = "";
+
+# Shortest key accepted (a 24-byte random value as hex is 48 characters).
 const int MIN_INTERNAL_KEY_LENGTH = 32;
 
-# Stops start-up when jobs or the scheduler are configured but the internal key is missing or too short, so a
-# deployment can't quietly send unauthenticated calls that amplify-jobs will refuse.
+# Stops start-up when a key a configured target needs is missing or too short, or when the two keys are equal, so
+# a deployment can't quietly send unauthenticated calls that amplify-jobs will refuse, or hand the scheduler the
+# full-access key.
 #
 # + jobs - `jobsUrl`
 # + scheduler - `schedulerUrl`
-# + key - `internalApiKey`
+# + internal - `internalApiKey`
+# + schedulerKey - `schedulerApiKey`
 # + return - An error naming the problem, or `()`
-isolated function checkInternalKey(string jobs, string scheduler, string key) returns error? {
-    if (jobs.trim() != "" || scheduler.trim() != "") && key.trim().length() < MIN_INTERNAL_KEY_LENGTH {
+isolated function checkApiKeys(string jobs, string scheduler, string internal, string schedulerKey) returns error? {
+    if jobs.trim() != "" && internal.trim().length() < MIN_INTERNAL_KEY_LENGTH {
         return error(string `internalApiKey must be a secret of at least ${MIN_INTERNAL_KEY_LENGTH} characters `
-                + "when jobsUrl or schedulerUrl is set");
+                + "when jobsUrl is set");
+    }
+    if scheduler.trim() != "" && schedulerKey.trim().length() < MIN_INTERNAL_KEY_LENGTH {
+        return error(string `schedulerApiKey must be a secret of at least ${MIN_INTERNAL_KEY_LENGTH} characters `
+                + "when schedulerUrl is set");
+    }
+    if internal.trim() != "" && internal.trim() == schedulerKey.trim() {
+        return error("schedulerApiKey must differ from internalApiKey");
     }
 }
 
-# The header the scheduler (and each trigger) sends to amplify-jobs.
+# The header each scheduler job carries into amplify-jobs: the scheduler key, never the internal key.
 #
-# + return - One header, or none when no key is configured (only possible when jobs is not configured)
-isolated function internalKeyHeaders() returns scheduler:Header[] =>
-    internalApiKey.trim() == "" ? [] : [{name: INTERNAL_KEY_HEADER, value: internalApiKey.trim()}];
+# + return - One header, or none when no scheduler key is configured (only possible when no scheduler is configured)
+isolated function schedulerKeyHeaders() returns scheduler:Header[] =>
+    schedulerApiKey.trim() == "" ? [] : [{name: INTERNAL_KEY_HEADER, value: schedulerApiKey.trim()}];
 
 final http:Client? jobsClient = check newBreakerClient(jobsUrl, jobsTimeoutSeconds);
 
@@ -79,12 +93,14 @@ configurable string peopleDirectoryTokenUrl = "";
 configurable string peopleDirectoryClientId = "";
 # Directory client secret (Choreo secret).
 configurable string peopleDirectoryClientSecret = "";
-# How long the team index is reused, seconds (default 3 days: teams change, but rarely). Memory only,
-# never written to the database.
-configurable decimal rosterCacheSeconds = 259200;
-# How long the employee count is reused, seconds (default 7 days). Memory only, never written to the
-# database. When it runs out the directory is fetched again, whatever age the team index has.
-configurable decimal headcountCacheSeconds = 604800;
+# How long the directory results (teams, names, houses) are reused, seconds (default 24 hours). Memory
+# only, never written to the database. Only a successful read is kept: a failed refresh keeps serving the
+# previous result and asks the directory again on the next call, so an outage is never cached.
+configurable decimal rosterCacheSeconds = 86400;
+# How long the employee count is reused, seconds (default 24 hours, the same directory read). Memory only,
+# never written to the database. When it runs out the directory is fetched again, whatever age the team
+# index has.
+configurable decimal headcountCacheSeconds = 86400;
 
 final http:Client? peopleDirectoryClient = check newBreakerClient(peopleDirectoryUrl, peopleDirectoryTimeoutSeconds,
         peopleDirectoryAuth());
@@ -110,9 +126,16 @@ configurable string tokenCurrentKeyId = "";
 
 # Validate the OIDC ID token from the code exchange (common H1 / api H1): RS256 against LinkedIn's JWKS,
 # `iss`, `aud` = client id, `exp`/`iat`, and its `sub` must match userinfo. Off by default until a real
-# LinkedIn app has been seen to return the ID token for this flow. No nonce and no PKCE: PKCE is
-# native-client-only at LinkedIn and the nonce parameter is undocumented.
+# LinkedIn app has been seen to return the ID token for this flow. No PKCE: it is native-client-only at
+# LinkedIn. The nonce is `linkedinNonceMode`.
 configurable boolean linkedinIdTokenValidation = false;
+# OIDC `nonce` on connect, only with `linkedinIdTokenValidation` on (the nonce lives in the ID token).
+# `OFF` (default): none is sent. `SEND`: it is sent on the authorize request and, when the ID token carries a
+# `nonce`, it must match; a token with none is accepted and logged (`nonce not echoed`), so a staging run shows
+# whether LinkedIn echoes it. `REQUIRE`: the ID token must carry the same nonce, or the connect is refused.
+# LinkedIn's documentation lists neither a `nonce` request parameter nor a `nonce` claim (its discovery
+# document's `claims_supported` has none), so nothing may go past `SEND` until a real app is seen to echo it.
+configurable string linkedinNonceMode = "OFF";
 # LinkedIn's OIDC signing keys (mock_linkedin's JWKS locally).
 configurable string linkedinJwksUrl = linkedin:LINKEDIN_JWKS_URL;
 # Expected ID-token issuer.
@@ -224,6 +247,20 @@ isolated function linkedInProvider() returns linkedin:ProviderAdapter? => linked
 # + return - The validator, or `()` when `linkedinIdTokenValidation` is off
 isolated function idTokens() returns linkedin:IdTokenValidator? => idTokenValidator;
 
+# How the nonce is used for this connect (test seam for the configured mode).
+#
+# + validator - The ID-token validator, `()` when validation is off
+# + return - `OFF` without a validator or when unset, else the configured `SEND` / `REQUIRE`
+isolated function nonceModeFor(linkedin:IdTokenValidator? validator) returns NonceMode {
+    if validator is () {
+        return "OFF";
+    }
+    return linkedinNonceMode == "SEND" ? "SEND" : linkedinNonceMode == "REQUIRE" ? "REQUIRE" : "OFF";
+}
+
+# `linkedinNonceMode`.
+type NonceMode "OFF"|"SEND"|"REQUIRE";
+
 # Test seam: the token cipher.
 #
 # + return - The cipher, or `()` when not configured
@@ -312,6 +349,8 @@ type Roster record {|
     string[] emails;
     # House of each member that has one, by lowercase email
     map<string> houses = {};
+    # Display name of each member that has one, by lowercase email (directory first and last name)
+    map<string> names = {};
 |};
 
 # The fields of a directory row Amplify reads. Open: the row carries more (names, photo, manager), which
@@ -320,6 +359,10 @@ type DirectoryRecord record {
     # Work email. Optional: one row without it (a contractor, a placeholder) is skipped, not a reason to
     # reject the whole directory.
     string? workEmail = ();
+    # First name
+    string? firstName = ();
+    # Last name
+    string? lastName = ();
     # Team
     string? team = ();
     # Sub-team
@@ -351,6 +394,10 @@ type DirectoryIndex record {|
     map<string> teamBu;
     # Everyone the directory returned with a work email, whether or not they have a team
     int total;
+    # Lowercase email to display name (first and last name; people without a name are left out)
+    map<string> nameOf;
+    # Everyone's lowercase email, in directory order (the company roster)
+    string[] everyone;
 |};
 
 # The cached index and when it was built (monotonic seconds).
@@ -372,6 +419,8 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
     map<string> houseOf = {};
     map<string[]> houseMembers = {};
     map<string> teamBu = {};
+    map<string> nameOf = {};
+    string[] everyone = [];
     map<boolean> seen = {};
     foreach DirectoryRecord r in records {
         string email = (r.workEmail ?: "").trim().toLowerAscii();
@@ -379,6 +428,11 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
             continue;
         }
         seen[email] = true;
+        everyone.push(email);
+        string fullName = string `${(r.firstName ?: "").trim()} ${(r.lastName ?: "").trim()}`.trim();
+        if fullName != "" {
+            nameOf[email] = fullName;
+        }
         string team = (r.team ?: "").trim();
         string subTeam = (r.subTeam ?: "").trim();
         string bu = (r.businessUnit ?: "").trim();
@@ -406,7 +460,7 @@ isolated function indexDirectory(DirectoryRecord[] records) returns DirectoryInd
         list.push(email);
         members[key] = list;
     }
-    return {teamOf, teamNames, members, buOf, buMembers, houseOf, houseMembers, teamBu, total: seen.length()}.cloneReadOnly();
+    return {teamOf, teamNames, members, buOf, buMembers, houseOf, houseMembers, teamBu, total: seen.length(), nameOf, everyone}.cloneReadOnly();
 }
 
 # The viewer's roster from the index.
@@ -421,14 +475,35 @@ isolated function rosterFrom(DirectoryIndex index, string email) returns Roster?
     }
     string[] emails = [...(index.members[key] ?: [])];
     map<string> houses = {};
+    map<string> names = {};
     foreach string member in emails {
         string? house = index.houseOf[member];
         if house is string {
             houses[member] = house;
         }
+        string? name = index.nameOf[member];
+        if name is string {
+            names[member] = name;
+        }
     }
-    return {teamName: index.teamNames[key] ?: key, emails, houses};
+    return {teamName: index.teamNames[key] ?: key, emails, houses, names};
 }
+
+# A roster as the members the database joins to the standings.
+#
+# + roster - Roster
+# + return - One member per email, with the directory's name when it has one
+isolated function membersOf(Roster roster) returns recognition:RosterMember[] =>
+    from string email in roster.emails
+    select {email, name: roster.names[email] ?: ""};
+
+# Everyone in the directory as roster members (the company-wide view).
+#
+# + index - Directory index
+# + return - One member per person with a work email
+isolated function everyoneIn(DirectoryIndex index) returns recognition:RosterMember[] =>
+    from string email in index.everyone
+    select {email, name: index.nameOf[email] ?: ""};
 
 # The viewer's team roster. The whole directory is fetched once and reused for `rosterCacheSeconds`.
 #
