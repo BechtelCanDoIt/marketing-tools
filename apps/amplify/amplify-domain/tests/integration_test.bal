@@ -420,3 +420,98 @@ function assertCode(any|error result, string code) {
     }
     test:assertFail(string `expected ${code}, got success`);
 }
+
+// ---- campaign: editing the post link and id ----------------------------------------------------------
+
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testPatchPostIdAndLinkInPostgres() returns error? {
+    postgresql:Client db = check api();
+    string po = check newEmployee(db, "patchpo");
+    campaign:PgCampaignRepository repo = new (db, poActor(po));
+    time:Utc now = time:utcNow();
+
+    // No activity: the id, type and link change, stored and audited, and the old id is free again.
+    campaign:Campaign c = check registerCampaign(db, po);
+    string oldUrn = c.resourceUrn;
+    string newUrn = "urn:li:ugcPost:" + uniq();
+    campaign:Campaign edited = check campaign:updateCampaign(repo, c.id, 1,
+            {resourceUrn: newUrn, resourceUrl: "https://www.linkedin.com/feed/update/" + newUrn}, now);
+    campaign:Campaign stored = <campaign:Campaign>(check repo.findById(c.id));
+    test:assertEquals(stored.resourceUrn, newUrn);
+    test:assertEquals(stored.resourceType, types:UGC_POST);
+    test:assertEquals(stored.resourceUrl, "https://www.linkedin.com/feed/update/" + newUrn);
+    test:assertEquals(stored.version, edited.version);
+    test:assertEquals(check count(db, `SELECT count(*)::int FROM audit.audit_log
+            WHERE entity_id = ${c.id} AND action = 'CampaignUpdated' AND before->>'resourceUrn' = ${oldUrn}
+              AND after->>'resourceUrn' = ${newUrn}`), 1);
+    test:assertEquals(check repo.hasActivity(c.id, newUrn), false);
+
+    // A post id another campaign has: the registration conflict, not a 500, and nothing changed.
+    campaign:Campaign other = check registerCampaign(db, po);
+    campaign:Campaign|error clash = campaign:updateCampaign(repo, other.id, 1, {resourceUrn: newUrn}, now);
+    assertCode(clash, types:ERR_CAMPAIGN_ALREADY_REGISTERED);
+    // The same through the table's unique key, past the domain's pre-check (the race between two editors).
+    campaign:Campaign raced = other.clone();
+    raced.resourceUrn = newUrn;
+    raced.version = 2;
+    assertCode(repo.update(raced, 1), types:ERR_CAMPAIGN_ALREADY_REGISTERED);
+    test:assertEquals((<campaign:Campaign>(check repo.findById(other.id))).resourceUrn, other.resourceUrn);
+    test:assertEquals((<campaign:Campaign>(check repo.findById(other.id))).version, 1);
+}
+
+@test:Config {groups: ["integration"], enable: itEnabled}
+function testPatchPostIdFrozenByEachKindOfActivity() returns error? {
+    postgresql:Client db = check api();
+    string po = check newEmployee(db, "freezepo");
+    campaign:PgCampaignRepository repo = new (db, poActor(po));
+    time:Utc now = time:utcNow();
+
+    // 1. share request (matched by campaign id)
+    campaign:Campaign withShare = check registerCampaign(db, po);
+    string emp = check newEmployee(db, "freezeshare");
+    _ = check sharing:requestShare(new sharing:PgShareRepository(db, {actorId: emp}),
+            {id: withShare.id, provider: withShare.provider, resourceUrn: withShare.resourceUrn, open: true},
+            {memberUrn: "urn:li:person:" + uniq(), usable: true}, {employeeId: emp, kind: types:REPOST}, now);
+    test:assertTrue(check repo.hasActivity(withShare.id, withShare.resourceUrn));
+    assertCode(campaign:updateCampaign(repo, withShare.id, 1, {resourceUrn: "urn:li:share:" + uniq()}, now),
+            types:ERR_POST_HAS_ACTIVITY);
+    // the link alone still changes
+    campaign:Campaign linkOnly = check campaign:updateCampaign(repo, withShare.id, 1,
+            {resourceUrl: "https://www.linkedin.com/posts/wso2_it-" + uniq()}, now);
+    test:assertEquals(linkOnly.resourceUrn, withShare.resourceUrn);
+
+    // 2. engagement matched by the post id only (no campaign id on the row)
+    campaign:Campaign withEngagement = check registerCampaign(db, po);
+    string member = "urn:li:person:" + uniq();
+    _ = check db->execute(`INSERT INTO sharing.engagement (provider, provider_api, origin, target_resource_urn,
+            actor_member_urn, employee_id, action, occurred_at)
+            VALUES ('linkedin', 'WEBHOOK', 'WEBHOOK', ${withEngagement.resourceUrn}, ${member}, ${emp}, 'REPOST', now())`);
+    test:assertTrue(check repo.hasActivity(withEngagement.id, withEngagement.resourceUrn));
+    assertCode(campaign:updateCampaign(repo, withEngagement.id, 1, {resourceUrn: "urn:li:share:" + uniq()}, now),
+            types:ERR_POST_HAS_ACTIVITY);
+
+    // 3. external share matched by the post id only
+    campaign:Campaign withClaim = check registerCampaign(db, po);
+    _ = check db->execute(`INSERT INTO external_sharing.external_share (employee_id, action, evidence_url,
+            evidence_url_submitted, evidence_host, provider, resource_urn, certified_at)
+            VALUES (${emp}, 'OWN_POST', ${"https://medium.com/@it/" + uniq()}, 'https://medium.com/@it/x', 'medium.com',
+                    'linkedin', ${withClaim.resourceUrn}, now())`);
+    test:assertTrue(check repo.hasActivity(withClaim.id, withClaim.resourceUrn));
+    assertCode(campaign:updateCampaign(repo, withClaim.id, 1, {resourceUrn: "urn:li:share:" + uniq()}, now),
+            types:ERR_POST_HAS_ACTIVITY);
+
+    // The transaction re-checks: activity that lands after the caller's check still stops the change.
+    campaign:Campaign late = check registerCampaign(db, po);
+    campaign:Campaign wantsNew = late.clone();
+    wantsNew.resourceUrn = "urn:li:share:" + uniq();
+    wantsNew.version = 2;
+    _ = check db->execute(`INSERT INTO sharing.engagement (provider, provider_api, origin, target_resource_urn,
+            actor_member_urn, employee_id, action, occurred_at)
+            VALUES ('linkedin', 'WEBHOOK', 'WEBHOOK', ${late.resourceUrn}, ${member}, ${emp}, 'SHARE', now())`);
+    assertCode(repo.update(wantsNew, 1), types:ERR_POST_HAS_ACTIVITY);
+    test:assertEquals((<campaign:Campaign>(check repo.findById(late.id))).resourceUrn, late.resourceUrn);
+
+    // A campaign with nothing recorded is free to change.
+    campaign:Campaign quiet = check registerCampaign(db, po);
+    test:assertFalse(check repo.hasActivity(quiet.id, quiet.resourceUrn));
+}

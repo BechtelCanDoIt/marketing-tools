@@ -218,7 +218,7 @@ public function dryRunReport(postgresql:Client db, string migrationsPath, string
             ...from string s in seeds select [seedPath, s]] {
         string content = check io:fileReadString(check file:joinPath(dir, script));
         ScriptState state = classifyScript(versionOf(script), checksumOf(content), recorded);
-        log:printInfo(string `${state}: ${script}`);
+        log:printInfo(string `${state}: ${script}`); // log-pii: ok state is PENDING, APPLIED or CHANGED
         if state == "PENDING" {
             pending += 1;
         } else if state == "CHANGED" {

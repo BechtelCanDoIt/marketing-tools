@@ -17,6 +17,7 @@ import amplify_api.auth;
 
 import ballerina/io;
 import ballerina/log;
+import ballerinax/postgresql;
 
 // ---- Identity (ADR-022). Setup values: docs/runbooks/identity-setup.md ----------------------------
 
@@ -94,11 +95,11 @@ configurable string devIssuer = "amplify-local-dev";
 final auth:TokenVerifier verifier = check newVerifier();
 
 isolated function newVerifier() returns auth:TokenVerifier|error {
-    check checkDevSwitch(environment, devLocalJwtEnabled, devIssuer, gatewayIssuer);
+    check checkDevSwitch(environment, devLocalJwtEnabled, devIssuer, gatewayIssuer, dbSslMode, gatewayJwksUrl);
     auth:DevTrust? dev = ();
     if devLocalJwtEnabled {
         dev = {issuer: devIssuer, keys: check auth:parseJwks(check io:fileReadJson(devJwksFile))};
-        log:printWarn("DEV-ONLY: accepting locally signed JWTs (ADR-023). Never enable outside local Docker.",
+        log:printError("DEV-ONLY: accepting locally signed JWTs (ADR-023). Never enable outside local Docker.",
                 issuer = devIssuer);
     }
     auth:JwksCache jwks = check new ({
@@ -119,19 +120,25 @@ isolated function newVerifier() returns auth:TokenVerifier|error {
     }, dev);
 }
 
-# Refuses to start with the dev switch outside local Docker (ADR-023).
+# Refuses to start with the dev switch outside a local stack (ADR-023). Three independent signs of a
+# local stack must all hold, so one stray environment variable on a deployed environment is not enough:
+# `environment` is `local`, the database connection is unencrypted (`DISABLE`, which a real database never
+# is), and the gateway JWKS URL points at `http://localhost` (a stack with no real gateway).
 #
 # + env - `environment`
 # + enabled - `devLocalJwtEnabled`
 # + localIssuer - `devIssuer`
 # + realIssuer - `gatewayIssuer`
+# + sslMode - `dbSslMode`
+# + jwksUrl - `gatewayJwksUrl`
 # + return - An error that stops startup, or `()`
-isolated function checkDevSwitch(string env, boolean enabled, string localIssuer, string realIssuer) returns error? {
+isolated function checkDevSwitch(string env, boolean enabled, string localIssuer, string realIssuer,
+        postgresql:SSLMode sslMode, string jwksUrl) returns error? {
     if !enabled {
         return;
     }
-    if env != "local" {
-        return error(string `devLocalJwtEnabled is refused when environment is '${env}' (only 'local')`);
+    if env != "local" || sslMode != postgresql:DISABLE || !jwksUrl.startsWith("http://localhost") {
+        return error(string `devLocalJwtEnabled is refused outside a local stack (environment '${env}')`);
     }
     if localIssuer.trim().length() == 0 || localIssuer == realIssuer {
         return error("devIssuer must be set and differ from gatewayIssuer");

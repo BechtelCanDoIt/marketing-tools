@@ -91,6 +91,8 @@ tier_unit() {
     bal_test "unit $pkg" "$APPS/$pkg"
   done
   bal_test "unit chat-stub" "$HERE/local/chat-stub"
+  # directory.json is gitignored (real names); a fresh checkout needs the example copied in.
+  [ -f "$HERE/local/people-stub/directory.json" ] || cp "$HERE/local/people-stub/directory.json.example" "$HERE/local/people-stub/directory.json"
   bal_test "unit people-stub" "$HERE/local/people-stub"
 }
 
@@ -115,6 +117,7 @@ clientId = "it-client"
 clientSecret = "it-secret"
 redirectUris = ["http://localhost:3000/auth/linkedin/callback"]
 enableMockAdmin = true
+mockAdminKey = "it-mock-admin-key-0123456789abcdef0123"
 TOML
   (cd "$MOCK" && BAL_CONFIG_FILES="$LOGDIR/mock-it.toml" bal run > "$LOGDIR/mock.log" 2>&1) &
   mock_pid=$!

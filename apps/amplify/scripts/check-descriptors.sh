@@ -19,19 +19,24 @@
 #   Choreo .choreo/component.yaml  <->  OpenChoreo workload.yaml : endpoint names, ports, env names (exact)
 #   Dockerfile EXPOSE                                            : same ports
 #   compose.yaml service env                                     : subset of the descriptor env + LOCAL_ONLY
+#   Docker context (ADR-027)                                     : the descriptor is <context>/.choreo/component.yaml,
+#                                                                  no two components share a context, schemaFilePath
+#                                                                  exists under the context, and compose builds the
+#                                                                  same context and Dockerfile
 # No yq needed: the descriptors are written one key per line on purpose.
 #
 # Usage: scripts/check-descriptors.sh [apps/amplify root]   scripts/check-descriptors.sh --self-test
 set -uo pipefail  # no -e on purpose: report every drift, then exit non-zero at the end
 LINKEDIN=linkedin/apps/mock_linkedin
 
-# component | Choreo descriptor | workload.yaml | Dockerfile | compose service
+# component | Choreo descriptor | workload.yaml | Dockerfile | compose service | Docker context
+# (every path is relative to apps/amplify; jobs builds from its parent `apps`, the unique ancestor ADR-027 needs)
 COMPONENTS=(
-  "amplify-api|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api"
-  "amplify-jobs|amplify-jobs/.choreo/component.yaml|amplify-jobs/workload.yaml|amplify-jobs/Dockerfile|amplify-jobs"
-  "amplify-database|amplify-database/.choreo/component.yaml|amplify-database/workload.yaml|amplify-database/Dockerfile|amplify-db-migrate"
-  "amplify-scheduler|amplify-scheduler/.choreo/component.yaml|amplify-scheduler/workload.yaml|amplify-scheduler/Dockerfile|scheduler"
-  "mock-linkedin|$LINKEDIN/.choreo/component.yaml|$LINKEDIN/workload.yaml|$LINKEDIN/Dockerfile|mock-linkedin"
+  "amplify-api|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api|."
+  "amplify-jobs|../.choreo/component.yaml|amplify-jobs/workload.yaml|amplify-jobs/Dockerfile|amplify-jobs|.."
+  "amplify-database|amplify-database/.choreo/component.yaml|amplify-database/workload.yaml|amplify-database/Dockerfile|amplify-db-migrate|amplify-database"
+  "amplify-scheduler|amplify-scheduler/.choreo/component.yaml|amplify-scheduler/workload.yaml|amplify-scheduler/Dockerfile|scheduler|amplify-scheduler"
+  "mock-linkedin|$LINKEDIN/.choreo/component.yaml|$LINKEDIN/workload.yaml|$LINKEDIN/Dockerfile|mock-linkedin|$LINKEDIN"
 )
 # Set only in local Compose, never in Choreo/OpenChoreo (dev JWT, plain-http stub, fast schedules, no TLS to
 # the local Postgres, browser-facing mock OAuth URL).
@@ -54,6 +59,20 @@ compose_envs() {  # env keys of one compose service, including the x-db-common a
   ' compose.yaml | sort -u
 }
 
+# Absolute, symlink-free form of a path whose directory exists.
+norm() { local d; d="$(cd "$(dirname "$1")" 2>/dev/null && pwd -P)" || return 1; printf '%s/%s' "$d" "$(basename "$1")"; }
+# `context:` and `dockerfile:` of one compose service's build block (dockerfile defaults to Dockerfile).
+compose_build() {  # service -> "context dockerfile"
+  awk -v svc="$1" '
+    /^  [a-z][a-z0-9-]*:$/ {s=($1==svc":"); b=0}
+    s && /^    build:/ {b=1; next}
+    s && b && /^      context:/ {ctx=$2}
+    s && b && /^      dockerfile:/ {df=$2}
+    s && b && /^    [a-z_]+:/ {b=0}
+    END {if (ctx != "") print ctx, (df == "" ? "Dockerfile" : df)}
+  ' compose.yaml
+}
+
 fail=0
 err() { echo "DRIFT [$1]: $2"; fail=1; }
 
@@ -61,9 +80,26 @@ err() { echo "DRIFT [$1]: $2"; fail=1; }
 scan() {
   cd "$1" || { echo "check-descriptors: cannot enter $1" >&2; return 2; }
   fail=0
+  seen_contexts=""
 for row in "${COMPONENTS[@]}"; do
-  IFS='|' read -r name desc wl dockerfile svc <<<"$row"
+  IFS='|' read -r name desc wl dockerfile svc ctx <<<"$row"
   for f in "$desc" "$wl" "$dockerfile"; do [[ -f "$f" ]] || { err "$name" "missing $f"; continue 2; }; done
+  # Docker context (ADR-027): Choreo reads <context>/.choreo/component.yaml, so the descriptor must live there and
+  # two components on one context would read the same file.
+  ctx_abs="$(cd "$ctx" 2>/dev/null && pwd -P)"
+  [[ "$(norm "$desc")" == "$ctx_abs/.choreo/component.yaml" ]] || err "$name" "descriptor $desc is not <context $ctx>/.choreo/component.yaml"
+  if [[ -n "$ctx_abs" ]]; then
+    case " $seen_contexts " in *" $ctx_abs "*) err "$name" "Docker context $ctx is shared with another component" ;; esac
+    seen_contexts="$seen_contexts $ctx_abs"
+    schema="$(awk '/^ +schemaFilePath:/{print $2}' "$desc" | head -1)"
+    [[ -z "$schema" || -f "$ctx/$schema" ]] || err "$name" "schemaFilePath $schema does not exist under context $ctx"
+    read -r c_ctx c_df <<<"$(compose_build "$svc")"
+    if [[ -z "${c_ctx:-}" ]]; then err "$name" "compose service $svc has no build context"
+    else
+      [[ "$(cd "$c_ctx" 2>/dev/null && pwd -P)" == "$ctx_abs" ]] || err "$name" "compose builds $svc from $c_ctx, not the descriptor's context $ctx"
+      [[ "$(norm "$c_ctx/$c_df")" == "$(norm "$dockerfile")" ]] || err "$name" "compose builds $svc with Dockerfile $c_df, not $dockerfile"
+    fi
+  fi
   grep -q '^schemaVersion: "1.2"' "$desc" || err "$name" "$desc is not schemaVersion 1.2"
   [[ "$(envs "$desc")" == "$(envs "$wl")" ]] || err "$name" "env names differ: $(diff <(envs "$desc") <(envs "$wl") | grep '^[<>]' | tr '\n' ' ')"
   [[ "$(ports "$desc")" == "$(ports "$wl")" ]] || err "$name" "ports differ ($desc vs $wl)"
@@ -134,7 +170,7 @@ if [ "${1:-}" = "--self-test" ]; then
   trap 'rm -rf "$SELFTEST_TMP"' EXIT
   DIGEST_A="sha256:$(printf 'a%.0s' {1..64})"
   DIGEST_B="sha256:$(printf 'b%.0s' {1..64})"
-  COMPONENTS=("amplify-api|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api")
+  COMPONENTS=("amplify-api|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api|.")
 
   fixture() {  # (re)write a clean, in-sync tree
     cd "$SELFTEST_TMP"
@@ -171,6 +207,9 @@ x-db-common: &db-common
 services:
   amplify-api:
     image: alpine:3.20@$DIGEST_A
+    build:
+      context: .
+      dockerfile: amplify-api/Dockerfile
     ports:
       - "127.0.0.1:9090:9090"
     environment:
@@ -216,6 +255,18 @@ PYFIX
   fixture
   sed -i.bak 's/^EXPOSE 9090$/EXPOSE 9090 9091/' "$SELFTEST_TMP/root/amplify-api/Dockerfile"
   expect_drift "an EXPOSE the descriptor does not list" "Dockerfile EXPOSE"
+
+  # ADR-027: a descriptor that is not at <context>/.choreo, and two components on one context.
+  fixture
+  COMPONENTS=("amplify-api|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api|amplify-api")
+  expect_drift "a context whose .choreo is not the descriptor" "is not <context"
+  COMPONENTS=("amplify-api|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api|."
+              "amplify-twin|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api|.")
+  expect_drift "two components on one Docker context" "is shared with another component"
+  COMPONENTS=("amplify-api|.choreo/component.yaml|amplify-api/workload.yaml|amplify-api/Dockerfile|amplify-api|.")
+  fixture
+  sed -i.bak 's#dockerfile: amplify-api/Dockerfile#dockerfile: other/Dockerfile#' "$SELFTEST_TMP/root/compose.yaml"
+  expect_drift "compose building a different Dockerfile" "compose builds amplify-api with Dockerfile"
 
   # A stage alias and `scratch` are not unpinned images.
   fixture

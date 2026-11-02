@@ -38,7 +38,7 @@ Enforced twice: API proxy scopes per resource, then the Ballerina request interc
 | S1 | `GET /tags`, `GET /categories` | `EMPLOYEE` | R | R | R | R | R | |
 | S1 | `POST /campaigns` | `CAN_CAMPAIGN` | — | C | C | — | — | ADR-012. `closes_at` defaults to `opens_at` + `campaign.default_window_days` (30) |
 | S1 | `POST /campaigns?shareNow=true` | `CAN_CAMPAIGN` | — | C + X | C + X | — | — | Also calls `amplify-jobs POST /runs` (fire-and-forget behind a breaker) |
-| S1 | `PATCH /campaigns/{id}` | `CAN_CAMPAIGN` | — | U | U | — | — | Not on an archived campaign |
+| S1 | `PATCH /campaigns/{id}` | `CAN_CAMPAIGN` | — | U | U | — | — | Not on an archived campaign. May change the post link (`resourceUrl`) always and the post id (`resourceUrn`) only while nothing is recorded against it (else 409 `POST_HAS_ACTIVITY`) |
 | S1 | `DELETE /campaigns/{id}` | `CAN_CAMPAIGN` | — | D (archive) | D (archive) | — | — | Soft archive only; shares and points stay |
 | S2 Connection | `POST /connections/linkedin/start` | `EMPLOYEE` | C own | C own | C own | C own | C own | Issues `state`; one active connection per employee |
 | S2 | `POST /connections/linkedin/complete` | `EMPLOYEE` | U own | U own | U own | U own | U own | `state` must match, be unused and unexpired; same employee who started |
@@ -65,7 +65,7 @@ Enforced twice: API proxy scopes per resource, then the Ballerina request interc
 | S6 | `GET /dashboards/export?from=&to=` | `CAN_EXPORT` | — | R | R | R | R | Raw rows behind the boards as CSV, with names and emails. Its own grant so the export can be narrowed (e.g. to PO and Admin) without code (R16) |
 | S4 | `GET /me/points` | `EMPLOYEE` | R own | R own | R own | R own | R own | Points only, no Coin value (A11) |
 | S4 | `GET /team?q=&sort=&page=` | `EMPLOYEE` | R (per ADR-014) | R | R (per ADR-014) | R (per ADR-014) | R (per ADR-014) | Returns emails for One WSO2 enrichment (ADR-009). Without `CAN_ADJUST_POINTS`, visibility follows the three-leaderboard rule |
-| S4 | `GET /team/{employeeId}/history` | `EMPLOYEE` | R own + team | R any | R own + team | R own + team | R own + team | Without `CAN_ADJUST_POINTS`: own, or a member of the caller's team from the people-app directory (sub-team, else team; ADR-019) (anyone when `team.visibility = COMPANY`), else 403 `TEAM_SCOPE` ([leaderboards.md](leaderboards.md)). `CAN_ADJUST_POINTS` sees any row (needed for adjust/reverse) |
+| S4 | `GET /team/{employeeId}/history` | `EMPLOYEE` | R own + team | R any | R own + team | R own + team | R own + team | Without `CAN_ADJUST_POINTS`: own, or a member of the caller's team from the people-app directory (sub-team, else team; ADR-019) (`team.visibility = COMPANY` does not widen it, ADR-035), else 403 `TEAM_SCOPE` ([leaderboards.md](leaderboards.md)). `CAN_ADJUST_POINTS` sees any row (needed for adjust/reverse) |
 | S4 | `GET /po/dashboard` | `CAN_PO_DASHBOARD` | — | R | — | — | — | Phase 1 (ADR-013); shape defined in M0c B6 |
 | S4 (phase 2) | `GET /reports/participation`, `GET /reports/campaigns` | `CAN_REPORTS` | — | R | — | R | — | Phase 2; read-only DB user |
 | S5 / Admin | `GET /admin/announcements?status=FAILED` | `CAN_ADMIN` | — | — | — | — | R | |

@@ -1,7 +1,7 @@
 # CLAUDE.md — amplify-api
 
 ## Overview
-Published Amplify API (Choreo "Amplify Backend"), reached only through the API proxy. M5: every phase 1 endpoint in `openapi.yaml` (42 operations).
+Published Amplify API (Choreo "Amplify Backend"), reached only through the API proxy. M5: every phase 1 endpoint is in `openapi.yaml` — read the spec for the operations and their `x-access` grants.
 
 ## Commands
 `bal build` · `bal test` (tests need `openssl` on PATH: they generate RSA keys and serve a test JWKS on :9591) (needs `amplify_common` then `amplify_domain` in the local repo, see root CLAUDE.md). Port: configurable `port` (default 9090).

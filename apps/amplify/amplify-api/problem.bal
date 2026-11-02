@@ -101,7 +101,7 @@ isolated function internalError(string? correlationId) returns http:InternalServ
 
 // Domain codes answered with 409 (state conflicts). The rest of the domain codes are 422 (invalid input).
 final readonly & string[] CONFLICT_CODES = [types:ERR_VERSION_CONFLICT, types:ERR_CAMPAIGN_ALREADY_REGISTERED,
-    types:ERR_CAMPAIGN_ARCHIVED, types:ERR_CAMPAIGN_NOT_OPEN, types:ERR_MEMBER_ALREADY_LINKED,
+    types:ERR_CAMPAIGN_ARCHIVED, types:ERR_POST_HAS_ACTIVITY, types:ERR_CAMPAIGN_NOT_OPEN, types:ERR_MEMBER_ALREADY_LINKED,
     types:ERR_CONNECTION_REMOVED, types:ERR_CONNECTION_NEEDS_RECONNECT, types:ERR_SHARE_ALREADY_QUEUED,
     types:ERR_SHARE_ALREADY_PUBLISHED, types:ERR_SHARE_NOT_QUEUED, types:ERR_EVIDENCE_ALREADY_CLAIMED,
     types:ERR_NOT_PENDING, types:ERR_NOT_APPROVED, types:ERR_ALREADY_AMPLIFIED, types:ERR_ALREADY_REVERSED,

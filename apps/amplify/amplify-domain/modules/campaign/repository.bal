@@ -21,6 +21,7 @@ import amplify_common.events;
 import amplify_common.types;
 import amplify_domain.store;
 
+import ballerina/sql;
 import ballerina/time;
 import ballerinax/postgresql;
 
@@ -95,28 +96,59 @@ public isolated class PgCampaignRepository {
 
     public isolated function update(Campaign campaign, int expectedVersion) returns error? {
         final readonly & Campaign c = campaign.cloneReadOnly();
-        return store:inTransaction(isolated function () returns error? => self.updateTx(c, expectedVersion));
+        error? result = store:inTransaction(isolated function () returns error? => self.updateTx(c, expectedVersion));
+        if result is error && store:isUniqueViolation(result, "campaign_provider_resource_uk") {
+            // The same answer registration gives; it doesn't say which campaign holds the post.
+            return types:domainError(types:ERR_CAMPAIGN_ALREADY_REGISTERED, "This post is already a campaign");
+        }
+        return result;
     }
+
+    public isolated function hasActivity(string id, string resourceUrn) returns boolean|error {
+        boolean found = check self.db->queryRow(self.activityQuery(id, resourceUrn));
+        return found;
+    }
+
+    // Read-only look at the other contexts' tables (`amplify_api` has SELECT on all three). Deleted engagements
+    // count: they were recorded against the post.
+    private isolated function activityQuery(string id, string resourceUrn) returns sql:ParameterizedQuery => `
+        SELECT EXISTS (SELECT 1 FROM sharing.share_request
+                       WHERE campaign_id = CAST(${id} AS uuid) OR target_resource_urn = ${resourceUrn})
+            OR EXISTS (SELECT 1 FROM sharing.engagement
+                       WHERE campaign_id = CAST(${id} AS uuid) OR target_resource_urn = ${resourceUrn})
+            OR EXISTS (SELECT 1 FROM external_sharing.external_share
+                       WHERE campaign_id = CAST(${id} AS uuid) OR resource_urn = ${resourceUrn})`;
 
     private isolated function updateTx(Campaign campaign, int expectedVersion) returns error? {
         transaction {
-            record {|string title; boolean archived; int version;|}|error old = self.db->queryRow(`
+            record {|string resource_urn; string title; boolean archived; int version;|}|error old = self.db->queryRow(`
                 UPDATE campaign.campaign
-                SET title = ${campaign.title}, summary = ${campaign.summary}, image_url = ${campaign.imageUrl},
+                SET resource_urn = ${campaign.resourceUrn}, resource_type = ${campaign.resourceType},
+                    resource_url = ${campaign.resourceUrl}, title = ${campaign.title}, summary = ${campaign.summary}, image_url = ${campaign.imageUrl},
                     category_code = ${campaign.categoryCode}, is_priority = ${campaign.isPriority},
                     opens_at = CAST(${store:ts(campaign.opensAt)} AS timestamptz), closes_at = CAST(${store:ts(campaign.closesAt)} AS timestamptz),
                     archived_at = CAST(${store:ts(campaign.archivedAt)} AS timestamptz), updated_at = CAST(${store:ts(campaign.updatedAt)} AS timestamptz),
                     version = ${campaign.version}
                 WHERE id = CAST(${campaign.id} AS uuid) AND version = ${expectedVersion}
-                RETURNING old.title, old.archived_at IS NOT NULL AS archived, old.version`);
+                RETURNING old.resource_urn, old.title, old.archived_at IS NOT NULL AS archived, old.version`);
             if old is error {
                 fail store:isNoRows(old) ? store:versionConflict("campaign") : old;
             }
+            if old.resource_urn != campaign.resourceUrn && check self.activityQueryTx(campaign.id, old.resource_urn) {
+                // Activity landed after the caller's check; the id stays as it was.
+                fail types:domainError(types:ERR_POST_HAS_ACTIVITY, "The post can't change once it has activity");
+            }
             check self.replaceTags(campaign);
             string action = campaign.archivedAt is () ? "CampaignUpdated" : "CampaignArchived";
-            check store:writeAudit(self.db, store:auditOf(self.actor, action, CAMPAIGN_TABLE, campaign.id,
-                    {version: campaign.version, title: campaign.title, archived: campaign.archivedAt !is ()}, (),
-                    {version: old.version, title: old.title, archived: old.archived}));
+            map<json> after = {version: campaign.version, title: campaign.title, archived: campaign.archivedAt !is ()};
+            map<json> before = {version: old.version, title: old.title, archived: old.archived};
+            if old.resource_urn != campaign.resourceUrn {
+                // Only when the post id changed, so every other edit's audit row keeps its shape.
+                after["resourceUrn"] = campaign.resourceUrn;
+                before["resourceUrn"] = old.resource_urn;
+            }
+            check store:writeAudit(self.db, store:auditOf(self.actor, action, CAMPAIGN_TABLE, campaign.id, after, (),
+                    before));
             check commit;
         }
     }
@@ -138,6 +170,11 @@ public isolated class PgCampaignRepository {
                     campaign.id, {resourceUrn: campaign.resourceUrn, title: campaign.title}));
             check commit;
         }
+    }
+
+    private isolated transactional function activityQueryTx(string id, string resourceUrn) returns boolean|error {
+        boolean found = check self.db->queryRow(self.activityQuery(id, resourceUrn));
+        return found;
     }
 
     private isolated transactional function replaceTags(Campaign campaign) returns error? {
