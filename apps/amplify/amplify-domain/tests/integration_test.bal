@@ -151,7 +151,7 @@ function testFailedWriteRollsBackAggregateOutboxAndAudit() returns error? {
     bad.tags = ["NOT-LOWER"];
     error? result = (new campaign:PgCampaignRepository(db, poActor(po))).insert(bad,
             [campaign:campaignRegisteredEvent(bad, false)]);
-    test:assertTrue(result is error);
+    assertCheckViolation(result, "a tag that breaks the CHECK");
     test:assertEquals(check count(db, `SELECT count(*)::int FROM campaign.campaign WHERE id = CAST(${bad.id} AS uuid)`), 0);
     string key = "CampaignRegistered:" + bad.id;
     test:assertEquals(check count(db, `SELECT count(*)::int FROM messaging.outbox WHERE idempotency_key = ${key}`), 0);
@@ -275,7 +275,7 @@ function testShareRequestRetryAndPublishByJobs() returns error? {
     test:assertEquals(check count(jobsDb, `SELECT count(*)::int FROM messaging.outbox WHERE idempotency_key = ${key}`), 1);
     // Publishing twice is refused by the domain guard and the engagement keys.
     error? twice = jobsRepo.recordPublish(published, published.request.version);
-    test:assertTrue(twice is error);
+    test:assertTrue(twice is error && store:isUniqueViolation(twice), "the engagement key refuses a second publish");
     test:assertEquals(check count(jobsDb, `SELECT count(*)::int FROM messaging.outbox WHERE idempotency_key = ${key}`), 1,
             "the refused second publish recorded nothing");
     check apiDb.close();
@@ -301,7 +301,7 @@ function testExternalShareOneClaimPerUrlAndAmplifiedCheck() returns error? {
     // DB backstop (C4): amplified before approval breaks the CHECK.
     sql:ExecutionResult|error early = db->execute(`UPDATE external_sharing.external_share SET amplified_at = now()
                                                    WHERE id = CAST(${claim.id} AS uuid)`);
-    test:assertTrue(early is error);
+    assertCheckViolation(early, "amplified before approval breaks the CHECK");
 
     external_sharing:ExternalShare approved = check external_sharing:approveExternalShare(repo, claim.id, po, time:utcNow());
     _ = check external_sharing:amplifyExternalShare(repo, approved.id, po, time:utcNow());
@@ -408,6 +408,16 @@ function testPartitionMaintenanceAsJobs() returns error? {
     test:assertTrue(denied is error, "only amplify_jobs runs upkeep");
     check db.close();
     check apiDb.close();
+}
+
+// A CHECK violation (SQLSTATE 23514) and nothing else: a dropped connection is an error too, and would pass a bare
+// `is error`.
+function assertCheckViolation(any|error result, string what) {
+    if result is sql:DatabaseError {
+        test:assertEquals(result.detail().sqlState, store:CHECK_VIOLATION, what);
+        return;
+    }
+    test:assertFail(string `${what}: expected a CHECK violation, got ${result is error ? result.message() : "success"}`);
 }
 
 function assertCode(any|error result, string code) {
