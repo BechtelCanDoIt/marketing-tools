@@ -134,6 +134,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/CampaignRegistration"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
@@ -176,6 +177,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Campaign"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
@@ -250,6 +252,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/ConnectAuthorization"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
   /connections/linkedin/complete:
@@ -273,6 +276,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/LinkedInConnection"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
         "422": {$ref: "#/components/responses/Problem"}
@@ -297,6 +301,7 @@ paths:
       responses:
         "204": {description: Recorded}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
   /connections/linkedin:
@@ -333,6 +338,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Share"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
@@ -374,6 +380,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/ExternalShare"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
         "422": {$ref: "#/components/responses/Problem"}
@@ -456,6 +463,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/ExternalShare"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
@@ -520,6 +528,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/PointRule"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
@@ -546,6 +555,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/LedgerEntry"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
@@ -574,6 +584,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/LedgerEntry"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
@@ -983,6 +994,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/SettingList"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
@@ -1073,7 +1085,7 @@ components:
           x-stable-codes: [TOKEN_MISSING, TOKEN_MALFORMED, TOKEN_ALG_NOT_ALLOWED, TOKEN_SIGNATURE_INVALID,
             TOKEN_EXPIRED, TOKEN_NOT_YET_VALID, TOKEN_ISSUER_INVALID, TOKEN_AUDIENCE_INVALID, TOKEN_CLAIMS_INVALID,
             ROUTE_NOT_PERMITTED, ROLE_NOT_PERMITTED, DEPENDENCY_UNAVAILABLE, EMAIL_CONFLICT, VALIDATION_FAILED,
-            NOT_FOUND, METHOD_NOT_ALLOWED, VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, INTERNAL_ERROR,
+            NOT_FOUND, METHOD_NOT_ALLOWED, PAYLOAD_TOO_LARGE, VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, INTERNAL_ERROR,
             CAMPAIGN_ALREADY_REGISTERED, NOT_WSO2_RESOURCE, INVALID_CAMPAIGN, INVALID_WINDOW, CAMPAIGN_ARCHIVED,
             POST_HAS_ACTIVITY, CAMPAIGN_CLOSED, OAUTH_STATE_INVALID, OAUTH_REDIRECT_MISMATCH, MISSING_SCOPE, MEMBER_ALREADY_LINKED, CONNECTION_REMOVED,
             LINKEDIN_NOT_CONNECTED, NEEDS_RECONNECT, DUPLICATE_ACTION, COMMENTARY_REQUIRED, COMMENTARY_NOT_ALLOWED,
