@@ -468,3 +468,15 @@ function testNewPersonAndKnownPersonAreUntouched() returns error? {
     test:assertEquals(check (check again.getJsonPayload()).employee.displayName, "P2");
     test:assertEquals(fakeEmployees.aliasCount(), before, "no alias for an ordinary sign-in");
 }
+
+@test:Config
+function testJwksUrlMustBeHttpsExceptOnALocalStack() {
+    test:assertTrue(checkJwksUrl("prod", "https://gw.example.com/jwks") is ());
+    test:assertTrue(checkJwksUrl("local", "http://localhost:9591/jwks") is ());
+    test:assertTrue(checkJwksUrl("local", "http://127.0.0.1:9591/jwks") is ());
+    test:assertTrue(checkJwksUrl("prod", "http://localhost:9591/jwks") is error);
+    test:assertTrue(checkJwksUrl("prod", "http://gw.example.com/jwks") is error);
+    test:assertTrue(checkJwksUrl("local", "http://gw.example.com/jwks") is error);
+    test:assertTrue(checkJwksUrl("local", "http://localhost.evil.example/jwks") is error);
+    test:assertTrue(checkJwksUrl("prod", "") is error);
+}

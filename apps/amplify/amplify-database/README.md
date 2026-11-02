@@ -5,8 +5,8 @@ Amplify DB Migrate: the Choreo Manual Task (and Compose one-shot) that builds th
 | Folder | What |
 | --- | --- |
 | `main.bal` | The runner |
-| `migrations/` | Forward-only schema scripts, `V001` to `V014` so far |
-| `seed/` | Idempotent seed data (`ON CONFLICT DO NOTHING`): point rules (S001, S005 pilot values, S006 all values), categories, app settings, scheduler settings, leaderboard top scope (see `seed/README.md`) |
+| `migrations/` | Forward-only schema scripts, `V001` to `V020` so far |
+| `seed/` | Idempotent seed data (`ON CONFLICT DO NOTHING`): point rules (S001, S005 pilot values, S006 all values), categories, app settings, scheduler settings, leaderboard top scope (S007, moved to MONTH by S009) and minimum points (S010), token grace (S008) (see `seed/README.md`) |
 | `checks/` | One-off checks such as `d2_extensions.sql` (run on each new server, plan D2) |
 | `tests/` | Unit tests plus the `integration` group: off unless `itEnabled = true`. It drops and recreates `itDbName` (default `amplify_it`) on a PostgreSQL 18 server, so never point it at a database you need (see `docs/migrations/README.md`) |
 
@@ -782,7 +782,18 @@ The migration user owns every object; app users never own tables, so they can't 
 | `V013__idle_timeout_dashboard_indexes.sql` | `ALTER ROLE amplify_api / amplify_jobs SET idle_in_transaction_session_timeout = '30s'` (runs as the bootstrap admin, before `SET LOCAL ROLE`), so a session the runtime leaves idle in a transaction releases its locks (R-13). Indexes `points_ledger (created_at)` and partial `share_request (failed_at) WHERE failed_at IS NOT NULL`, the two the planner used for the PO dashboard tiles (EXPLAIN in `docs/migrations/2026-10-17-v013-idle-timeout-dashboard-indexes.md`). `COMMENT ON FUNCTION` for the lock order |
 | `V014__point_actions_all_phases.sql` | `point_rule_action_check` and `points_ledger_action_check` also accept `REACTION`, `COMMENT`, `CHALLENGE_ENTRY` and `CHALLENGE_WINNER`, so the whole points table fits without a later schema change. Nothing awards them yet (likes and comments need Community Management; Challenge entry and winner are PO adjustments for now). `sharing.engagement.action` is unchanged. Seeds S005 to S007 price them (REACTION 1, COMMENT 1, CHALLENGE_ENTRY 10, CHALLENGE_WINNER 25 from 2026-10-19) and add `leaderboard.top_scope` |
 
-No script after V010 changes a grant (V011 only re-grants the recreated view). **Proposed, not applied** (jobs-db review D4/D5, H3; waiting on a decision): `REVOKE DELETE ON messaging.outbox, sharing.share_request, sharing.engagement, sharing.engagement_verification, connection.member_connection FROM amplify_api, amplify_jobs`; `REVOKE INSERT, UPDATE ON messaging.idempotency_key FROM amplify_jobs`; `REVOKE DELETE ON connection.oauth_state FROM amplify_jobs`; `REVOKE TEMPORARY ON DATABASE <db> FROM PUBLIC`. The grants table above is still what's in the database.
+**As built after V014 (V015–V020):**
+
+| Script | What it changes |
+| --- | --- |
+| `V015__linkedin_consent.sql` | `connection.linkedin_consent`, the Link Me decision (`CONSENTED` or `DECLINED`) with the optional LinkedIn profile URL a person who declined typed. Private like the member URN: nothing for `amplify_readonly` |
+| `V016__token_grace_one_day.sql` | `connection.token_grace_days` from 5 to 1 (ADR-002) on a database that still holds the old default; S008 does the same on a fresh one |
+| `V017__narrow_token_grants.sql` | least privilege on `connection.provider_token`: `amplify_api` INSERT, SELECT, DELETE; `amplify_jobs` SELECT, UPDATE, DELETE |
+| `V018__erase_employee_function.sql` | `identity.erase_employee(p_employee_id, p_actor, p_reason)`, the audited erase (ADR-040): connection, tokens, consent, idempotency keys, commentary and names go; the ledger, engagements, shares and audit rows stay under the pseudonymous id |
+| `V019__dev_post_link_http.sql` | `campaign.campaign.resource_url` also accepts the local stack's one http dev origin; the app's `campaignLinkOrigins` stays the production policy |
+| `V020__employee_alias.sql` | `identity.employee_alias`: a re-created Asgardeo account maps to the first employee id (ADR-041); `amplify_api` SELECT, INSERT, `amplify_jobs` and `amplify_readonly` SELECT |
+
+Up to V010, no script changes a grant (V011 only re-grants the recreated view). V017 narrows the token grants and V020 grants the alias table, as listed above. **Proposed, not applied** (jobs-db review D4/D5, H3; waiting on a decision): `REVOKE DELETE ON messaging.outbox, sharing.share_request, sharing.engagement, sharing.engagement_verification, connection.member_connection FROM amplify_api, amplify_jobs`; `REVOKE INSERT, UPDATE ON messaging.idempotency_key FROM amplify_jobs`; `REVOKE DELETE ON connection.oauth_state FROM amplify_jobs`; `REVOKE TEMPORARY ON DATABASE <db> FROM PUBLIC`. The grants table above is still what's in the database.
 
 ## Decisions from review (2026-10-16)
 
