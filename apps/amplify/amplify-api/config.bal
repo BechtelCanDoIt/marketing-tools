@@ -96,6 +96,7 @@ final auth:TokenVerifier verifier = check newVerifier();
 
 isolated function newVerifier() returns auth:TokenVerifier|error {
     check checkDevSwitch(environment, devLocalJwtEnabled, devIssuer, gatewayIssuer, dbSslMode, gatewayJwksUrl);
+    check checkJwksUrl(environment, gatewayJwksUrl);
     auth:DevTrust? dev = ();
     if devLocalJwtEnabled {
         dev = {issuer: devIssuer, keys: check auth:parseJwks(check io:fileReadJson(devJwksFile))};
@@ -118,6 +119,40 @@ isolated function newVerifier() returns auth:TokenVerifier|error {
         nameClaim,
         access: accessGroups
     }, dev);
+}
+
+# Refuses a gateway JWKS URL that is not https, so signing keys never travel in the clear. A developer needs no
+# certificate: plain http is accepted for `localhost` or `127.0.0.1` when `environment` is `local`, which is what the
+# local stack and the tests use. Anywhere else the URL must be https.
+#
+# + env - `environment`
+# + jwksUrl - `gatewayJwksUrl`
+# + return - An error that stops startup, or `()`
+isolated function checkJwksUrl(string env, string jwksUrl) returns error? {
+    if jwksUrl.startsWith("https://") {
+        return;
+    }
+    if env == "local" && isLoopbackHttp(jwksUrl) {
+        return;
+    }
+    return error(string `gatewayJwksUrl must be https (plain http is only for localhost when environment is 'local', not '${env}')`);
+}
+
+isolated function isLoopbackHttp(string url) returns boolean {
+    string prefix = "http://";
+    if !url.startsWith(prefix) {
+        return false;
+    }
+    string rest = url.substring(prefix.length());
+    int end = rest.length();
+    foreach string stop in ["/", ":", "?"] {
+        int? at = rest.indexOf(stop);
+        if at is int && at < end {
+            end = at;
+        }
+    }
+    string host = rest.substring(0, end);
+    return host == "localhost" || host == "127.0.0.1";
 }
 
 # Refuses to start with the dev switch outside a local stack (ADR-023). Three independent signs of a
