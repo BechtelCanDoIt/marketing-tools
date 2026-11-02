@@ -11,7 +11,7 @@ This folder (`apps/amplify` in the marketing-tools repo) holds the backend. The 
 apps/amplify/
 ├── README.md · CLAUDE.md          # LICENSE and the issue/PR templates are marketing-tools' (repo root)
 ├── compose.yaml · Makefile       # full local stack (M8a): make up / seed / e2e / down
-├── .choreo/component.yaml        # Choreo descriptor of amplify-api (its Docker context is this folder, ADR-027)
+├── .choreo/component.yaml        # Choreo descriptor of amplify-api (its Docker context is this folder, ADR-027); jobs' is ../.choreo/component.yaml (context `apps`)
 ├── .dockerignore · .gitignore
 ├── amplify-common/           # shared library (ADR-020): types, events, crypto, linkedin, googlechat
 ├── amplify-domain/           # shared library (ADR-021): bounded contexts + PostgreSQL repositories + store
@@ -40,7 +40,7 @@ Docker images build from a clean checkout (the shared packages are packed inside
 
 ```sh
 docker build -f amplify-api/Dockerfile -t amplify-api .
-docker build -f amplify-jobs/Dockerfile -t amplify-jobs .
+docker build -f amplify-jobs/Dockerfile -t amplify-jobs ..   # jobs builds from apps/, its own ancestor context
 docker build -t amplify-database amplify-database
 docker build -t amplify-scheduler amplify-scheduler
 ```
