@@ -68,16 +68,140 @@ After each build, confirm the endpoint Choreo shows matches the descriptor (name
 3. **D3** Turn on backend JWT so the Backend gets `x-jwt-assertion`; copy its JWKS/issuer/audience into C5.
 4. **D4** Security headers at the proxy too if supported (`nosniff`, CSP `upgrade-insecure-requests`, HSTS).
 5. **D5 WAF / egress.** If the org uses egress control, allow-list only `api.linkedin.com`, `www.linkedin.com`, `chat.googleapis.com` and the people-app connection's gateway host for this project. Attach the org WAF policy to the proxy if one exists.
+6. **D6 Ingress rate limiting.** Put a rate limit on the proxy in front of amplify-api that slows an abusive caller without touching normal use. The limit itself is still to be chosen.
+7. **D7 Egress rate limiting to LinkedIn.** On the developer tier we are on for now, LinkedIn allows 500 reposts in a 24-hour window. amplify-jobs caps a run at 50 and a day at 1000 (`linkedinMaxPostsPerRun`, `linkedinMaxPostsPerDay`), so its own day cap sits above that limit. `linkedinMaxPostsPerDay` is not in the Jobs descriptor yet, so it cannot be lowered from the config form: add it (and to `workload.yaml`) before relying on it, or expect LinkedIn to answer 429 past 500.
 
 ## E. Versioning and promotion
 
 1. **E1** First version **v1.0.0 from `main`**; no extra deployment tracks.
 2. **E2** Build once, promote the same image dev → prod. Only config and secrets differ per environment.
 3. **E3** Before promoting: run DB Migrate in prod, then deploy Jobs, Scheduler, Backend; check Backend `GET /ready` (via the proxy test console) and that the startup log says `Scheduler sync … SYNCED`.
+4. **E4** No CI workflow runs the quality gates yet (the marketing-tools repo has none), so nothing checks a PR automatically. Until one is added, run them by hand before every promotion: `make check` (descriptors, log PII, transaction gate), `scripts/lint-openapi-names.sh`, and `scripts/test-all.sh`. A workflow that runs all of them on every PR is still to be added.
 
 ## F. Observability
 
 Alerts (Choreo logs/metrics): outbox `FAILED`, share failure rate, breaker `OPEN` in the run log, 5xx rate, scheduler job failures (scheduler `/jobs/{id}/history`, Project network only), `schedulerSync: PENDING` / reconcile give-up log, partition-maintenance failures.
+
+## G. Environment variable reference
+
+Every variable each component's `.choreo/component.yaml` declares, checked against the descriptors. Kind: **cfg** = config form, **secret** = config form secret (only ever in Choreo), **conn** = filled by a Choreo connection. Req: **R** required, **O** optional. Values here are non-secret only. "Local/stg" is what the local stack or the stg Novera setup uses today (`local/.env`, gitignored); it is a hint for dev, **not** a prod value. **TBD** means nobody has supplied it yet; do not guess.
+
+Same names in two components (`DBHOST`, `DBPORT`, `DBNAME`, `DBUSER`, `DBPASSWORD`, `DBSSLROOTCERT`, `LINKEDIN*`, `TOKEN*`) take the per-component values below. All names carry the `BAL_CONFIG_VAR_` prefix except `DSN` and `BAL_CONFIG_DATA`.
+
+### G1. Amplify Backend
+
+| Variable | Kind | Req | Local/stg value | Prod |
+|---|---|---|---|---|
+| `ENVIRONMENT` | cfg | R | `local` (compose only) | `prod`. Never `local` |
+| `GATEWAYJWKSURL` | cfg | R | empty | TBD, from the proxy's backend JWT (D3) |
+| `GATEWAYISSUER` | cfg | R | empty | TBD, same source |
+| `GATEWAYAUDIENCES` | cfg | R | `amplify-local` | TBD, same source |
+| `DBHOST` / `DBPORT` | cfg | R | compose Postgres | TBD, from the Choreo server (B1) |
+| `DBNAME` | cfg | R | | `amplify` |
+| `DBUSER` | cfg | R | | `amplify_api` |
+| `DBPASSWORD` | secret | R | | Ops-generated (`APIDBPASSWORD` from C1) |
+| `DBSSLROOTCERT` | cfg | O | | File-mount path of the managed Postgres CA PEM, e.g. `/home/choreo/db-ca/ca.pem`. TBD until mounted |
+| `JOBSURL` | conn | R | | `amplify-jobs` connection `ServiceURL` |
+| `SCHEDULERURL` | conn | R | | `amplify-scheduler` connection `ServiceURL` |
+| `SCHEDULERJOBSURL` | conn | R | | `amplify-jobs` connection `ServiceURL` |
+| `CAMPAIGNLINKORIGINS` | cfg | O | | Leave empty (LinkedIn only: `https://www.linkedin.com,https://linkedin.com`). Dev may add the mock's www URL |
+| `ROSTERCACHESECONDS` | cfg | O | | Leave empty (default 259200) |
+| `TOPBOARDCACHESECONDS` | cfg | O | | Leave empty (default 7200) |
+| `HEADCOUNTCACHESECONDS` | cfg | O | `604800` | Leave empty (default 604800) |
+| `SCORECARDTARGETCONNECTEDPCT` | cfg | O | `25` | Leave empty (default 25) |
+| `SCORECARDMAXEXPIREDPCT` | cfg | O | `5` | Leave empty (default 5) |
+| `SCORECARDTARGETSHARESUCCESSPCT` | cfg | O | `98` | Leave empty (default 98) |
+| `SCORECARDTARGETPRIORITYREACHPCT` | cfg | O | `25` | Leave empty (default 25) |
+| `SCORECARDTARGETACTIVE30D` | cfg | O | `100` | Leave empty (default 100) |
+| `SCORECARDTARGETREPOSTSPERMONTH` | cfg | O | `600` | Leave empty (default 600) |
+| `PEOPLEDIRECTORYURL` | cfg | O | | TBD, from the people-app connection (C7) + `/employees/basic-info` |
+| `PEOPLEDIRECTORYTOKENURL` | cfg | O | | TBD (C7) |
+| `PEOPLEDIRECTORYCLIENTID` | cfg | O | | TBD (C7) |
+| `PEOPLEDIRECTORYCLIENTSECRET` | secret | O | | TBD (C7) |
+| `LINKEDINCLIENTID` | cfg | R | `amplify-local` (mock) | TBD, from the LinkedIn app owner |
+| `LINKEDINCLIENTSECRET` | secret | R | | TBD, from the LinkedIn app owner |
+| `LINKEDINREDIRECTURI` | cfg | R | `http://localhost:3000/amplify/connect/callback` | TBD, the prod One WSO2 callback page |
+| `LINKEDINAPIBASEURL` | cfg | R | mock API URL | `https://api.linkedin.com` |
+| `LINKEDINAUTHBASEURL` | cfg | R | mock www **public** URL | `https://www.linkedin.com` |
+| `WSO2ORGANIZATIONURN` | cfg | O | `urn:li:organization:143998207` (test org) | TBD. Code default is `urn:li:organization:1477`; confirm it is the WSO2 page before relying on it |
+| `LINKEDINIDTOKENVALIDATION` | cfg | O | unset (default `false`) | TBD, decide before go-live |
+| `TOKENKEYS` | secret | R | local random | Fresh for prod, `keyId:base64Key` (`openssl rand -base64 32`); same as Jobs |
+| `TOKENCURRENTKEYID` | cfg | R | local | The key id in `TOKENKEYS` |
+| `CANADJUSTPOINTSGROUPS` | cfg | O | | Asgardeo groups for adjust/reverse points, comma separated. Empty = the default `amplify_po` |
+| `CANADMINGROUPS` | cfg | O | | Asgardeo groups for admin, comma separated. Empty = the default `amplify_admin` |
+| `CANCAMPAIGNGROUPS` | cfg | O | | Asgardeo groups for campaigns, comma separated. Empty = the default `amplify_po,amplify_marketing` |
+| `CANDASHBOARDGROUPS` | cfg | O | | Asgardeo groups for dashboards, comma separated. Empty = the default `amplify_po,amplify_marketing,amplify_slt,amplify_admin` |
+| `CANEXPORTGROUPS` | cfg | O | | Asgardeo groups for dashboard CSV export, comma separated. Empty = the default `amplify_po,amplify_marketing,amplify_slt,amplify_admin` |
+| `CANPODASHBOARDGROUPS` | cfg | O | | Asgardeo groups for the PO dashboard, comma separated. Empty = the default `amplify_po` |
+| `CANPOINTRULESGROUPS` | cfg | O | | Asgardeo groups for point rules, comma separated. Empty = the default `amplify_po` |
+| `CANREPORTSGROUPS` | cfg | O | | Asgardeo groups for SLT reports, comma separated. Empty = the default `amplify_slt,amplify_po` |
+| `CANREVIEWSHARESGROUPS` | cfg | O | | Asgardeo groups for external-share review, comma separated. Empty = the default `amplify_po` |
+| `LINKEDINNONCEMODE` | cfg | O | `OFF` | `OFF`, `SEND` (checked when LinkedIn echoes the nonce) or `REQUIRE`. Only with ID-token validation on. Empty = `OFF` |
+| `INTERNALAPIKEY` | secret | R | | Ops-generated, at least 32 characters, the same value as Jobs (C2) |
+| `SCHEDULERAPIKEY` | secret | R | | Ops-generated, at least 32 characters, different from the internal key, the same value as Jobs (C2) |
+
+### G2. Amplify Jobs
+
+| Variable | Kind | Req | Local/stg value | Prod |
+|---|---|---|---|---|
+| `DBHOST` / `DBPORT` | cfg | R | compose Postgres | TBD (B1) |
+| `DBNAME` | cfg | R | | `amplify` |
+| `DBUSER` | cfg | R | | `amplify_jobs` |
+| `DBPASSWORD` | secret | R | | Ops-generated (`JOBSDBPASSWORD` from C1) |
+| `DBSSLROOTCERT` | cfg | O | | Same file-mount path as Backend |
+| `LINKEDINCLIENTID` | cfg | R | `amplify-local` (mock) | TBD, same as Backend |
+| `LINKEDINAPIBASEURL` | cfg | R | mock API URL | `https://api.linkedin.com` |
+| `LINKEDINAUTHBASEURL` | cfg | R | mock www URL | `https://www.linkedin.com` |
+| `TOKENKEYS` | secret | R | | Same as Backend |
+| `TOKENCURRENTKEYID` | cfg | R | | Same as Backend |
+| `CHATWEBHOOKURL` | secret | R | dev test space webhook (Scott-only) | TBD, from the Club space owner |
+| `CHATSPACE` | cfg | R | `Amplify Demo` locally; `dev-test` in Choreo dev | `club` |
+| `CHATCARDAVATARURL` | cfg | O | `https://fonts.gstatic.com/s/e/notoemoji/17.0/1f50a/72.png` | Same URL is fine; confirm |
+| `CHATDEFAULTIMAGEURL` | cfg | O | `https://raw.githubusercontent.com/BechtelCanDoIt/marketing-tools/5e5006aadd4a031021265342a20ff0fcda3102b7/apps/amplify/amplify-jobs/img/WSO2-Amplify-Poster-Default.png` (fork) | TBD, same file pinned to a commit in the WSO2-managed repo |
+| `SHAREPAGEBASEURL` | cfg | R | `https://one.wso2.com/amplify/celebrate` | TBD, the One WSO2 team confirms the prod Celebrate page |
+| `NOVERANOTIFYURL` | cfg | O | `https://apis-stg.wso2.com/people-ops-suite/po-agent/v1.0/internal/notifications` (stg) | TBD, prod gateway URL of `POST /internal/notifications` (https) |
+| `NOVERATOKENURL` | cfg | O | `https://api.asgardeo.io/t/wso2/oauth2/token` (stg app) | TBD |
+| `NOVERACLIENTID` | cfg | O | stg application id (in `local/.env`) | TBD, a prod application subscribed to Novera's API |
+| `NOVERACLIENTSECRET` | secret | O | | TBD |
+| `NOVERASCOPES` | cfg | O | empty | TBD, empty unless Novera needs a scope |
+| `AMPLIFYONNOVERA` | cfg | O | `false` locally (default `true`) | TBD, the open item in `prod-deploy-handoff.md` |
+| `AMPLIFYONWEBHOOK` | cfg | O | `true` locally (default `false`) | TBD, same open item |
+| `INTERNALAPIKEY` | secret | R | | Ops-generated, at least 32 characters, the same value as the Backend (C5) |
+| `SCHEDULERAPIKEY` | secret | R | | Ops-generated, at least 32 characters, different from the internal key; accepted only for `POST /runs` and `POST /maintenance/partitions`; the same value as the Backend |
+| `LEAVERSWEEPMODE` | cfg | O | `OFF` | `OFF`, `DRY_RUN` or `ERASE`. Start with `DRY_RUN` (ADR-040) |
+| `PEOPLEDIRECTORYURL` | cfg | O | | People directory URL for the leaver sweep, the full `GET .../employees/basic-info` |
+| `PEOPLEDIRECTORYTOKENURL` | cfg | O | | People directory OAuth token URL |
+| `PEOPLEDIRECTORYCLIENTID` | cfg | O | | People directory client id |
+| `PEOPLEDIRECTORYCLIENTSECRET` | secret | O | | People directory client secret |
+
+### G3. Amplify Scheduler
+
+| Variable | Kind | Req | Prod |
+|---|---|---|---|
+| `DSN` | secret | R | `postgres://<user>:<pw>@<host>:<port>/scheduler?sslmode=require` (B3), TBD |
+
+### G4. Amplify DB Migrate (Manual Task)
+
+| Variable | Kind | Req | Prod |
+|---|---|---|---|
+| `DBHOST` / `DBPORT` | cfg | R | TBD (B1) |
+| `DBNAME` | cfg | R | `amplify` |
+| `DBUSER` | cfg | R | Bootstrap admin user, TBD |
+| `DBPASSWORD` | secret | R | Bootstrap admin password, from the Choreo server |
+| `DBSSLROOTCERT` | cfg | O | Same file-mount path |
+| `APIDBPASSWORD` | secret | R | Ops-generated, 16+ chars |
+| `JOBSDBPASSWORD` | secret | R | Ops-generated, 16+ chars |
+| `READONLYDBPASSWORD` | secret | O | Ops-generated, 16+ chars |
+
+### G5. LinkedIn Mock (dev only)
+
+| Variable | Kind | Req | Dev |
+|---|---|---|---|
+| `LISTENERHOST` | cfg | R | `0.0.0.0` (fixed) |
+| `WWWBASEURL` | cfg | R | The www endpoint's public URL, TBD |
+| `CLIENTID` | cfg | R | `amplify-local` (matches Backend and Jobs) |
+| `CLIENTSECRET` | secret | R | Made-up; matches Backend |
+| `BAL_CONFIG_DATA` (no prefix) | cfg | R | `redirectUris = ["<dev One WSO2 callback>"]`, TBD |
 
 ## Go-live config review (M10)
 
