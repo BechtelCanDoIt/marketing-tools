@@ -13,8 +13,8 @@ Paths: `apps/…` = `apps/amplify/…`. Local commands run from `apps/amplify/`.
 | What | How |
 | --- | --- |
 | Health / readiness | `GET /health` (always UP), `GET /ready` (api: DB + JWKS gated; jobs: DB gated) — not through the proxy |
-| Run now (manual) | `POST {jobs}/runs` (Project-only) or wait for the scheduler |
-| Maintenance now | `POST {jobs}/maintenance/partitions` (also rotates token keys: `token_rotation` in the response) |
+| Run now (manual) | `POST {jobs}/runs` (Project-only, header `X-Amplify-Internal-Key` with either key) or wait for the scheduler |
+| Maintenance now | `POST {jobs}/maintenance/partitions` (either key; also rotates token keys: `token_rotation` in the response) |
 | Scheduler sync now | `POST /admin/scheduler/sync` (admin) |
 | Retry one announcement | `POST /admin/announcements/{id}/retry` (admin) |
 | Kill switches | `PUT /admin/settings` `sharing.enabled` / `announcements.enabled` |
@@ -192,9 +192,9 @@ Per environment (dev, prod), for each of the three components **[console]**:
 
 ## 13. People directory (team rosters)
 
-My Team and the Team page's team scope come from people-app's `GET /employees/basic-info` (ADR-019). Amplify Backend fetches the whole directory once, groups everyone by sub-team (team when there's none) and keeps that index in memory for 3 days (`ROSTERCACHESECONDS`, default 259200). Nothing is written to the database or the logs.
+My Team and the Team page's team scope come from people-app's `GET /employees/basic-info` (ADR-019). Amplify Backend fetches the whole directory once, groups everyone by sub-team (team when there's none) and keeps that index (teams, names and houses) in memory for 24 hours (`ROSTERCACHESECONDS`, default 86400). Nothing is written to the database or the logs.
 
-- **Someone moved team and still sees the old one.** Expected for up to 3 days. To pick it up now, restart Amplify Backend; the next leaderboard read fetches the directory again.
+- **Someone moved team and still sees the old one.** Expected for up to 24 hours. To pick it up now, restart Amplify Backend; the next leaderboard read fetches the directory again.
 - **`teamStatus: NO_TEAM` for one person.** They aren't in the directory (only Active and Marked leaver employees are), their people-app record has no team, or their Amplify email doesn't match their people-app `workEmail`. Compare the two emails first.
 - **`teamStatus: UNAVAILABLE` for everyone.** The directory has never loaded since the last start. Check, in order:
   1. The Backend log for `People directory not configured`: the `PEOPLEDIRECTORY*` settings are empty (choreo-deploy C5/C7).
@@ -204,3 +204,12 @@ My Team and the Team page's team scope come from people-app's `GET /employees/ba
 - **A refresh fails after a good load.** Amplify keeps serving the old index and logs `People directory refresh failed; using the cached teams`. Nothing to do unless it lasts; teams just stop updating.
 - **Rotating the client secret.** New secret on the Choreo connection, update `PEOPLEDIRECTORYCLIENTSECRET`, redeploy the Backend. People-app needs no change: it lists the client id, not the secret.
 
+## 14. Rotate the internal key and the scheduler key (ADR-039)
+
+Two secrets guard amplify-jobs: `INTERNALAPIKEY` (full access; amplify-api's own triggers) and `SCHEDULERAPIKEY` (only `POST /runs` and `POST /maintenance/partitions`; set by amplify-api as a header on the two scheduler jobs). Each is the same value on Amplify Backend and Amplify Jobs, at least 32 characters, and the two must differ (both components refuse to start otherwise). Rotate on a leak, an owner change or yearly.
+
+1. Generate a new value: `openssl rand -hex 24`.
+2. **Scheduler key:** set `SCHEDULERAPIKEY` on Amplify Jobs and on Amplify Backend and redeploy both. Order does not matter much: a run missed while they disagree is caught by the next tick.
+3. **Then force a scheduler sync** so the registered jobs carry the new value: `POST /admin/scheduler/sync` (admin); the Backend also syncs at start-up. Check the response lists both jobs as `UPDATED`. Until then the scheduler still sends the old key and Jobs answers 401 (`Internal call refused` in the Jobs log, `keySent=true`).
+4. **Internal key:** set `INTERNALAPIKEY` on both and redeploy. No scheduler sync needed (the scheduler never holds it). "Save & Share Now" falls back to the scheduled run while the two disagree.
+5. A `403` in the Jobs log (`scheduler key on a route it may not call`) means something other than `/runs` or `/maintenance/partitions` was called with the scheduler key: check the job URIs in the scheduler.
