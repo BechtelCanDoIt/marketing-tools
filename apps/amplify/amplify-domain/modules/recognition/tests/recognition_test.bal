@@ -70,3 +70,15 @@ function monthStartsOnTheFirstUtc() {
     test:assertEquals(nextMonthStartOf(checkpanic time:utcFromString("2026-12-15T00:00:00Z")),
         checkpanic time:utcFromString("2027-01-01T00:00:00Z"), "December rolls into January");
 }
+
+@test:Config
+function rosterColumnsLowercasesTrimsAndDropsRepeats() {
+    var [emails, names] = rosterColumns([
+        {email: " Ada@WSO2.com ", name: " Ada Lovelace "},
+        {email: "ada@wso2.com", name: "Ada Again"},
+        {email: "", name: "Nobody"},
+        {email: "grace@wso2.com"}
+    ]);
+    test:assertEquals(emails, ["ada@wso2.com", "grace@wso2.com"]);
+    test:assertEquals(names, ["Ada Lovelace", ""], "first name wins; no name stays blank for the fallback");
+}
