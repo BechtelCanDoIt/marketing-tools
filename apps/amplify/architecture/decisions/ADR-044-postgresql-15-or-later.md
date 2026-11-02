@@ -12,7 +12,7 @@ The data model was designed for PostgreSQL 18 and the plan said "if 18 isn't off
 ## Decision
 
 1. **Support PostgreSQL 15 and later.** 15 is the floor because the `*_v` views use `security_invoker`. The runner refuses an older server.
-2. **`uuidv7()` is installed when the server lacks it.** `amplify-database/bootstrap/uuidv7_compat.sql` creates `uuidv7()` in the Amplify schema (a v4 uuid with the Unix time in milliseconds in the first 48 bits and the version bits set to 7). The migrate runner applies it before the first script, only when the server has no native `pg_catalog.uuidv7()`, so on 18 it does nothing. It is not a migration and is not recorded: it is idempotent, and no applied script changes (V002-V008 keep `DEFAULT uuidv7()`). By hand, apply that file first.
+2. **`uuidv7()` is installed by V001 when the server lacks it.** V001 creates `uuidv7()` in the Amplify schema (a v4 uuid with the Unix time in milliseconds in the first 48 bits and the version bits set to 7) only when the server has no native `pg_catalog.uuidv7()`, so on 18 it does nothing. It is in V001, the first script, because V002 onward use it as a column default, and so it also works when the scripts are applied by hand without the runner. The schema must be first on the `search_path` (the runner does that).
 3. **`RETURNING old.*` becomes a data-modifying CTE.** `WITH prev AS (SELECT … FOR UPDATE) UPDATE … FROM prev … RETURNING prev.old_…`. The row is read and locked in the same statement that changes it, so the version check and the audit "before" values stay atomic. Applied in the campaign, connection, sharing, scoring, external sharing and settings repositories.
 4. **Local and CI match staging.** Compose and the test scripts pin `postgres:17.11`, the version staging runs, so local work never uses a newer server than we deploy to. CI runs the database integration tests on 15, 17 and 18: the floor, staging's version and the newest.
 
@@ -25,5 +25,5 @@ The data model was designed for PostgreSQL 18 and the plan said "if 18 isn't off
 
 ## Links
 
-- [bootstrap/uuidv7_compat.sql](../../amplify-database/bootstrap/uuidv7_compat.sql)
+- [V001__schema_and_extensions.sql](../../amplify-database/migrations/V001__schema_and_extensions.sql)
 - [phase1-data-model.md](../solution/Phase%201/phase1-data-model.md)

@@ -15,7 +15,7 @@
 // under the License.
 
 
-// uuidv7(): native on PostgreSQL 18, the runner's bootstrap/uuidv7_compat.sql before it (ADR-044). Either way an id
+// uuidv7(): native on PostgreSQL 18, the compatible function V001 installs before it (ADR-044). Either way an id
 // is a version 7 uuid that carries the current time in its first 48 bits and sorts by creation across milliseconds.
 
 import ballerina/test;

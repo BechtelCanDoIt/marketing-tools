@@ -33,7 +33,7 @@ order only, so a late-arriving `V0NN` must be renumbered above the highest appli
 script. It logs each script as `pending`, `applied` or `changed` and fails when any is `changed`, so it doubles
 as a checksum check before a deploy. Nothing in the database is touched.
 
-Local: `make up` runs it once before api/jobs start; `make seed` reruns it (compose and the tests pin `postgres:17.11`, the version staging runs; CI also runs 15 and 18). Before PostgreSQL 18 the runner installs `bootstrap/uuidv7_compat.sql` first (ADR-044).
+Local: `make up` runs it once before api/jobs start; `make seed` reruns it (compose and the tests pin `postgres:17.11`, the version staging runs; CI also runs 15 and 18). Before PostgreSQL 18, V001 installs a compatible `uuidv7()` in the schema (ADR-044).
 
 ## Integration tests (PostgreSQL 15 or later)
 

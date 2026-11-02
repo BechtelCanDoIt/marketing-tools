@@ -40,4 +40,4 @@ UNION ALL
 SELECT 'uuidv7()', CASE WHEN EXISTS (SELECT 1 FROM pg_proc p WHERE p.proname = 'uuidv7' AND p.pronamespace = 'pg_catalog'::regnamespace)
                         THEN 'native (PostgreSQL 18)' ELSE 'not native' END,
        CASE WHEN current_setting('server_version_num')::int >= 180000 THEN 'OK'
-            ELSE 'OK, the runner installs bootstrap/uuidv7_compat.sql; by hand, apply that file first' END;
+            ELSE 'OK, V001 installs a compatible one in the schema' END;
