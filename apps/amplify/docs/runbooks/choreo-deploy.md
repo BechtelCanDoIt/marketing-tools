@@ -39,13 +39,13 @@ The Docker context is where Choreo reads `.choreo/component.yaml`, so each compo
 
 | Component (display name) | Type | Component directory / Docker context | Dockerfile path |
 |---|---|---|---|
-| Amplify Jobs | Service | `apps/amplify` | `apps/amplify/amplify-jobs/Dockerfile` |
+| Amplify Jobs | Service | `apps` (its own ancestor context; Choreo reads `apps/.choreo/component.yaml`) | `apps/amplify/amplify-jobs/Dockerfile` |
 | Amplify Scheduler | Service | `apps/amplify/amplify-scheduler` | `apps/amplify/amplify-scheduler/Dockerfile` |
 | Amplify DB Migrate | Manual Task | `apps/amplify/amplify-database` | `apps/amplify/amplify-database/Dockerfile` |
 | Amplify Backend | Service | `apps/amplify` | `apps/amplify/amplify-api/Dockerfile` |
 | LinkedIn Mock (dev only) | Service | `apps/amplify/linkedin/apps/mock_linkedin` | `apps/amplify/linkedin/apps/mock_linkedin/Dockerfile` |
 
-After each build, confirm the endpoint Choreo shows matches the descriptor (name, port, visibility). If Choreo shows the wrong port, the Docker context is wrong.
+After each build, confirm the endpoint Choreo shows matches the descriptor (name, port, visibility). If Choreo shows the wrong port, the Docker context is wrong (Jobs on `apps/amplify` would read the Backend's descriptor and show 9090).
 
 1. **C1 Amplify DB Migrate** (Manual Task). Config form: `BAL_CONFIG_VAR_DBHOST/DBPORT/DBNAME/DBUSER` from B1/B2, secrets `BAL_CONFIG_VAR_DBPASSWORD` (bootstrap admin), `APIDBPASSWORD`, `JOBSDBPASSWORD`, `READONLYDBPASSWORD` (generate, 16+ chars, store only in Choreo). Run it once per environment, then after every release that adds a `V###`/`S###` script. Check the log ends with `Migration run done`.
 2. **C2 Amplify Jobs** (Project visibility only). `INTERNALAPIKEY` (full access) and `SCHEDULERAPIKEY` (only `POST /runs` and `POST /maintenance/partitions`): each a secret of at least 32 characters (`openssl rand -hex 24`), **different values**, each the **same value** on Amplify Backend (C5) and here, one pair per environment (ADR-039). Without both Jobs does not start; the Backend needs the internal key when `JOBSURL` is set and the scheduler key when `SCHEDULERURL` is set. DB: user `amplify_jobs` + its password. `TOKENKEYS` (`keyId:base64Key`, `openssl rand -base64 32`, one per environment, never shared dev↔prod) + `TOKENCURRENTKEYID`. Chat: `CHATWEBHOOKURL` secret (dev = test space, prod = WSO2 Club; see `google-chat-webhook.md`), `CHATSPACE` (`dev-test` / `club`), `CHATCARDAVATARURL` and `CHATDEFAULTIMAGEURL` (both optional; the default image is a public HTTPS PNG/JPEG pinned to a commit, see `google-chat-webhook.md` section C), `SHAREPAGEBASEURL` (the One WSO2 Celebrate page, e.g. `https://one.wso2.com/amplify/celebrate`; the card button adds `?share=<campaignId>`). LinkedIn: dev = LinkedIn Mock URLs + mock client id; prod = `https://api.linkedin.com`, `https://www.linkedin.com` + prod app client id. **Never** set `CHATALLOWINSECUREHTTP`.
