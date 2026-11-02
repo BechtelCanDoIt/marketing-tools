@@ -15,6 +15,7 @@
 // under the License.
 import amplify_api.auth;
 import amplify_common.types;
+import amplify_domain.identity;
 import amplify_domain.store;
 
 import ballerina/crypto;
@@ -22,6 +23,7 @@ import ballerina/http;
 import ballerina/lang.runtime;
 import ballerina/test;
 import ballerina/time;
+import ballerinax/postgresql;
 
 // No client cache: `/leaderboard` is `private, max-age=30`, and a cached 200 would answer the anonymous and
 // breaker-open calls of later tests without reaching the server.
@@ -263,14 +265,60 @@ function testMeReportsLinkedInStatus() returns error? {
 
 // ---- Dev-only local signing (ADR-023) ------------------------------------------------------------
 
+const string LOCAL_JWKS = "http://localhost:1/unset";
+
 @test:Config
 function testDevSwitchIsRefusedOutsideLocal() {
-    test:assertTrue(checkDevSwitch("prod", true, "amplify-local-dev", TEST_ISSUER) is error);
-    test:assertTrue(checkDevSwitch("dev", true, "amplify-local-dev", TEST_ISSUER) is error);
-    test:assertTrue(checkDevSwitch("local", true, TEST_ISSUER, TEST_ISSUER) is error);
-    test:assertTrue(checkDevSwitch("local", true, " ", TEST_ISSUER) is error);
-    test:assertTrue(checkDevSwitch("local", true, "amplify-local-dev", TEST_ISSUER) is ());
-    test:assertTrue(checkDevSwitch("prod", false, "", TEST_ISSUER) is ());
+    postgresql:SSLMode off = postgresql:DISABLE;
+    test:assertTrue(checkDevSwitch("prod", true, "amplify-local-dev", TEST_ISSUER, off, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("dev", true, "amplify-local-dev", TEST_ISSUER, off, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("local", true, TEST_ISSUER, TEST_ISSUER, off, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("local", true, " ", TEST_ISSUER, off, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("prod", false, "", TEST_ISSUER, postgresql:VERIFY_FULL, "https://idp.example/jwks")
+            is ());
+}
+
+// Each of the three signs of a local stack is enough, on its own, to refuse the switch.
+@test:Config
+function testDevSwitchNeedsAllThreeLocalSigns() {
+    string issuer = "amplify-local-dev";
+    // The allowed local stack.
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:DISABLE, LOCAL_JWKS) is ());
+    // environment is not local.
+    error? wrongEnv = checkDevSwitch("dev", true, issuer, TEST_ISSUER, postgresql:DISABLE, LOCAL_JWKS);
+    test:assertTrue(wrongEnv is error);
+    if wrongEnv is error {
+        test:assertTrue(wrongEnv.message().includes("outside a local stack"));
+    }
+    // The database is verified or encrypted (a real database).
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:VERIFY_FULL, LOCAL_JWKS) is error);
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:REQUIRE, LOCAL_JWKS) is error);
+    // The gateway JWKS is a real endpoint, not a local one.
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:DISABLE,
+            "https://api.asgardeo.io/t/org/oauth2/jwks") is error);
+    test:assertTrue(checkDevSwitch("local", true, issuer, TEST_ISSUER, postgresql:DISABLE,
+            "http://127.0.0.1:1/unset") is error);
+    // Switched off, the three checks do not apply.
+    test:assertTrue(checkDevSwitch("prod", false, issuer, TEST_ISSUER, postgresql:VERIFY_FULL, "https://x/jwks") is ());
+}
+
+@test:Config
+function testReportsRowsAreNotAdvertisedUntilBuilt() {
+    auth:AccessGroups access = {canReports: [SLT_GROUP], canDashboard: [SLT_GROUP]};
+    auth:Access[] slt = auth:grantsOf([SLT_GROUP], access);
+    test:assertTrue(slt.some(g => g == auth:CAN_REPORTS), "the grant itself still exists");
+    string[] caps = auth:capabilities(slt);
+    test:assertTrue(caps.indexOf("reports.read") is (), "GET /me must not advertise unbuilt /reports/*");
+    test:assertTrue(caps.indexOf("dashboards.operations.read") !is ());
+    // The matrix keeps the rows, so the route still answers 403 / authorised-404 as before.
+    int unbuilt = 0;
+    foreach auth:Rule rule in auth:ACTIVITY_MATRIX {
+        if !rule.built {
+            unbuilt += 1;
+            test:assertTrue(rule.path.startsWith("/reports/"), rule.path);
+        }
+    }
+    test:assertEquals(unbuilt, 2);
 }
 
 @test:Config
@@ -355,4 +403,68 @@ function testColdJwksCacheFetchesOncePerInterval() returns error? {
         return e;
     }
     setJwksEmptyBody(false);
+}
+
+// ---- A re-created Asgardeo account (new sub, same email) ---------------------------------------------
+
+@test:Config
+function testRecreatedAccountActsAsTheExistingEmployee() returns error? {
+    http:Response first = check call("GET", "/me", check mint({sub: "emp-re-old", email: "Re.Person@wso2.com", name: "Re Person"}));
+    test:assertEquals(first.statusCode, 200);
+    test:assertEquals(check (check first.getJsonPayload()).employee.employeeId, "emp-re-old");
+    int before = fakeEmployees.aliasCount();
+
+    // Same person, new sub: no 409, and the history key stays the first one.
+    string recreated = check mint({sub: "emp-re-new", email: "re.person@wso2.com", name: "Re Person"});
+    http:Response second = check call("GET", "/me", recreated);
+    test:assertEquals(second.statusCode, 200);
+    test:assertEquals(check (check second.getJsonPayload()).employee.employeeId, "emp-re-old",
+            "acts as the first employee id, so the ledger and standing are the same person's");
+    test:assertEquals(fakeEmployees.aliasCount(), before + 1);
+    test:assertTrue(fakeEmployees.findById("emp-re-new") is (), "no second employee row is made");
+
+    // Idempotent: asking again, with the resolver's cache gone, adds nothing.
+    lock {
+        resolvedSubs.removeAll();
+    }
+    http:Response third = check call("GET", "/me", recreated);
+    test:assertEquals(third.statusCode, 200);
+    test:assertEquals(check (check third.getJsonPayload()).employee.employeeId, "emp-re-old");
+    test:assertEquals(fakeEmployees.aliasCount(), before + 1);
+    // And so does a route other than /me: the principal everywhere is the first id.
+    http:Response points = check call("GET", "/me/points", recreated);
+    test:assertEquals(points.statusCode, 200);
+    test:assertEquals(check (check points.getJsonPayload()).standing.employeeId, "emp-re-old");
+}
+
+@test:Config
+function testGenuineEmailClashIsATypedGenericConflict() returns error? {
+    _ = check call("GET", "/me", check mint({sub: "emp-cl-a", email: "cl.a@wso2.com", name: "A"}));
+    _ = check call("GET", "/me", check mint({sub: "emp-cl-b", email: "cl.b@wso2.com", name: "B"}));
+    // b's account now claims a's email: two separate records, nothing to merge by guessing.
+    string token = check mint({sub: "emp-cl-b", email: "cl.a@wso2.com", name: "B"});
+    lock {
+        resolvedSubs.removeAll();
+    }
+    foreach string path in ["/me", "/me/points"] {
+        http:Response res = check call("GET", path, token);
+        test:assertEquals(res.statusCode, 409, path);
+        json body = check res.getJsonPayload();
+        test:assertEquals(check body.code, "EMAIL_CONFLICT");
+        string text = body.toJsonString();
+        test:assertFalse(text.includes("cl.a") || text.includes("emp-cl-a") || text.includes("belongs to another"),
+                "the body says nothing about the other record (no account-enumeration oracle): " + text);
+    }
+    // The clash is not cached: once the other record is out of the way the caller recovers on the next call.
+    test:assertTrue(fakeEmployees.findByEmail("cl.a@wso2.com") is identity:Employee);
+}
+
+@test:Config
+function testNewPersonAndKnownPersonAreUntouched() returns error? {
+    int before = fakeEmployees.aliasCount();
+    http:Response fresh = check call("GET", "/me", check mint({sub: "emp-plain-1", email: "plain.one@wso2.com", name: "P"}));
+    test:assertEquals(check (check fresh.getJsonPayload()).employee.employeeId, "emp-plain-1");
+    http:Response again = check call("GET", "/me", check mint({sub: "emp-plain-1", email: "plain.one@wso2.com", name: "P2"}));
+    test:assertEquals(check (check again.getJsonPayload()).employee.displayName, "P2");
+    test:assertEquals(fakeEmployees.aliasCount(), before, "no alias for an ordinary sign-in");
 }

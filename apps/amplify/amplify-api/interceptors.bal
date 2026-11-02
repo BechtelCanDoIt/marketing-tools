@@ -16,8 +16,10 @@
 import amplify_api.auth;
 
 import amplify_common.resilience;
+import amplify_common.types;
 
 import ballerina/http;
+import ballerina/http.httpscerr;
 import ballerina/log;
 import ballerina/time;
 import ballerina/uuid;
@@ -30,7 +32,7 @@ isolated service class AuthInterceptor {
     *http:RequestInterceptor;
 
     isolated resource function 'default [string... path](http:RequestContext ctx, http:Request req)
-            returns http:NextService|http:Unauthorized|http:Forbidden|http:ServiceUnavailable|error? {
+            returns http:NextService|http:Unauthorized|http:Forbidden|http:ServiceUnavailable|http:Conflict|error? {
         string correlationId = assignCorrelationId(ctx, req);
         if req.method == http:GET && auth:isPublic(path) {
             return ctx.next();
@@ -58,7 +60,22 @@ isolated service class AuthInterceptor {
                     correlationId);
             return forbidden(ROLE_NOT_PERMITTED, correlationId);
         }
-        ctx.set(PRINCIPAL_KEY, principal.cloneReadOnly());
+        // A re-created Asgardeo account acts as the employee the person already is (V020), so history keeps one key.
+        types:EmployeeId|types:DomainError|error employeeId = canonicalEmployeeId(principal);
+        if employeeId is types:DomainError {
+            deny(principal.employeeId, principal.roles, routeOf(req.method, path, rule), EMAIL_CONFLICT, correlationId);
+            // Generic on purpose: which email belongs to which record is nothing a caller may probe for.
+            return conflicted(EMAIL_CONFLICT, "This sign-in can't be matched to an Amplify profile, contact the Amplify admins",
+                    correlationId);
+        }
+        if employeeId is error {
+            log:printError("Could not resolve the employee", employeeId, correlationId = correlationId);
+            recordDbFailure(employeeId);
+            return unavailable(DEPENDENCY_UNAVAILABLE, correlationId);
+        }
+        auth:Principal acting = {employeeId, email: principal.email, displayName: principal.displayName,
+            roles: principal.roles, grants: principal.grants, issuer: principal.issuer};
+        ctx.set(PRINCIPAL_KEY, acting.cloneReadOnly());
         return ctx.next();
     }
 }
@@ -253,6 +270,11 @@ isolated function errorResponse(http:RequestContext ctx, error err) returns http
     string code = INTERNAL_ERROR;
     string detail = "Something went wrong on our side";
     string title = "Internal Server Error";
+    if err is httpscerr:PayloadTooLargeError {
+        // Any 413 raised as an error (`httpscerr:PayloadTooLargeError`) is the same stable code, not a 500. The listener's
+        // own over-limit refusal of a chunked body never reaches here (it answers before the interceptors run).
+        return payloadTooLarge(id);
+    }
     if err is http:PayloadBindingError || err is http:QueryParameterBindingError || err is http:HeaderBindingError
             || err is http:PathParameterBindingError || err is http:PayloadValidationError
             || err is http:QueryParameterValidationError || err is http:HeaderValidationError {
