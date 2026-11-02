@@ -68,7 +68,8 @@ services:
       BAL_CONFIG_VAR_DBPASSWORD: ${AMPLIFY_API_DB_PASSWORD:?}
       # Identity (ADR-022). Default profile: no gateway, dev JWT from local/dev-jwt (ADR-023, local only).
       BAL_CONFIG_VAR_ENVIRONMENT: local
-      BAL_CONFIG_VAR_GATEWAYJWKSURL: ${GATEWAY_JWKS_URL:-http://127.0.0.1:1/unset}
+      # The default must start with http://localhost: the dev-JWT switch is refused otherwise (ADR-023, config.bal).
+      BAL_CONFIG_VAR_GATEWAYJWKSURL: ${GATEWAY_JWKS_URL:-http://localhost:1/unset}
       BAL_CONFIG_VAR_GATEWAYISSUER: ${GATEWAY_ISSUER:-unset-gateway-issuer}
       BAL_CONFIG_VAR_GATEWAYAUDIENCES: ${GATEWAY_AUDIENCES:-amplify-local}
       BAL_CONFIG_VAR_DEVLOCALJWTENABLED: ${AMPLIFY_DEV_LOCAL_JWT:-false}

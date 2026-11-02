@@ -279,6 +279,8 @@ isolated class FakeExternalShares {
             self.rows[c.id] = c.clone();
             self.awards.push(award.entry.clone());
         }
+        // The award is on the ledger too: `amplifyWithPoints` prices the top-up from what the ledger holds.
+        _ = check fakeLedger.append(award);
     }
 
     isolated function awardRows() returns types:LedgerEntry[] {
