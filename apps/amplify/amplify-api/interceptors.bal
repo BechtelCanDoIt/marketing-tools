@@ -125,6 +125,10 @@ isolated function shouldWriteDenialAt(string actorId, string[] roles, string rou
                     _ = denialBuckets.remove(k);
                 }
             }
+            if denialBuckets.length() >= DENIAL_THROTTLE_MAX {
+                // Still full of fresh keys: write this denial without tracking it.
+                return 0;
+            }
         }
         int suppressed = bucket is DenialBucket ? bucket.suppressed : 0;
         denialBuckets[key] = {writtenAt: now};
