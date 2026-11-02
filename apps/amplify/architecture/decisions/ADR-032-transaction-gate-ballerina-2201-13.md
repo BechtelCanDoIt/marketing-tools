@@ -36,3 +36,23 @@ Upgrade to **Ballerina 2201.14.1 or later** (needs **JDK 25**: base images, CI a
 - **Single-statement refactor** (no `transaction` blocks: one CTE statement, or autocommit with explicit `BEGIN`/`COMMIT` on one connection). Measured clean, but it rewrites all 19 units of work (aggregate + outbox + audit, ledger + recognition) and loses the readable transaction boundaries the domain relies on, for a problem that goes away with the upgrade.
 - **`retry transaction`.** Rejected: on 13.x it raised the CME rate about 15 times and exhausted the pool.
 - **Do nothing and rely on the idle timeout and readiness.** Rejected: those limit the damage (locks released, pod restarted) but don't stop a 200 that lost its write.
+
+## Amendment 2026-11-01: phase 1 stays on 2201.13.3 (Scott's decision)
+
+**Decision.** Ballerina stays on **2201.13.3** for phase 1. The gate in this ADR stays in the code. The upgrade to 2201.14.1 or later is still the planned exit, after the pilot decision, not before.
+
+**Why the upgrade is still needed.** The gate is one process-wide lock held across database I/O. A slow dashboard read or a recognition rebuild that runs inside a gated transaction stalls every other write in that replica until it finishes, and nothing in 13.x can make the lock narrower, because the race it hides is inside the runtime. The fix in 2201.14.1 removes the race itself: measured at 0 failures over 19,200 transactions, so the gate, the `...Tx` split and `scripts/check-transaction-gate.sh` can all go.
+
+**Why not now.** 2201.14.x needs JDK 25. Moving to it changes every base image, the CI jobs and each Dockerfile (api, jobs and database) close to the pilot, and the go-live date is still open with the PO. A regression run on a new JDK that late is a worse risk than a serialized write path whose transactions take milliseconds at pilot volume.
+
+**What limits the damage meanwhile.**
+
+- V013: `idle_in_transaction_session_timeout = '30s'` on `amplify_api` and `amplify_jobs`, so a lost commit releases its locks.
+- `/ready` goes DOWN when the database breaker opens or the pool is exhausted (ADR-028), so a stuck replica is restarted.
+- The runbook alert on sessions idle in transaction for more than 30 s (`operations.md`).
+- `make check`, which fails the build on a transaction outside the gate, a gate call that bypasses `...Tx`, and any `retry transaction`.
+- The recognition advisory lock waits at most 2 s, so a busy leaderboard answers "busy, retry" instead of queueing behind the gate.
+
+**Open check (unverified).** Does Choreo accept a JDK 25 runtime image for a Docker component? Nobody has built or deployed one there yet. Until that is answered, the upgrade cannot be scheduled, so it is the first thing to try once the pilot date is known.
+
+The Removal trigger above is unchanged.
