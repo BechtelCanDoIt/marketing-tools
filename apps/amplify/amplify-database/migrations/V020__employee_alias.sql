@@ -22,8 +22,6 @@
 -- One row per alias `sub`. The first sign-in of the new account creates it (amplify-api, once, with an audit row
 -- `EMPLOYEE_ALIASED`); it holds two opaque ids and no email or name.
 
-SET LOCAL ROLE amplify_migrate;
-
 CREATE TABLE identity_employee_alias (
     alias_sub   text        PRIMARY KEY CHECK (length(alias_sub) BETWEEN 1 AND 255),
     employee_id text        NOT NULL CHECK (length(employee_id) BETWEEN 1 AND 255),
@@ -35,5 +33,3 @@ CREATE INDEX employee_alias_employee_idx ON identity_employee_alias (employee_id
 COMMENT ON TABLE identity_employee_alias IS
     'A re-created Asgardeo account (new sub, same email) mapped to the employee id the person already has.';
 
-GRANT SELECT, INSERT ON identity_employee_alias TO amplify_api;
-GRANT SELECT ON identity_employee_alias TO amplify_jobs, amplify_readonly;

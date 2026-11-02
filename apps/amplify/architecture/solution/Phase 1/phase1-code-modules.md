@@ -138,7 +138,7 @@ flowchart LR
     SCHED --- SDB
     API -->|"amplify_api role"| PG
     JOBS -->|"amplify_jobs role"| PG
-    MIG -->|"amplify_migrate role"| PG
+    MIG -->|"DB login"| PG
     API -->|"connect: token exchange · userinfo"| LI
     JOBS -->|"publish shares"| LI
     JOBS -->|"announcements"| GC

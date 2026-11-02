@@ -17,8 +17,6 @@
 -- V008: S5 Announcements and the infrastructure schemas: messaging (outbox, idempotency), audit
 -- (monthly partitions, 5-year retention, B17) and config (app_setting).
 
-SET LOCAL ROLE amplify_migrate;
-
 -- ---- announcement --------------------------------------------------------------------------------
 
 -- PK = campaign_id: a campaign is announced exactly once.
@@ -43,10 +41,6 @@ SELECT a.*,
             WHEN a.failed_at IS NOT NULL THEN 'FAILED'
             ELSE 'QUEUED' END AS status
 FROM announcement a;
-
-GRANT SELECT ON announcement, announcement_v TO amplify_api, amplify_readonly;
-GRANT SELECT, INSERT, UPDATE, DELETE ON announcement TO amplify_jobs;
-GRANT SELECT ON announcement_v TO amplify_jobs;
 
 -- ---- messaging -----------------------------------------------------------------------------------
 
@@ -88,8 +82,6 @@ CREATE TABLE messaging_idempotency_key (
 
 CREATE INDEX idempotency_key_expires_idx ON messaging_idempotency_key (expires_at);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON messaging_outbox, messaging_idempotency_key TO amplify_api, amplify_jobs;
-
 -- ---- audit ---------------------------------------------------------------------------------------
 
 -- Append-only, monthly RANGE partitions on `at` (UTC month), retained 60 months (B17).
@@ -112,8 +104,6 @@ CREATE TABLE audit_log (
 CREATE INDEX audit_log_entity_idx ON audit_log (entity_type, entity_id, at DESC);
 CREATE INDEX audit_log_actor_idx ON audit_log (actor_id, at DESC);
 
-GRANT SELECT, INSERT ON audit_log TO amplify_api, amplify_jobs;
-
 -- ---- config --------------------------------------------------------------------------------------
 
 CREATE TABLE config_app_setting (
@@ -124,5 +114,3 @@ CREATE TABLE config_app_setting (
     version    int         NOT NULL DEFAULT 1 CHECK (version > 0)
 );
 
-GRANT SELECT, INSERT, UPDATE ON config_app_setting TO amplify_api;
-GRANT SELECT ON config_app_setting TO amplify_jobs;

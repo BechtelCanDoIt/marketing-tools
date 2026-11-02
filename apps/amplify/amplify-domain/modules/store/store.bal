@@ -37,14 +37,10 @@ public type DbConfig record {|
     string user;
     # Password (secret)
     string password;
-    # Group role to act as (`amplify_api` or `amplify_jobs`). The login user is one for every component, so each
-    # connection starts with `SET ROLE` to this role through the JDBC `options` startup parameter (ADR-042);
-    # `()` keeps the login's own identity (the integration tests log in as the role directly)
-    string? role = ();
     # Schema that holds the tables, first on the `search_path` (then `public` for citext and pg_trgm). `()` =
     # the server default
     string? schema = ();
-    # `idle_in_transaction_session_timeout` in milliseconds, set with the role (domain review H-3b)
+    # `idle_in_transaction_session_timeout` in milliseconds, set with the schema (domain review H-3b)
     int idleInTransactionTimeoutMs = 30000;
     # TLS mode. `VERIFY_FULL` (the default) checks the server certificate chain against `sslRootCert` and
     # the host name, as the deployment security checklist requires; `REQUIRE` encrypts without checking
@@ -96,40 +92,28 @@ public isolated function newClient(DbConfig config) returns postgresql:Client|sq
         });
 }
 
-# The database name with the JDBC `options` startup parameter appended, when a role or schema is configured:
-# `amplify?options=-c%20role%3Damplify_api%20-c%20search_path%3D<schema>,public%20-c%20idle_in_...`. The server
-# applies the settings before the first statement, on every pooled connection, so no query runs as the bare
-# login user. Role and schema are plain identifiers (checked here); nothing else is spliced in.
+# The database name with the JDBC `options` startup parameter appended, when a schema is configured:
+# `amplify?options=-c%20search_path%3D<schema>,public%20-c%20idle_in_transaction_session_timeout%3D30000`. The
+# server applies the settings before the first statement, on every pooled connection, so the tables resolve without
+# a schema name. The schema is a plain identifier (checked here); nothing else is spliced in.
 #
 # + config - Settings
-# + return - The database part of the JDBC URL, or an error for an identifier that isn't plain
+# + return - The database part of the JDBC URL, or an error for a schema that isn't a plain identifier
 public isolated function databaseOf(DbConfig config) returns string|sql:Error {
-    string? role = types:trimToNil(config.role);
     string? schema = types:trimToNil(config.schema);
-    if role is () && schema is () {
+    if schema is () {
         return config.database;
     }
-    string[] settings = [];
-    if role is string {
-        if !isPlainIdentifier(role) {
-            return error sql:ApplicationError("dbRole is not a plain identifier");
-        }
-        settings.push(string `-c role=${role}`);
+    if !isPlainIdentifier(schema) {
+        return error sql:ApplicationError("dbSchema is not a plain identifier");
     }
-    if schema is string {
-        if !isPlainIdentifier(schema) {
-            return error sql:ApplicationError("dbSchema is not a plain identifier");
-        }
-        settings.push(string `-c search_path=${schema},public`);
-    }
-    settings.push(string `-c idle_in_transaction_session_timeout=${config.idleInTransactionTimeoutMs}`);
-    string options = string:'join(" ", ...settings);
+    string options = string `-c search_path=${schema},public -c idle_in_transaction_session_timeout=${config.idleInTransactionTimeoutMs}`;
     return string `${config.database}?options=${re ` `.replaceAll(re `=`.replaceAll(options, "%3D"), "%20")}`;
 }
 
 # Whether the text is a plain lower-case identifier (letters, digits, underscore; not starting with a digit).
 #
-# + value - Role or schema name
+# + value - Schema name
 # + return - True when safe to put in a startup option
 isolated function isPlainIdentifier(string value) returns boolean =>
     re `[a-z_][a-z0-9_]{0,62}`.isFullMatch(value);

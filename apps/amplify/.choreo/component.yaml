@@ -78,12 +78,6 @@ configurations:
         configForm:
           displayName: DB password
           type: secret
-    - name: BAL_CONFIG_VAR_DBROLE
-      valueFrom:
-        configForm:
-          displayName: DB group role to act as (ADR-042)
-          type: string
-          required: false
     - name: BAL_CONFIG_VAR_DBSCHEMA
       valueFrom:
         configForm:

@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// V017 and V018: the narrowed token grants, and the one audited erase function (security review). The erase test
+// V018: the one audited erase function (security review). The erase test
 // seeds two people with data in every place personal data lives, erases one and checks the other is untouched.
 
 import ballerina/sql;
@@ -67,15 +67,9 @@ isolated function remaining(postgresql:Client db, string id) returns int|error {
 function testEraseEmployeeRemovesPersonalDataAndKeepsTheLedger() returns error? {
     postgresql:Client admin = check adminClient(itDbName);
     postgresql:Client jobs = check jobsClient();
-    postgresql:Client api = check apiClient();
     check seedEmployee(admin, "erase-gone");
     check seedEmployee(admin, "erase-stays");
     test:assertEquals(check remaining(admin, "erase-gone"), 7, "seeded: one row in each place personal data lives");
-
-    // The worker may erase; the API may not.
-    sql:ExecutionResult|sql:Error byApi = api->execute(`SELECT identity_erase_employee('erase-stays', 'api', 'no')`);
-    test:assertTrue(byApi is error, "amplify_api cannot call the erase function");
-    test:assertEquals(check remaining(admin, "erase-stays"), 7, "and nothing changed");
 
     string result = check jobs->queryRow(`SELECT identity_erase_employee('erase-gone', 'system', 'leaver sweep')::text`);
     test:assertTrue(result.includes("\"tokens\": 1") && result.includes("\"connections\": 1")
@@ -99,7 +93,7 @@ function testEraseEmployeeRemovesPersonalDataAndKeepsTheLedger() returns error? 
     // The database user that really called it is recorded next to the actor the caller named.
     string calledBy = check admin->queryRow(`SELECT after->>'calledBy' FROM audit_log
         WHERE entity_id = 'erase-gone' AND action = 'EMPLOYEE_DATA_ERASED' AND reason = 'leaver sweep'`);
-    test:assertEquals(calledBy, "amplify_jobs");
+    test:assertEquals(calledBy, itLoginUser);
     // Someone else is untouched.
     test:assertEquals(check remaining(admin, "erase-stays"), 7, "another employee keeps everything");
     string keptEmail = check admin->queryRow(`SELECT email::text FROM identity_employee WHERE employee_id = 'erase-stays'`);
@@ -112,29 +106,6 @@ function testEraseEmployeeRemovesPersonalDataAndKeepsTheLedger() returns error? 
     sql:ExecutionResult|sql:Error blank = jobs->execute(`SELECT identity_erase_employee('', 'system', 'x')`);
     test:assertTrue(blank is error, "an empty employee id is refused");
 
-    check api.close();
     check jobs.close();
     check admin.close();
-}
-
-@test:Config {groups: ["integration"], dependsOn: [testFreshRunThenIdempotentRerun], enable: itEnabled}
-function testTokenGrantsAreNarrowedPerComponent() returns error? {
-    postgresql:Client jobs = check jobsClient();
-    postgresql:Client api = check apiClient();
-    // Privileges are checked before any row is touched, so these fail even with WHERE false.
-    sql:ExecutionResult|sql:Error apiUpdate = api->execute(`UPDATE connection_provider_token SET key_id = key_id WHERE false`);
-    test:assertTrue(apiUpdate is error, "amplify_api no longer rewrites token rows");
-    sql:ExecutionResult|sql:Error jobsInsert = jobs->execute(`INSERT INTO connection_provider_token (owner_type, owner_id,
-            provider, token_kind, ciphertext, nonce, key_id, expires_at)
-        SELECT 'MEMBER', 'x', 'linkedin', 'ACCESS', ''::bytea, decode('000000000000000000000000', 'hex'), 'k', now() WHERE false`);
-    test:assertTrue(jobsInsert is error, "amplify_jobs no longer creates token rows");
-    // What each still needs.
-    int _ = check api->queryRow(`SELECT count(*)::int FROM connection_provider_token`);
-    int _ = check jobs->queryRow(`SELECT count(*)::int FROM connection_provider_token`);
-    sql:ExecutionResult|sql:Error apiDelete = api->execute(`DELETE FROM connection_provider_token WHERE false`);
-    test:assertFalse(apiDelete is error, "amplify_api still removes a connection's token");
-    sql:ExecutionResult|sql:Error jobsUpdate = jobs->execute(`UPDATE connection_provider_token SET key_id = key_id WHERE false`);
-    test:assertFalse(jobsUpdate is error, "amplify_jobs still re-seals tokens");
-    check api.close();
-    check jobs.close();
 }

@@ -17,8 +17,6 @@
 -- V003: S2 Connection (phase1-data-model › connection, ADR-002).
 -- `org_connection` is a future phase (Community Management) and isn't created here.
 
-SET LOCAL ROLE amplify_migrate;
-
 CREATE TABLE connection_member_connection (
     employee_id             text        NOT NULL,
     provider                text        NOT NULL CHECK (provider IN ('linkedin')),
@@ -91,7 +89,6 @@ END
 $fn$;
 
 REVOKE ALL ON FUNCTION config_int_setting(text, int) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION config_int_setting(text, int) TO amplify_api, amplify_jobs;
 
 -- Derived status (B14). NEEDS_RECONNECT also when the token row is gone (partition dropped, or deleted).
 CREATE VIEW connection_member_connection_v WITH (security_invoker = true) AS
@@ -110,6 +107,3 @@ SELECT mc.*,
 FROM connection_member_connection mc;
 
 -- amplify_readonly gets nothing in this schema (tokens and member URNs stay private).
-GRANT SELECT, INSERT, UPDATE, DELETE ON connection_member_connection, connection_provider_token,
-    connection_oauth_state TO amplify_api, amplify_jobs;
-GRANT SELECT ON connection_member_connection_v TO amplify_api, amplify_jobs;
