@@ -1,7 +1,7 @@
 # Database migrations and integration tests
 
 Schema source of truth: `architecture/solution/Phase 1/phase1-data-model.md`. Scripts:
-`amplify-database/migrations/` (V001–V014) and `seed/` (S001–S007). Per-migration notes:
+`amplify-database/migrations/` (V001–V020) and `seed/` (S001–S010). Per-migration notes:
 `2026-10-17-v012-recognition-lock-maintenance-timeout.md`, `2026-10-17-v013-idle-timeout-dashboard-indexes.md`,
 `2026-10-27-v014-point-actions-all-phases.md`. Runner: `amplify-database/main.bal`.
 
