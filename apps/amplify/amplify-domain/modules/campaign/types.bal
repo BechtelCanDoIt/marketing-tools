@@ -172,8 +172,8 @@ public type CampaignRepository isolated object {
     # + return - `VERSION_CONFLICT` if someone else changed it, or another error
     public isolated function update(Campaign campaign, int expectedVersion) returns error?;
 
-    # Whether anything has been recorded against the campaign: a share request, an engagement or an external
-    # share, matched by campaign id or by the post id. Read-only, across contexts (like the reporting reads).
+    # Whether anything has been recorded against the campaign: a share request, an engagement, an external
+    # share or a points ledger row, matched by campaign id (and, except for the ledger, by the post id). Read-only, across contexts (like the reporting reads).
     #
     # + id - Campaign id
     # + resourceUrn - The campaign's stored post id
