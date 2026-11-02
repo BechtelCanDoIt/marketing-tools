@@ -8,9 +8,9 @@ Schema source of truth: `architecture/solution/Phase 1/phase1-data-model.md`. Sc
 ## Running the migrate runner
 
 The runner connects as the **one login user** the DBA gave Amplify (staging `amplify_stg_user`, production its own
-name, local `amplify_local_user`) and works in the schema named after it (ADR-042). Before the first run the DBA
-creates the four NOLOGIN roles, grants them to the login `WITH SET TRUE`, and creates the schema; run
-`amplify-database/checks/d3_single_user_roles.sql` to see what is missing. Configurables (Choreo: secrets / env
+name, local `amplify_local_user`) and works in the schema named after it (ADR-043). There are no database roles:
+the login owns every object. Before the first run the DBA creates the login, the schema and the two extensions; run
+`amplify-database/checks/d3_single_user.sql` to see what is missing. Configurables (Choreo: secrets / env
 `BAL_CONFIG_VAR_*`):
 
 | Key | Meaning |
@@ -21,8 +21,8 @@ creates the four NOLOGIN roles, grants them to the login `WITH SET TRUE`, and cr
 | `dbPassword` | Login password (secret) |
 | `migrationsDir`, `seedDir`, `dryRun` | Folders, and report-only mode (see below) |
 
-No role passwords exist: the roles stay `NOLOGIN`. The runner reaches `amplify_migrate` through `SET LOCAL ROLE`,
-and the services take `amplify_api` / `amplify_jobs` at connect (`dbRole`, `dbSchema` in `store:newClient`).
+No role passwords exist and no script switches role. The services take the schema from `dbSchema` at connect
+(`store:newClient`).
 
 Each script runs in its own transaction under a transaction-level advisory lock, and is recorded in
 `schema_version` with a SHA-256 checksum. A rerun applies nothing; a changed applied script stops the run.
@@ -42,8 +42,8 @@ Local: `make up` runs it once before api/jobs start; `make seed` reruns it (comp
 ```sh
 docker run -d --name amplify-pg18 -e POSTGRES_PASSWORD=postgres -p 55432:5432 postgres:18
 
-# 1. Runner: drops/creates `amplify_it`, plays the DBA (roles, login user `amplify_it_user`, its schema), migrates fresh as that
-#    login, reruns (idempotent), checksum guard, partition tests. Then lets the app roles log in (test only) for steps 2 and 3.
+# 1. Runner: drops/creates `amplify_it`, plays the DBA (login user `amplify_it_user`, its schema), migrates fresh as that
+#    login, reruns (idempotent), checksum guard, partition tests. Steps 2 and 3 connect as the same login.
 cd amplify-database
 BAL_CONFIG_VAR_ITENABLED=true BAL_CONFIG_VAR_DBPORT=55432 BAL_CONFIG_VAR_ITADMINPASSWORD=postgres \
   BAL_CONFIG_VAR_DBSSLMODE=DISABLE bal test --groups integration

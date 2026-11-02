@@ -49,7 +49,7 @@ function testReadinessCarriesTheRunwayOnlyWhenItWasRead() {
 // start while the tests above stayed green, because they only call the pure helpers with a literal.
 @test:Config {groups: ["integration"], enable: itEnabled}
 function testStartupCreatesThePartitionsThroughTheRealFunction() returns error? {
-    postgresql:Client pg = check itConnect("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client pg = check itConnect(itLoginUser, itLoginPassword, 1);
     check ensureTokenPartitions(pg);
     int partitions = check pg->queryRow(`SELECT count(*)::int FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace

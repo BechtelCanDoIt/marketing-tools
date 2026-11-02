@@ -39,7 +39,7 @@ configurable int dbPort = 5432;
 # Database name.
 configurable string dbName = "amplify";
 # Login user: the one database user Amplify gets (staging `amplify_stg_user`, production its own name; local
-# `amplify_local_user`). It must be able to SET ROLE `amplify_migrate`; see `checks/d3_single_user_roles.sql`.
+# `amplify_local_user`). It owns every object and every component connects as it (ADR-043); see `checks/d3_single_user.sql`.
 configurable string dbUser = "amplify_local_user";
 # Login password (secret).
 configurable string dbPassword = "";
@@ -78,7 +78,7 @@ public type RunSummary record {|
 |};
 
 # Amplify DB Migrate: applies pending migrations, then seeds, each in its own transaction, records them in
-# `schema_version`, sets role passwords from secrets, and exits. Safe to rerun: applied scripts are
+# `schema_version`, and exits. Safe to rerun: applied scripts are
 # skipped, and a changed applied script stops the run (forward-only).
 #
 # + return - Error when a script fails, an applied script changed, or the database is unreachable
@@ -170,7 +170,6 @@ public function migrate(postgresql:Client db, string migrationsPath, string seed
     check useSchema(db, schema, false);
     check checkServerVersion(db);
     check ensureVersionTable(db, schema);
-    check checkBootstrapRole(db);
     string[] migrations = check listMigrations(migrationsPath);
     string[] seeds = check listScripts(seedPath, SEED_FILE);
     map<string> recorded = check readRecorded(db);
@@ -326,7 +325,7 @@ function listScripts(string dir, regexp:RegExp pattern) returns string[]|error {
     return sorted;
 }
 
-# Version key of a script: its name without `.sql`, for example `V001__roles_and_schema`.
+# Version key of a script: its name without `.sql`, for example `V001__schema_and_extensions`.
 #
 # + script - File name
 # + return - Version key
@@ -341,25 +340,6 @@ function checkServerVersion(postgresql:Client db) returns error? {
     int versionNum = check db->queryRow(`SELECT current_setting('server_version_num')::int`);
     if versionNum < MIN_SERVER_VERSION_NUM {
         return error(string `Amplify needs PostgreSQL 18 or later (uuidv7); the server reports version number ${versionNum}`);
-    }
-}
-
-# Later scripts `SET LOCAL ROLE amplify_migrate`. When the login can't switch to it (the DBA hasn't granted the
-# role, or `dbUser` changed since), they would fail with a bare "permission denied to set role"; say why instead.
-# Skipped on a fresh database, where V001 has not run yet (V001 checks the same thing itself).
-#
-# + db - Client connected as the login user
-# + return - An error when V001 ran but this login can't switch to `amplify_migrate`
-function checkBootstrapRole(postgresql:Client db) returns error? {
-    boolean v001Recorded = check db->queryRow(
-            `SELECT EXISTS (SELECT 1 FROM schema_version WHERE version = 'V001__roles_and_schema')`);
-    if !v001Recorded {
-        return;
-    }
-    boolean canSwitch = check db->queryRow(`SELECT pg_has_role(current_user, 'amplify_migrate', 'SET')`);
-    if !canSwitch {
-        return error("This login cannot SET ROLE amplify_migrate: ask the DBA to run "
-            + "GRANT amplify_migrate TO <this login> WITH SET TRUE (checks/d3_single_user_roles.sql lists what is missing)");
     }
 }
 
@@ -413,9 +393,6 @@ function applyScript(postgresql:Client db, string dir, string script, ScriptKind
                 fail error(string `${kind} ${script} failed: ${result.message()}`, result);
             }
             check result.close();
-            // Scripts switch to amplify_migrate with SET LOCAL ROLE; record the version as the runner.
-            sql:ProcedureCallResult reset = check db->call(`RESET ROLE`);
-            check reset.close();
             int elapsed = <int>(time:utcDiffSeconds(time:utcNow(), started) * 1000);
             _ = check db->execute(`
                 INSERT INTO schema_version (version, kind, checksum, execution_ms)

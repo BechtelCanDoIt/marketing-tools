@@ -230,8 +230,8 @@ function ddl(postgresql:Client db, string text) returns error? {
 // a leaked pool connection). Without the gate this loses commits and leaks connections on 2201.13.3.
 @test:Config {groups: ["integration"], enable: itEnabled}
 function testGatedParallelWritesAllCommit() returns error? {
-    postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: "amplify_api",
-        password: apiDbPassword, sslMode: dbSslMode, maxOpenConnections: 12, poolAcquireTimeoutSeconds: 10});
+    postgresql:Client db = check store:newClient({host: dbHost, port: dbPort, database: dbName, user: loginUser,
+        password: loginPassword, sslMode: dbSslMode, maxOpenConnections: 12, poolAcquireTimeoutSeconds: 10});
     string marker = "IT gate " + uniq();
     string[] emps = [];
     foreach int i in 0 ..< 8 {

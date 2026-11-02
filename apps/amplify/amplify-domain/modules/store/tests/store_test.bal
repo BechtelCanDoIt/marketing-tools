@@ -137,22 +137,21 @@ function tlsWarningOnlyForUnverifiedRemoteHosts() {
 }
 
 @test:Config {}
-function databaseNameCarriesTheRoleAndSchemaAsStartupOptions() {
-    test:assertEquals(databaseOf(cfg()), "amplify", "no role or schema: the plain database name");
-    DbConfig withRole = {host: "db", database: "amplify", user: "amplify_stg_user", password: "x",
-        role: "amplify_api", schema: "amplify_stg_user"};
-    test:assertEquals(databaseOf(withRole), "amplify?options=-c%20role%3Damplify_api"
-        + "%20-c%20search_path%3Damplify_stg_user,public%20-c%20idle_in_transaction_session_timeout%3D30000");
-    DbConfig roleOnly = {host: "db", database: "amplify", user: "u", password: "x", role: " amplify_jobs "};
-    test:assertEquals(databaseOf(roleOnly), "amplify?options=-c%20role%3Damplify_jobs"
+function databaseNameCarriesTheSchemaAsAStartupOption() {
+    test:assertEquals(databaseOf(cfg()), "amplify", "no schema: the plain database name");
+    DbConfig withSchema = {host: "db", database: "amplify", user: "amplify_stg_user", password: "x",
+        schema: "amplify_stg_user"};
+    test:assertEquals(databaseOf(withSchema), "amplify?options=-c%20search_path%3Damplify_stg_user,public"
         + "%20-c%20idle_in_transaction_session_timeout%3D30000");
+    DbConfig padded = {host: "db", database: "amplify", user: "u", password: "x", schema: " amplify_jobs ",
+        idleInTransactionTimeoutMs: 5000};
+    test:assertEquals(databaseOf(padded), "amplify?options=-c%20search_path%3Damplify_jobs,public"
+        + "%20-c%20idle_in_transaction_session_timeout%3D5000");
 }
 
 @test:Config {}
-function databaseNameRefusesAnIdentifierThatIsNotPlain() {
+function databaseNameRefusesASchemaThatIsNotPlain() {
     foreach string bad in ["amplify_api; DROP TABLE x", "Amplify", "a b", "role=x", "1abc", "a-b"] {
-        DbConfig badRole = {host: "db", database: "amplify", user: "u", password: "x", role: bad};
-        test:assertTrue(databaseOf(badRole) is sql:Error, "role " + bad);
         DbConfig badSchema = {host: "db", database: "amplify", user: "u", password: "x", schema: bad};
         test:assertTrue(databaseOf(badSchema) is sql:Error, "schema " + bad);
     }

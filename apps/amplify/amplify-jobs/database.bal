@@ -33,9 +33,6 @@ configurable string dbName = "amplify";
 configurable string dbUser = "amplify_stg_user";
 # DB password (Choreo secret).
 configurable string dbPassword = "";
-# Group role to act as. Every component logs in as the same database user and takes its own role at connect
-# (ADR-042), so the grants separate api, jobs and readonly.
-configurable string dbRole = "amplify_jobs";
 # Schema that holds the tables. Empty = the login user's name (the schema the DBA created for it).
 configurable string dbSchema = "";
 # TLS mode. `VERIFY_FULL` (default) checks the server certificate against `dbSslRootCert` and the host
@@ -195,7 +192,6 @@ isolated function dbConfig(int maxOpenConnections = 10, decimal maxConnectionLif
     database: dbName,
     user: dbUser,
     password: dbPassword,
-    role: dbRole,
     schema: dbSchema.trim() == "" ? dbUser : dbSchema.trim(),
     sslMode: dbSslMode,
     sslRootCert: dbSslRootCert,

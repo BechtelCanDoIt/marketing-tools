@@ -14,7 +14,6 @@
 -- specific language governing permissions and limitations
 -- under the License.
 
-
 -- S006: the rest of the pilot points table (business, 2026-10-19; docs/requirements/point-values.md), so no value is
 -- overlooked when its phase arrives. Same effective date as S005; S005 stays as applied (forward-only).
 --   Like on an Amplify post on LinkedIn ............ REACTION = 1     (phase 4: Community Management)
@@ -25,8 +24,6 @@
 --   Amplify Challenge winner ....................... CHALLENGE_WINNER = 25 (PO adjustment until it has a flow)
 -- Already seeded by S005: repost 2, repost/share with commentary 5, original post 10, featured +15 bonus
 -- (OWN_POST_AMPLIFIED = 25 in total, the top-up is 15).
-
-SET LOCAL ROLE amplify_migrate;
 
 INSERT INTO scoring_point_rule (action, points, effective_from, created_by)
 VALUES ('SHARE_COMMENTARY', 5, '2026-10-19T00:00:00Z', 'system'),

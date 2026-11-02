@@ -38,12 +38,12 @@ Audit mitigations applied 2026-10-16 ([requirements-map.md](../architecture/solu
 - [announcement — S5 Announcements](#announcement--s5-announcements)
 - [messaging, audit, config — infrastructure](#messaging-audit-config--infrastructure)
 - [Domain events → which table changes](#domain-events--which-table-changes)
-- [Database users and grants](#database-users-and-grants)
+- [Database user and grants](#database-user-and-grants)
 - [Decisions from review (2026-10-16)](#decisions-from-review-2026-10-16)
 
 ## Design rules
 
-1. **One schema, one table-name prefix per bounded context (ADR-042).** The database gives Amplify one user and one schema named after it, so a context's tables carry its old schema name as a prefix (`sharing_share_request`; a name that already starts with its context isn't doubled: `audit_log`, `campaign`). A context's module reads and writes only its own prefix. The prefix is the boundary you could later lift into its own schema, component or database without touching other contexts. Scripts and queries name no schema; the `search_path` does.
+1. **One schema, one table-name prefix per bounded context (ADR-043).** The database gives Amplify one user and one schema named after it, so a context's tables carry its old schema name as a prefix (`sharing_share_request`; a name that already starts with its context isn't doubled: `audit_log`, `campaign`). A context's module reads and writes only its own prefix. The prefix is the boundary you could later lift into its own schema, component or database without touching other contexts. Scripts and queries name no schema; the `search_path` does.
 2. **No physical foreign keys across contexts.** They are **virtual FKs**: implied by name and type, enforced by the owning module and by domain events in `messaging_outbox`. Every diagram has a *Virtual FKs* table under it. Physical FKs exist only inside a context.
 3. **Aggregate roots** are marked `AR`. Child tables belong to their root and are only changed through it.
 4. **Invariants live in constraints** wherever Postgres can enforce them (unique keys, checks, column grants). The domain code enforces the rest.
@@ -760,18 +760,21 @@ The stored `messaging_outbox.idempotency_key` is `<event_type>:` + the key parts
 
 **Not events, on purpose:** campaign opening and closing, and connection expiry, are **time-derived** from `opens_at` / `closes_at` / `access_expires_at` in the `*_v` views, so there's no `CampaignOpened` or `ConnectionExpired` event. `EmployeeErased` is **not in phase 1** (C3, ADR-016).
 
-## Database users and grants
+## Database user and grants
 
-| DB user | `identity` | `campaign` | `connection` | `sharing` | `external_sharing` | `scoring` | `recognition` | `announcement` | `messaging` | `audit` | `config` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `amplify_api` | rw | rw (no delete) | rw | rw | rw | insert/select + settlement columns | **rw** (B12) | select | rw | insert/select | rw |
-| `amplify_jobs` | select | select | rw + partition DDL on `provider_token` | rw | select | insert/select + settlement columns | rw | rw | rw | insert/select + partition DDL | select |
-| `amplify_migrate` | owner | owner | owner | owner | owner | owner | owner | owner | owner | owner | owner |
-| `amplify_readonly` (phase 2 SLT reports) | select | select | **none** | select (no `commentary`) | select | select | select | select | none | none | none |
+**There are no database roles (ADR-043).** The database gives Amplify one login user per environment and one schema named after it. That user owns every object, and the migrate runner, `amplify-api` and `amplify-jobs` all connect as it. No script creates a role, grants to one or switches to one.
 
-The migration user owns every object; app users never own tables, so they can't `ALTER` or `DROP` (partition DDL is granted narrowly through `SECURITY DEFINER` maintenance functions owned by `amplify_migrate`).
+What used to be enforced by roles is now enforced in code and by constraints:
 
-**As built (M3, V001–V010; later scripts below):** the four roles are `NOLOGIN` group roles the DBA creates and grants to the one login user `WITH SET TRUE` (ADR-042; V001 only checks that and grants schema access); the migrate runner connects as that login and runs every script after V001 as `SET LOCAL ROLE amplify_migrate`; the services take `amplify_api` / `amplify_jobs` at connect. There are no role passwords. Enums are `text` + `CHECK`. `*_v` views are `security_invoker`, so the grants above apply through them; `sharing_share_request_v` leaves out `commentary`, and `amplify_readonly` gets a column grant on `share_request` without it. `amplify_api` and `amplify_jobs` get `INSERT/SELECT` plus `UPDATE (status, status_changed_at, paid_at, coin_reference)` on the ledger, and only `amplify_jobs` can run the partition functions and `recognition_rebuild`.
+| Was a role grant | Now |
+| --- | --- |
+| API can't run partition upkeep or `recognition_rebuild`; only jobs can | `amplify-api` never calls them; the maintenance functions stay `SECURITY DEFINER` and are called only by the jobs worker |
+| Ledger facts immutable, settlement columns only | `scoring_points_ledger` check constraints (no `PAID` in phase 1); the repository only updates the settlement columns |
+| Audit rows insert-only | `audit_log` is written only through `store:writeAudit` and the system audit function |
+| Token grants narrowed per component (ADR-040) | the repositories: api inserts, reads and deletes tokens; jobs reads, re-seals and deletes |
+| `amplify_readonly` (phase 2 reports) without tokens, URNs or commentary | needs its own mechanism when phase 2 starts (read replica, views in another schema, or a second user) |
+
+A database trigger that rejects updates and deletes on the ledger and the audit log would make the first two enforceable for every component again, without roles. It is a recommended follow-up (ADR-043).
 
 **As built after M3 (V011–V014):**
 
@@ -779,7 +782,7 @@ The migration user owns every object; app users never own tables, so they can't 
 | --- | --- |
 | `V011__announcement_thread_name.sql` | `announcement.chat_thread_name` (the thread Chat returns with each Club card, M6a). Recreates `announcement_v` to pick up the column and re-grants `SELECT` to the same roles as V008 |
 | `V012__recognition_lock_maintenance_timeout.sql` | `pg_advisory_xact_lock(1634561133)` first in `apply_ledger_entry`, `rerank`, `rebuild` (lock order above). `lock_timeout = 5s` on the six upkeep functions, so daily upkeep gives up instead of queueing every token and audit write behind an `ACCESS EXCLUSIVE` request; `run_partition_maintenance` takes advisory lock 1634561134 so two upkeep calls don't race. Owners and grants unchanged |
-| `V013__idle_timeout_dashboard_indexes.sql` | The 30 s `idle_in_transaction_session_timeout` (R-13) is no longer set here: under one login and `SET ROLE` a role-level setting never applies, so `store:newClient` sends it as a startup option. Indexes `points_ledger (created_at)` and partial `share_request (failed_at) WHERE failed_at IS NOT NULL`, the two the planner used for the PO dashboard tiles (EXPLAIN in `docs/migrations/2026-10-17-v013-idle-timeout-dashboard-indexes.md`). `COMMENT ON FUNCTION` for the lock order |
+| `V013__idle_timeout_dashboard_indexes.sql` | The 30 s `idle_in_transaction_session_timeout` (R-13) is not set in a script: `store:newClient` sends it as a startup option (ADR-043). Indexes `points_ledger (created_at)` and partial `share_request (failed_at) WHERE failed_at IS NOT NULL`, the two the planner used for the PO dashboard tiles (EXPLAIN in `docs/migrations/2026-10-17-v013-idle-timeout-dashboard-indexes.md`). `COMMENT ON FUNCTION` for the lock order |
 | `V014__point_actions_all_phases.sql` | `point_rule_action_check` and `points_ledger_action_check` also accept `REACTION`, `COMMENT`, `CHALLENGE_ENTRY` and `CHALLENGE_WINNER`, so the whole points table fits without a later schema change. Nothing awards them yet (likes and comments need Community Management; Challenge entry and winner are PO adjustments for now). `sharing_engagement.action` is unchanged. Seeds S005 to S007 price them (REACTION 1, COMMENT 1, CHALLENGE_ENTRY 10, CHALLENGE_WINNER 25 from 2026-10-19) and add `leaderboard.top_scope` |
 
 **As built after V014 (V015–V020):**
@@ -788,7 +791,7 @@ The migration user owns every object; app users never own tables, so they can't 
 | --- | --- |
 | `V015__linkedin_consent.sql` | `connection_linkedin_consent`, the Link Me decision (`CONSENTED` or `DECLINED`) with the optional LinkedIn profile URL a person who declined typed. Private like the member URN: nothing for `amplify_readonly` |
 | `V016__token_grace_one_day.sql` | `connection.token_grace_days` from 5 to 1 (ADR-002) on a database that still holds the old default; S008 does the same on a fresh one |
-| `V017__narrow_token_grants.sql` | least privilege on `connection_provider_token`: `amplify_api` INSERT, SELECT, DELETE; `amplify_jobs` SELECT, UPDATE, DELETE |
+| *(V017 removed)* | it only held role grants, which ADR-043 drops; the number is left unused |
 | `V018__erase_employee_function.sql` | `identity_erase_employee(p_employee_id, p_actor, p_reason)`, the audited erase (ADR-040): connection, tokens, consent, idempotency keys, commentary and names go; the ledger, engagements, shares and audit rows stay under the pseudonymous id |
 | `V019__dev_post_link_http.sql` | `campaign.resource_url` also accepts the local stack's one http dev origin; the app's `campaignLinkOrigins` stays the production policy |
 | `V020__employee_alias.sql` | `identity_employee_alias`: a re-created Asgardeo account maps to the first employee id (ADR-041); `amplify_api` SELECT, INSERT, `amplify_jobs` and `amplify_readonly` SELECT |

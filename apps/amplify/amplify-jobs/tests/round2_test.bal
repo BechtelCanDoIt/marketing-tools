@@ -244,7 +244,7 @@ function realPoolExhaustionTripsTheBreaker() returns error? {
         return;
     }
     postgresql:Client tiny = check store:newClient({host: itDbHost, port: itDbPort, database: itDbName,
-        user: "amplify_jobs", password: itJobsPassword, sslMode: postgresql:DISABLE, maxOpenConnections: 1,
+        user: itLoginUser, password: itLoginPassword, sslMode: postgresql:DISABLE, maxOpenConnections: 1,
         minIdleConnections: 0, poolAcquireTimeoutSeconds: 1});
     future<error?> holder = start holdConnection(tiny);
     runtime:sleep(0.5);
@@ -279,9 +279,9 @@ function testShareArticleCarriesTheCampaignTitleToLinkedIn() returns error? {
     if !itEnabled {
         return;
     }
-    postgresql:Client apiDb = check itConnect("amplify_api", itApiPassword);
-    postgresql:Client jobsDb = check itConnect("amplify_jobs", itJobsPassword);
-    postgresql:Client lockDb = check itConnect("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client apiDb = check itConnect(itLoginUser, itLoginPassword);
+    postgresql:Client jobsDb = check itConnect(itLoginUser, itLoginPassword);
+    postgresql:Client lockDb = check itConnect(itLoginUser, itLoginPassword, 1);
     linkedin:LinkedInAdapter adapter = check new ({apiBaseUrl: mockApiUrl, authBaseUrl: mockWwwUrl,
         clientId: mockClientId, clientSecret: mockClientSecret, redirectUri: mockRedirectUri});
     Deps deps = check itDeps(jobsDb, lockDb, adapter);

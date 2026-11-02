@@ -18,8 +18,6 @@
 -- format: 5-field cron in UTC, a descriptor (`@daily`) or `@every <duration>`.
 -- Existing values are never overwritten: an admin's change survives a re-seed.
 
-SET LOCAL ROLE amplify_migrate;
-
 INSERT INTO config_app_setting (key, value)
 VALUES ('run.schedule', '"@every 5m"'),             -- job amplify-run -> amplify-jobs POST /runs
        ('run.enabled', 'true'),                     -- false disables the scheduler job (no Runs)

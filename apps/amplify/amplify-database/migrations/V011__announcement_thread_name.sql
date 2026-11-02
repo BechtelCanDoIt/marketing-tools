@@ -18,8 +18,6 @@
 -- The view was created with `a.*`, which PostgreSQL expands at creation time, so it is recreated to
 -- pick up the new column (CREATE OR REPLACE can't insert a column before `status`).
 
-SET LOCAL ROLE amplify_migrate;
-
 ALTER TABLE announcement ADD COLUMN chat_thread_name text;
 
 DROP VIEW announcement_v;
@@ -31,4 +29,3 @@ SELECT a.*,
             ELSE 'QUEUED' END AS status
 FROM announcement a;
 
-GRANT SELECT ON announcement_v TO amplify_api, amplify_readonly, amplify_jobs;

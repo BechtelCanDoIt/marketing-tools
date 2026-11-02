@@ -17,8 +17,6 @@
 -- V004: C1 Sharing (phase1-data-model › sharing). `share_request` is the command, `engagement` the fact.
 -- `engagement_metric` and `sync_cursor` are a future phase and aren't created here.
 
-SET LOCAL ROLE amplify_migrate;
-
 CREATE TABLE sharing_engagement (
     id                  uuid        PRIMARY KEY DEFAULT uuidv7(),
     provider            text        NOT NULL CHECK (provider IN ('linkedin')),
@@ -98,11 +96,4 @@ SELECT e.*,
        CASE WHEN e.deleted_at IS NOT NULL THEN 'DELETED' ELSE 'ACTIVE' END AS status
 FROM sharing_engagement e;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON sharing_share_request, sharing_engagement, sharing_engagement_verification
-    TO amplify_api, amplify_jobs;
-GRANT SELECT ON sharing_share_request_v, sharing_engagement_v TO amplify_api, amplify_jobs, amplify_readonly;
-GRANT SELECT ON sharing_engagement, sharing_engagement_verification TO amplify_readonly;
 -- amplify_readonly: every share_request column except commentary.
-GRANT SELECT (id, campaign_id, employee_id, provider, provider_api, target_resource_urn, kind, requested_at,
-              published_at, failed_at, failure_reason, attempts, last_error_code, engagement_id, version)
-    ON sharing_share_request TO amplify_readonly;

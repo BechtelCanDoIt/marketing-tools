@@ -32,12 +32,7 @@ function testV013IdleTimeoutMovedAndIndexes() returns error? {
                                       WHERE version = 'V013__idle_timeout_dashboard_indexes'`);
     test:assertEquals(applied, 1);
 
-    // The idle-in-transaction limit moved out of the script: with one login and SET ROLE a role-level setting
-    // never applies, so `store:newClient` sends it as a startup option (docs/runbooks/choreo-deploy.md).
-    int roleSettings = check db->queryRow(`
-        SELECT count(*)::int FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole
-        WHERE r.rolname IN ('amplify_api', 'amplify_jobs')`);
-    test:assertEquals(roleSettings, 0, "no ALTER ROLE ... SET in the scripts");
+    // The idle-in-transaction limit is not set in the scripts: `store:newClient` sends it as a startup option.
 
     map<string> expected = {
         points_ledger_created_at_idx: "CREATE INDEX points_ledger_created_at_idx ON scoring_points_ledger USING btree (created_at)",

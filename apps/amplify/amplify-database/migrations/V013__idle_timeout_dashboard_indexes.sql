@@ -14,23 +14,18 @@
 -- specific language governing permissions and limitations
 -- under the License.
 
-
 -- V013: round 2 of the 2026-10-17 deep review (docs/migrations/2026-10-17-v013-idle-timeout-dashboard-indexes.md).
 --
--- 1. Idle-in-transaction limit for the app roles (domain review H-3b). Not in this script any more: with one
---    login user and `SET ROLE`, a role-level `ALTER ROLE ... SET` never applies (it only takes effect when someone
---    logs in as that role) and needs CREATEROLE. The services set `idle_in_transaction_session_timeout=30000`
---    (30 s, the R-13 write-up's recommendation, docs/reviews/2026-10-17-r13-transaction-race.md) in `PGOPTIONS`
---    next to their role and search_path (docs/runbooks/choreo-deploy.md). The recognition lock holders keep
---    their tighter transaction-local 5 s.
+-- 1. Idle-in-transaction limit (domain review H-3b). Not set in this script: there are no roles to attach a
+--    role-level `ALTER ROLE ... SET` to (ADR-043). `store:newClient` sends `idle_in_transaction_session_timeout=30000`
+--    (30 s, the R-13 write-up's recommendation, docs/reviews/2026-10-17-r13-transaction-race.md) as a startup option
+--    for every connection. The recognition lock holders keep their tighter transaction-local 5 s.
 -- 2. Dashboard indexes (domain review H-4), only the ones the planner used in EXPLAIN on a seeded copy
 --    (see the doc): `points_ledger (created_at)` for tile 4 and `share_request (failed_at)` for the
 --    tile 7 breakdown by reason. Tiles 2 and the tile 7 totals aggregate the whole table with FILTER, so
 --    an index on `decided_at` / `published_at` wasn't used and isn't added.
 -- 3. Lock order documented on the SQL side (round 2 item 11): COMMENT ON the three V012 functions that
 --    take the SQL-level recognition lock, naming the app-level lock that comes first.
-
-SET LOCAL ROLE amplify_migrate;
 
 -- ---- 2. dashboard indexes ---------------------------------------------------------------------------
 
