@@ -26,6 +26,9 @@ public const string EVIDENCE_PROVIDER_MEDIUM = "medium";
 # Detected provider for any other host.
 public const string EVIDENCE_PROVIDER_OTHER = "other";
 
+// LinkedIn's URL shortener. Never accepted as evidence (see `parseEvidenceUrl`).
+const string LINKEDIN_SHORT_HOST = "lnkd.in";
+
 // Query parameters dropped during normalization, compared lowercased. `utm_*` is handled by prefix.
 final string[] & readonly TRACKING_PARAMS = ["fbclid", "gclid", "trk", "trackingid", "mc_cid", "mc_eid"];
 
@@ -117,6 +120,12 @@ public isolated function parseEvidenceUrl(string raw) returns EvidenceUrl|Domain
     if hostError is DomainError {
         return hostError;
     }
+    if host == LINKEDIN_SHORT_HOST {
+        // A short link redirects to a post Amplify never fetches, so it can't be tied to the post's URN:
+        // the same post could be claimed once by its short link and again by its full URL (ADR-017).
+        return domainError(ERR_INVALID_EVIDENCE_URL,
+                "LinkedIn short links (lnkd.in) are not accepted. Use the post's full LinkedIn URL or just its number");
+    }
 
     string path = pathAndQuery;
     string query = "";
@@ -159,6 +168,22 @@ public isolated function parseEvidenceUrl(string raw) returns EvidenceUrl|Domain
     };
 }
 
+# The evidence URL for a LinkedIn post known only by its number (the activity id in
+# `.../feed/update/urn:li:activity:<number>` or `.../posts/<slug>-activity-<number>-xyz`). It is the
+# canonical feed URL of that URN, the same string `parseEvidenceUrl` normalizes every LinkedIn post URL to,
+# so it is what is stored as the claim's evidence URL and it collides with any other form of the same post.
+#
+# + postNumber - The post number: digits only (surrounding spaces are ignored)
+# + return - The canonical evidence URL, or a domain error when it is not a post number
+public isolated function linkedInPostEvidenceUrl(string postNumber) returns string|DomainError {
+    string digits = postNumber.trim();
+    if !re `[0-9]+`.isFullMatch(digits) {
+        return domainError(ERR_INVALID_EVIDENCE_URL, "A LinkedIn post number has digits only");
+    }
+    PostUrn urn = check parsePostUrn(string `urn:li:activity:${digits}`);
+    return canonicalPostUrl(urn);
+}
+
 // Canonical public URL of a LinkedIn post URN: the claim key for both LinkedIn URL forms.
 isolated function canonicalPostUrl(PostUrn urn) returns string =>
     string `https://www.linkedin.com/feed/update/${urn}`;
@@ -183,7 +208,7 @@ isolated function validateHost(string host) returns DomainError? {
 }
 
 isolated function detectProvider(string host) returns string {
-    if host == "linkedin.com" || host.endsWith(".linkedin.com") || host == "lnkd.in" {
+    if host == "linkedin.com" || host.endsWith(".linkedin.com") {
         return EVIDENCE_PROVIDER_LINKEDIN;
     }
     if host == "medium.com" || host.endsWith(".medium.com") {
