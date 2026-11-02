@@ -34,7 +34,7 @@ Check: both services are healthy in prod.
 
 ### Step 2: Databases (B)
 
-1. PostgreSQL 18 server on a plan with backups. If 18 isn't offered, stop and escalate; do not continue on an older version.
+1. PostgreSQL server, version 15 or later (18 recommended), on a plan with backups. Before 18 the DB Migrate runner installs a compatible `uuidv7()` itself (ADR-044), so 15, 16 and 17 work. Do not continue on an older version.
 2. Run `amplify-database/checks/d2_extensions.sql`. `citext` and `pg_trgm` are required. If either is missing, stop and raise it.
 3. Database `amplify` with one login user and one schema named after it, no roles (choreo-deploy B2) and database `scheduler` with its own user.
 4. Record backup frequency and retention.

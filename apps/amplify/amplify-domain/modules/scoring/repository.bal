@@ -119,11 +119,16 @@ public isolated class PgLedgerRepository {
     private isolated function updateSettlementTx(types:LedgerReference reference, types:LedgerStatus? status,
             time:Utc changedAt) returns error? {
         transaction {
-            // Only the settlement columns: the column-level grant refuses anything else.
+            // Only the settlement columns: the V021 trigger refuses anything else. The old status is read and locked in the
+            // same statement that changes it (`RETURNING old.*` needs PostgreSQL 18).
             record {|string? status;|}|error before = self.db->queryRow(`
+                WITH prev AS (
+                    SELECT reference, status AS old_status FROM scoring_points_ledger
+                    WHERE reference = ${reference} FOR UPDATE)
                 UPDATE scoring_points_ledger SET status = ${status}, status_changed_at = CAST(${store:ts(changedAt)} AS timestamptz)
-                WHERE reference = ${reference}
-                RETURNING old.status`);
+                FROM prev
+                WHERE scoring_points_ledger.reference = prev.reference
+                RETURNING prev.old_status AS status`);
             if before is error {
                 fail store:isNoRows(before) ? types:domainError(types:ERR_NOT_FOUND, "Ledger entry not found") : before;
             }
