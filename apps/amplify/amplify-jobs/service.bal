@@ -37,7 +37,7 @@ type MaintenanceSkipped record {|
 |};
 
 function init() returns error? {
-    check checkInternalKey(internalApiKey);
+    check checkKeys(internalApiKey, schedulerApiKey);
     check validateSweepConfig(sweepConfig(), peopleDirectoryUrl.trim() != "");
     // The database may still be starting: create the next two weeks of token partitions in the background.
     _ = start ensurePartitionsAtStartup();
