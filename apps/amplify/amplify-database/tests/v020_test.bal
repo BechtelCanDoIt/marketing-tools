@@ -16,13 +16,13 @@
 
 
 // V020: identity_employee_alias maps a re-created Asgardeo account's `sub` to the employee id the person already has.
-// amplify_api reads and inserts, never updates or deletes; amplify_jobs only reads; one mapping per `sub`.
+// One mapping per `sub`, never a self-alias.
 
 import ballerina/test;
 import ballerinax/postgresql;
 
 @test:Config {groups: ["integration"], dependsOn: [testFreshRunThenIdempotentRerun], enable: itEnabled}
-function testV020EmployeeAliasTableAndGrants() returns error? {
+function testV020EmployeeAliasTable() returns error? {
     postgresql:Client admin = check adminClient(itDbName);
     postgresql:Client api = check apiClient();
     postgresql:Client jobs = check jobsClient();
@@ -37,15 +37,8 @@ function testV020EmployeeAliasTableAndGrants() returns error? {
             VALUES ('v020-self', 'v020-self')`), "employee_alias_not_self_ck");
     string mapped = check api->queryRow(`SELECT employee_id FROM identity_employee_alias WHERE alias_sub = 'v020-new-sub'`);
     test:assertEquals(mapped, "v020-first");
-    // Read for the worker, nothing else; the API never rewrites or removes a mapping.
     int seen = check jobs->queryRow(`SELECT count(*)::int FROM identity_employee_alias WHERE alias_sub = 'v020-new-sub'`);
     test:assertEquals(seen, 1);
-    assertDenied(failure(jobs, `INSERT INTO identity_employee_alias (alias_sub, employee_id) VALUES ('v020-j', 'v020-first')`),
-            "amplify_jobs creating an alias");
-    assertDenied(failure(api, `UPDATE identity_employee_alias SET employee_id = 'v020-x' WHERE alias_sub = 'v020-new-sub'`),
-            "amplify_api rewriting an alias");
-    assertDenied(failure(api, `DELETE FROM identity_employee_alias WHERE alias_sub = 'v020-new-sub'`),
-            "amplify_api deleting an alias");
     check admin.close();
     check api.close();
     check jobs.close();

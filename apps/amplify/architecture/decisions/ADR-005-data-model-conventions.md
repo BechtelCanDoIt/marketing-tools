@@ -1,6 +1,6 @@
 # ADR-005: Phase 1 data model conventions
 
-- **Status:** Accepted. One schema per context was replaced by one schema with prefixed names in ADR-042; the rest stands
+- **Status:** Accepted. One schema per context was replaced by one schema with prefixed names in ADR-043; the rest stands
 - **Date:** 2026-10-16
 - **Source:** domains D6 (no plan number)
 

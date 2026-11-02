@@ -16,8 +16,6 @@
 
 -- V005: S3 External Sharing, "My Campaign" (phase1-data-model › external_sharing, C4, C5, ADR-017).
 
-SET LOCAL ROLE amplify_migrate;
-
 CREATE TABLE external_sharing_external_share (
     id                     uuid        PRIMARY KEY DEFAULT uuidv7(),
     employee_id            text        NOT NULL,
@@ -59,6 +57,3 @@ SELECT es.*,
             ELSE es.decision END AS status
 FROM external_sharing_external_share es;
 
-GRANT SELECT, INSERT, UPDATE ON external_sharing_external_share TO amplify_api;
-GRANT SELECT ON external_sharing_external_share TO amplify_jobs, amplify_readonly;
-GRANT SELECT ON external_sharing_external_share_v TO amplify_api, amplify_jobs, amplify_readonly;

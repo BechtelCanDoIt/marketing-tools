@@ -106,8 +106,8 @@ function waitForDb(postgresql:Client db, decimal timeoutSeconds) returns boolean
 
 @test:Config {groups: ["db-down-it"], enable: itEnabled && pgContainer != ""}
 function testDbDownMidRunBreakerOpensAndRecovers() returns error? {
-    postgresql:Client jobsDb = check itConnect("amplify_jobs", itJobsPassword);
-    postgresql:Client lockDb = check itConnect("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client jobsDb = check itConnect(itLoginUser, itLoginPassword);
+    postgresql:Client lockDb = check itConnect(itLoginUser, itLoginPassword, 1);
     RunConfig cfg = {...TEST_CONFIG};
     cfg.maxRows = 1000;
     cfg.batchSize = 10;
@@ -157,7 +157,7 @@ function testDbDownMidRunBreakerOpensAndRecovers() returns error? {
 
     // 4. After the lease, the next run settles every row exactly once (the first one stayed DONE).
     runtime:sleep(<decimal>cfg.leaseSeconds + 0.5);
-    Deps again = bareDeps(new PgRunStore(jobsDb), new PgRunLock(check itConnect("amplify_jobs", itJobsPassword, 1)),
+    Deps again = bareDeps(new PgRunStore(jobsDb), new PgRunLock(check itConnect(itLoginUser, itLoginPassword, 1)),
             cfg);
     RunReport|RunSkipped|error recovered = runOnce(again, tag + "-recover");
     test:assertTrue(recovered is RunReport, "the run after recovery completes");

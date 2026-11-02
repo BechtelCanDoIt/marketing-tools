@@ -15,7 +15,7 @@
 // under the License.
 
 // Repository integration tests against a migrated PostgreSQL 18 (group `integration`), run as the real
-// app roles (`amplify_api`, `amplify_jobs`). Off unless `AMPLIFY_IT=true`; the amplify-database
+// the one database login (ADR-043). Off unless `AMPLIFY_IT=true`; the amplify-database
 // integration tests create and migrate the database first (docs/migrations/README.md).
 // Ids are fresh UUIDv7s per run, so the tests can run again on the same database.
 
@@ -42,8 +42,9 @@ final boolean itEnabled = os:getEnv("AMPLIFY_IT") == "true";
 final string dbHost = envOr("AMPLIFY_IT_DB_HOST", "localhost");
 final int dbPort = checkpanic int:fromString(envOr("AMPLIFY_IT_DB_PORT", "5432"));
 final string dbName = envOr("AMPLIFY_IT_DB_NAME", "amplify_it");
-final string apiDbPassword = envOr("AMPLIFY_IT_API_PASSWORD", "it-api-password-00001");
-final string jobsDbPassword = envOr("AMPLIFY_IT_JOBS_PASSWORD", "it-jobs-password-0001");
+// The one database login every component uses (ADR-043); the database tests create it.
+final string loginUser = envOr("AMPLIFY_IT_LOGIN_USER", "amplify_it_user");
+final string loginPassword = envOr("AMPLIFY_IT_LOGIN_PASSWORD", "it-login-password-0001");
 final postgresql:SSLMode dbSslMode = os:getEnv("AMPLIFY_IT_DB_SSL") == "require" ? postgresql:REQUIRE : postgresql:DISABLE;
 
 function envOr(string name, string fallback) returns string {
@@ -57,9 +58,9 @@ function connect(string user, string password) returns postgresql:Client|error =
     store:newClient({host: dbHost, port: dbPort, database: dbName, user, password, sslMode: dbSslMode,
         maxOpenConnections: 3});
 
-function api() returns postgresql:Client|error => connect("amplify_api", apiDbPassword);
+function api() returns postgresql:Client|error => connect(loginUser, loginPassword);
 
-function jobs() returns postgresql:Client|error => connect("amplify_jobs", jobsDbPassword);
+function jobs() returns postgresql:Client|error => connect(loginUser, loginPassword);
 
 function uniq() returns string => types:newUuidV7().substring(24);
 
@@ -378,14 +379,12 @@ function testLedgerAppendUpdatesRecognitionInOneTransaction() returns error? {
                                     WHERE campaign_id = CAST(${campaignId} AS uuid)`);
     test:assertEquals(reposters, 1, "reversal takes the reposter back out");
 
-    // Settlement columns only; facts and PAID are refused.
+    // Settlement columns only; PAID is refused (a check constraint). There are no column grants any more (ADR-043),
+    // so the ledger's facts are protected by the code paths, not by the database.
     check apiLedger.updateSettlement(small.entry.reference, (), time:utcNow());
     sql:ExecutionResult|error paid = apiDb->execute(`UPDATE scoring_points_ledger SET status = 'PAID', paid_at = now()
                                                     WHERE reference = ${small.entry.reference}`);
     test:assertTrue(paid is error, "no PAID in phase 1");
-    sql:ExecutionResult|error facts = apiDb->execute(`UPDATE scoring_points_ledger SET points = 99
-                                                     WHERE reference = ${small.entry.reference}`);
-    test:assertTrue(facts is error, "points are immutable (column grants)");
 
     // A full rebuild from the ledger gives the same totals.
     _ = check recognition:rebuild(jobsDb);
@@ -403,11 +402,7 @@ function testPartitionMaintenanceAsJobs() returns error? {
     store:MaintenanceResult _ = check store:runPartitionMaintenance(db);
     store:MaintenanceResult result = check store:runPartitionMaintenance(db);
     test:assertEquals(result.token_partitions_created, 0, "already 7 days ahead");
-    postgresql:Client apiDb = check api();
-    store:MaintenanceResult|error denied = store:runPartitionMaintenance(apiDb);
-    test:assertTrue(denied is error, "only amplify_jobs runs upkeep");
     check db.close();
-    check apiDb.close();
 }
 
 // A CHECK violation (SQLSTATE 23514) and nothing else: a dropped connection is an error too, and would pass a bare

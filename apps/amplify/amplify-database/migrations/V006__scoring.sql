@@ -16,8 +16,6 @@
 
 -- V006: C2 Scoring and the points ledger (phase1-data-model › scoring, C1, C4).
 
-SET LOCAL ROLE amplify_migrate;
-
 CREATE TABLE scoring_point_rule (
     id             uuid        PRIMARY KEY DEFAULT uuidv7(),
     action         text        NOT NULL CHECK (action IN ('REPOST', 'REPOST_COMMENTARY', 'SHARE', 'SHARE_COMMENTARY',
@@ -95,10 +93,4 @@ CREATE TRIGGER points_ledger_reversal_action
     FOR EACH ROW WHEN (NEW.source_type = 'REVERSAL')
     EXECUTE FUNCTION scoring_check_reversal_action();
 
-GRANT SELECT, INSERT ON scoring_point_rule TO amplify_api;
-GRANT SELECT ON scoring_point_rule TO amplify_jobs, amplify_readonly;
-
 -- Facts are physically immutable to app roles: insert/select plus the settlement columns only.
-GRANT SELECT, INSERT ON scoring_points_ledger TO amplify_api, amplify_jobs;
-GRANT UPDATE (status, status_changed_at, paid_at, coin_reference) ON scoring_points_ledger TO amplify_api, amplify_jobs;
-GRANT SELECT ON scoring_points_ledger TO amplify_readonly;

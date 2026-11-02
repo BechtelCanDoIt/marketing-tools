@@ -40,8 +40,6 @@
 -- The audit row records who called it (session_user) next to the actor the caller names, so a caller cannot pass
 -- itself off as someone else. Safe to run twice: a second call changes nothing and reports zeros.
 
-SET LOCAL ROLE amplify_migrate;
-
 CREATE FUNCTION identity_erase_employee(p_employee_id text, p_actor text, p_reason text)
     RETURNS jsonb
     LANGUAGE plpgsql
@@ -112,4 +110,3 @@ COMMENT ON FUNCTION identity_erase_employee(text, text, text) IS
 
 REVOKE ALL ON FUNCTION identity_erase_employee(text, text, text) FROM PUBLIC;
 -- The worker sweeps leavers. The API never erases: a person asking to be removed goes through the runbook.
-GRANT EXECUTE ON FUNCTION identity_erase_employee(text, text, text) TO amplify_jobs;

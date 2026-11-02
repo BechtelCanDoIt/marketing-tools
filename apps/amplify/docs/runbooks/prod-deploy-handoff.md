@@ -36,7 +36,7 @@ Check: both services are healthy in prod.
 
 1. PostgreSQL 18 server on a plan with backups. If 18 isn't offered, stop and escalate; do not continue on an older version.
 2. Run `amplify-database/checks/d2_extensions.sql`. `citext` and `pg_trgm` are required. If either is missing, stop and raise it.
-3. Database `amplify` with one login user and one schema named after it, the four NOLOGIN roles granted to it (choreo-deploy B2) and database `scheduler` with its own user.
+3. Database `amplify` with one login user and one schema named after it, no roles (choreo-deploy B2) and database `scheduler` with its own user.
 4. Record backup frequency and retention.
 
 ### Step 3: Components (C), in this order

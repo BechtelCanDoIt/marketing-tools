@@ -25,15 +25,13 @@ import ballerina/test;
 import ballerina/time;
 import ballerinax/postgresql;
 
-const string IT_READONLY_PASSWORD = "it-readonly-password-1";
-
-function roleClient(string user, string password, int poolSize = 2) returns postgresql:Client|error =>
-    new (host = dbHost, username = user, password = password, database = itDbName, port = dbPort,
+// Every component connects as the one login user (ADR-043), so every "role" client below is the login. The names
+// stay so the tests read as which component is acting.
+function roleClient(string role, int poolSize = 2) returns postgresql:Client|error =>
+    new (host = dbHost, username = itLoginUser, password = itLoginPassword, database = itDbName, port = dbPort,
         options = {ssl: {mode: dbSslMode}}, connectionPool = {maxOpenConnections: poolSize, minIdleConnections: 0});
 
-function apiClient() returns postgresql:Client|error => roleClient("amplify_api", itApiPassword);
-
-function readonlyClient() returns postgresql:Client|error => roleClient("amplify_readonly", IT_READONLY_PASSWORD);
+function apiClient() returns postgresql:Client|error => roleClient("api");
 
 # Runs a statement that must fail, and returns the error text ("" when it unexpectedly succeeded).
 function failure(postgresql:Client db, sql:ParameterizedQuery q) returns string {
@@ -53,9 +51,6 @@ function sqlText(postgresql:Client db, string text) returns error? {
     check r.close();
 }
 
-function assertDenied(string message, string what) {
-    test:assertTrue(message.includes("permission denied"), string `${what} must be denied, got: '${message}'`);
-}
 
 function assertViolates(string message, string constraint) {
     test:assertTrue(message.includes(constraint), string `expected ${constraint}, got: '${message}'`);
@@ -203,66 +198,6 @@ function testConstraintsRejectBadRows() returns error? {
     check jobs.close();
 }
 
-// ---- grants: each role is denied what it must not do -----------------------------------------------
-
-@test:Config {groups: ["integration"], dependsOn: [testV012IsApplied]}
-function testGrantsDenyPerRole() returns error? {
-    if !itEnabled {
-        return;
-    }
-    postgresql:Client ro = check readonlyClient();
-    postgresql:Client api = check apiClient();
-    postgresql:Client jobs = check jobsClient();
-
-    // amplify_readonly: no tokens, connections, commentary, messaging, audit or config; no writes.
-    assertDenied(selectFailure(ro, `SELECT count(*)::int FROM connection_provider_token`), "readonly tokens");
-    assertDenied(selectFailure(ro, `SELECT count(*)::int FROM connection_member_connection`), "readonly connections");
-    assertDenied(selectFailure(ro, `SELECT count(commentary)::int FROM sharing_share_request`), "readonly commentary");
-    assertDenied(selectFailure(ro, `SELECT count(*)::int FROM messaging_outbox`), "readonly outbox");
-    assertDenied(selectFailure(ro, `SELECT count(*)::int FROM audit_log`), "readonly audit");
-    assertDenied(selectFailure(ro, `SELECT count(*)::int FROM config_app_setting`), "readonly config");
-    assertDenied(failure(ro, `INSERT INTO identity_employee (employee_id, email, display_name)
-            VALUES ('ro', 'ro@wso2.com', 'ro')`), "readonly insert");
-    // The reads succeeding is the check here (the grant exists); how many rows the fixture holds is not.
-    int _ = check ro->queryRow(`SELECT count(*)::int FROM sharing_share_request_v`);
-    int _ = check ro->queryRow(`SELECT count(*)::int FROM recognition_standing`);
-
-    // amplify_api: no upkeep, no rebuild, no campaign delete, no ledger rewrite, no announcement writes.
-    assertDenied(selectFailure(api, `SELECT 1 FROM (SELECT messaging_run_partition_maintenance()) m`), "api upkeep");
-    assertDenied(selectFailure(api, `SELECT recognition_rebuild(3)::int`), "api rebuild");
-    assertDenied(selectFailure(api, `SELECT connection_drop_expired_token_partitions(0)`), "api token drop");
-    assertDenied(failure(api, `DELETE FROM campaign`), "api campaign delete (archive only)");
-    assertDenied(failure(api, `UPDATE scoring_points_ledger SET points = 0`), "api ledger rewrite");
-    assertDenied(failure(api, `DELETE FROM scoring_points_ledger`), "api ledger delete");
-    assertDenied(failure(api, `INSERT INTO announcement (campaign_id, space, thread_key)
-            VALUES (uuidv7(), 'club', 'k')`), "api announcement insert");
-    assertDenied(failure(api, `UPDATE audit_log SET reason = 'x'`), "api audit rewrite");
-    assertDenied(failure(api, `DELETE FROM audit_log`), "api audit delete");
-
-    // amplify_jobs: no config writes, no campaign/identity writes, no audit rewrite, no direct audit helper.
-    assertDenied(failure(jobs, `UPDATE config_app_setting SET value = 'false' WHERE key = 'sharing.enabled'`),
-            "jobs settings write");
-    assertDenied(failure(jobs, `INSERT INTO identity_employee (employee_id, email, display_name)
-            VALUES ('j', 'j@wso2.com', 'j')`), "jobs employee insert");
-    assertDenied(failure(jobs, `UPDATE campaign SET title = 'x'`), "jobs campaign update");
-    assertDenied(failure(jobs, `UPDATE scoring_points_ledger SET points = 0`), "jobs ledger rewrite");
-    assertDenied(failure(jobs, `DELETE FROM audit_log`), "jobs audit delete");
-    assertDenied(selectFailure(jobs, `SELECT 1 FROM (SELECT audit_write_system_audit('X', 'y', NULL, NULL)) a`),
-            "jobs forging a system audit row");
-
-    // Nobody creates in public; partitions only through the parent.
-    foreach postgresql:Client c in [ro, api, jobs] {
-        assertDenied(failure(c, `CREATE TABLE public.it_squat (id int)`), "app role creating in public");
-    }
-    string today = re `-`.replaceAll(utcDay(0), "");
-    sql:ParameterizedQuery direct = `SELECT count(*)::int FROM provider_token_p`;
-    direct.strings = [string `SELECT count(*)::int FROM provider_token_p${today}`].cloneReadOnly();
-    assertDenied(selectFailure(jobs, direct), "direct partition access");
-    check ro.close();
-    check api.close();
-    check jobs.close();
-}
-
 // ---- SECURITY DEFINER functions, views, ownership ----------------------------------------------------
 
 @test:Config {groups: ["integration"], dependsOn: [testV012IsApplied]}
@@ -282,16 +217,8 @@ function testDefinerFunctionsArePinnedOwnedAndPrivate() returns error? {
             WHERE cfg LIKE 'search_path=' || ${itLoginUser} || ',%' AND cfg LIKE '%pg_temp')`);
     test:assertEquals(unpinned, 0, "every SECURITY DEFINER function pins search_path to the schema (V001's runner sets it, FROM CURRENT)");
     int notMigrateOwned = check db->queryRow(`
-        SELECT count(*)::int FROM pg_proc p WHERE p.prosecdef AND pg_get_userbyid(p.proowner) <> 'amplify_migrate'`);
+        SELECT count(*)::int FROM pg_proc p WHERE p.prosecdef AND pg_get_userbyid(p.proowner) <> ${itLoginUser}`);
     test:assertEquals(notMigrateOwned, 0);
-    int publicExecutable = check db->queryRow(`
-        SELECT count(*)::int FROM pg_proc p
-        WHERE p.prosecdef AND has_function_privilege('amplify_readonly', p.oid, 'EXECUTE')`);
-    test:assertEquals(publicExecutable, 0, "no SECURITY DEFINER function is executable by PUBLIC");
-    int apiExecutable = check db->queryRow(`
-        SELECT count(*)::int FROM pg_proc p
-        WHERE p.prosecdef AND has_function_privilege('amplify_api', p.oid, 'EXECUTE')`);
-    test:assertEquals(apiExecutable, 0, "upkeep is amplify_jobs only");
     int timeouts = check db->queryRow(`
         SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = ${itLoginUser} AND p.proname IN ('messaging_run_partition_maintenance', 'connection_create_token_partitions',
@@ -307,8 +234,8 @@ function testDefinerFunctionsArePinnedOwnedAndPrivate() returns error? {
     int appOwned = check db->queryRow(`
         SELECT count(*)::int FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = ${itLoginUser}
-          AND c.relname NOT LIKE 'schema_version%' AND pg_get_userbyid(c.relowner) <> 'amplify_migrate'`);
-    test:assertEquals(appOwned, 0, "amplify_migrate owns every relation, partitions included");
+          AND pg_get_userbyid(c.relowner) <> ${itLoginUser}`);
+    test:assertEquals(appOwned, 0, "the login owns every relation, partitions included");
     check db.close();
 }
 
@@ -319,8 +246,8 @@ function testPartitionFunctionGuardsAndUtcBounds() returns error? {
     if !itEnabled {
         return;
     }
-    postgresql:Client jobs = check roleClient("amplify_jobs", itJobsPassword, 1);
-    // The token fixture is inserted as the admin: since V017 amplify_jobs no longer inserts tokens.
+    postgresql:Client jobs = check roleClient("jobs", 1);
+    // The token fixture is inserted as the admin.
     postgresql:Client admin = check adminClient(itDbName);
     test:assertTrue(selectFailure(jobs, `SELECT connection_create_token_partitions(-1)`).includes("0-60"));
     test:assertTrue(selectFailure(jobs, `SELECT connection_create_token_partitions(61)`).includes("0-60"));
@@ -382,9 +309,9 @@ function testConcurrentLedgerAppendsKeepRanksConsistent() returns error? {
     if !itEnabled {
         return;
     }
-    // Two writers (as amplify_jobs and amplify_api) append top-of-board rows at the same time.
-    postgresql:Client first = check roleClient("amplify_jobs", itJobsPassword, 1);
-    postgresql:Client second = check roleClient("amplify_api", itApiPassword, 1);
+    // Two writers (jobs and api) append top-of-board rows at the same time.
+    postgresql:Client first = check roleClient("jobs", 1);
+    postgresql:Client second = check roleClient("api", 1);
     string tag = time:utcNow()[0].toString();
     check sqlText(first, "BEGIN");
     check appendAndApply(first, "ADJ-it-c1-" + tag, "it-conc-1-" + tag, 1000003);
@@ -416,11 +343,11 @@ function testUpkeepGivesUpOnALockInsteadOfQueueing() returns error? {
         return;
     }
     // A month past retention to drop, so the upkeep needs ACCESS EXCLUSIVE on audit_log.
-    postgresql:Client jobs = check roleClient("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client jobs = check roleClient("jobs", 1);
     string old = time:utcToString(time:utcAddSeconds(time:utcNow(), -64d * 31d * 86400d)).substring(0, 10);
     _ = check jobs->queryRow(`SELECT audit_create_audit_partitions(0, CAST(${old} AS date))`, int);
     // A long reader holds a lock on the audit table.
-    postgresql:Client reader = check roleClient("amplify_api", itApiPassword, 1);
+    postgresql:Client reader = check roleClient("api", 1);
     check sqlText(reader, "BEGIN");
     _ = check reader->queryRow(`SELECT count(*)::int FROM audit_log`, int);
     // Without the V012 lock_timeout the call would queue until statement_timeout (57014).

@@ -25,8 +25,6 @@
 -- SECURITY INVOKER: callers (amplify_api, amplify_jobs) already hold rw on recognition and select on
 -- scoring and identity. Only period `ALL` is maintained in phase 1 (plan D6 open).
 
-SET LOCAL ROLE amplify_migrate;
-
 -- How many "actions" a ledger row adds: +1 for an award (the top-up isn't a new action), −1 for the
 -- reversal of one, 0 for adjustments.
 CREATE FUNCTION recognition_action_delta(p_source_type text, p_action text)
@@ -203,6 +201,3 @@ $fn$;
 
 REVOKE ALL ON FUNCTION recognition_rerank(text, int), recognition_apply_ledger_entry(varchar, int),
     recognition_rebuild(int) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION recognition_rerank(text, int), recognition_apply_ledger_entry(varchar, int)
-    TO amplify_api, amplify_jobs;
-GRANT EXECUTE ON FUNCTION recognition_rebuild(int) TO amplify_jobs;

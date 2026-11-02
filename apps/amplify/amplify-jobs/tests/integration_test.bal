@@ -42,8 +42,9 @@ final boolean itEnabled = os:getEnv("AMPLIFY_IT") == "true";
 final string itDbHost = envOr("AMPLIFY_IT_DB_HOST", "localhost");
 final int itDbPort = checkpanic int:fromString(envOr("AMPLIFY_IT_DB_PORT", "5432"));
 final string itDbName = envOr("AMPLIFY_IT_DB_NAME", "amplify_it");
-final string itApiPassword = envOr("AMPLIFY_IT_API_PASSWORD", "it-api-password-00001");
-final string itJobsPassword = envOr("AMPLIFY_IT_JOBS_PASSWORD", "it-jobs-password-0001");
+// The one database login every component uses (ADR-043); the database tests create it.
+final string itLoginUser = envOr("AMPLIFY_IT_LOGIN_USER", "amplify_it_user");
+final string itLoginPassword = envOr("AMPLIFY_IT_LOGIN_PASSWORD", "it-login-password-0001");
 final string mockApiUrl = envOr("AMPLIFY_IT_LINKEDIN_API", "http://localhost:19190");
 final string mockAdminKey = envOr("AMPLIFY_IT_MOCK_ADMIN_KEY", "it-mock-admin-key-0123456789abcdef0123");
 final string mockWwwUrl = envOr("AMPLIFY_IT_LINKEDIN_WWW", "http://localhost:19191");
@@ -156,9 +157,9 @@ function testM6RunAnnouncesSharesAndScores() returns error? {
     if !itEnabled {
         return;
     }
-    postgresql:Client apiDb = check itConnect("amplify_api", itApiPassword);
-    postgresql:Client jobsDb = check itConnect("amplify_jobs", itJobsPassword);
-    postgresql:Client lockDb = check itConnect("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client apiDb = check itConnect(itLoginUser, itLoginPassword);
+    postgresql:Client jobsDb = check itConnect(itLoginUser, itLoginPassword);
+    postgresql:Client lockDb = check itConnect(itLoginUser, itLoginPassword, 1);
     _ = check store:runPartitionMaintenance(jobsDb);
     linkedin:LinkedInAdapter adapter = check new ({apiBaseUrl: mockApiUrl, authBaseUrl: mockWwwUrl,
         clientId: mockClientId, clientSecret: mockClientSecret, redirectUri: mockRedirectUri});
@@ -244,9 +245,9 @@ function testM6OneRunAcrossReplicasStaleLocksAndPurge() returns error? {
     if !itEnabled {
         return;
     }
-    postgresql:Client jobsDb = check itConnect("amplify_jobs", itJobsPassword);
-    postgresql:Client lockDb = check itConnect("amplify_jobs", itJobsPassword, 1);
-    postgresql:Client otherReplica = check itConnect("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client jobsDb = check itConnect(itLoginUser, itLoginPassword);
+    postgresql:Client lockDb = check itConnect(itLoginUser, itLoginPassword, 1);
+    postgresql:Client otherReplica = check itConnect(itLoginUser, itLoginPassword, 1);
     linkedin:LinkedInAdapter adapter = check new ({apiBaseUrl: mockApiUrl, authBaseUrl: mockWwwUrl,
         clientId: mockClientId, clientSecret: mockClientSecret, redirectUri: mockRedirectUri});
     Deps deps = check itDeps(jobsDb, lockDb, adapter);
@@ -282,8 +283,8 @@ function aSecondMaintenancePassIsSkippedWhileOneIsRunning() returns error? {
     if !itEnabled {
         return;
     }
-    postgresql:Client first = check itConnect("amplify_jobs", itJobsPassword, 1);
-    postgresql:Client second = check itConnect("amplify_jobs", itJobsPassword, 1);
+    postgresql:Client first = check itConnect(itLoginUser, itLoginPassword, 1);
+    postgresql:Client second = check itConnect(itLoginUser, itLoginPassword, 1);
     PgRunLock held = new (first, MAINTENANCE_LOCK_KEY);
     PgRunLock rival = new (second, MAINTENANCE_LOCK_KEY);
     test:assertTrue(check held.tryAcquire());
