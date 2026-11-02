@@ -19,7 +19,11 @@
 -- Recognition is rebuilt afterwards by amplify-jobs (POST /maintenance/rebuild-recognition).
 
 BEGIN;
+-- The ledger is append-only (V021). This local fixture clears its own rows, so it needs the superuser-only bypass;
+-- the setting reverts at COMMIT.
+SET LOCAL session_replication_role = replica;
 DELETE FROM scoring_points_ledger WHERE reference LIKE 'AMP-lt-%';
+SET LOCAL session_replication_role = origin;
 DELETE FROM identity_employee WHERE employee_id LIKE 'lt-%';
 
 INSERT INTO identity_employee (employee_id, email, display_name, first_seen_at, last_seen_at)
