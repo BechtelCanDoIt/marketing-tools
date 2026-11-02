@@ -156,6 +156,13 @@ public type ProviderAdapter isolated object {
     # + return - Authorization URL
     public isolated function authorizationUrl(string state) returns string|ProviderError;
 
+    # Builds the authorization URL with an OIDC `nonce` (OpenID Connect Core 3.1.2.1) next to `state`.
+    #
+    # + state - Single-use `oauth_state.state`
+    # + nonce - `oauth_state.nonce`, or `()` to send none
+    # + return - Authorization URL
+    public isolated function authorizationUrlWithNonce(string state, string? nonce) returns string|ProviderError;
+
     # Exchanges an authorization code for an access token.
     #
     # + code - Code from the redirect
