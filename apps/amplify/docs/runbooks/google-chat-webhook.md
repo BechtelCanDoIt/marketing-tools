@@ -28,7 +28,7 @@ Use the **team/common Amplify owner account** (not a personal account), so the w
 | prod | `chatWebhookUrl` (**secret**) | WSO2 Club webhook |
 | prod | `chatSpace` | `club` |
 | all | `chatCardAvatarUrl` | public HTTPS Amplify avatar (optional) |
-| all | `chatDefaultImageUrl` | public HTTPS **PNG or JPEG** shown on a card when the post has no image or an unusable one (Chat doesn't render SVG). Use the repo's `apps/amplify/amplify-jobs/img/WSO2-Amplify-Poster-Default.png` through a raw URL pinned to a commit SHA (`https://raw.githubusercontent.com/<org>/marketing-tools/<sha>/apps/amplify/amplify-jobs/img/WSO2-Amplify-Poster-Default.png`), never a branch name (the original image is in the Amplify Demo shared chat space). Empty = such cards go out without an image |
+| all | `chatDefaultImageUrl` | public HTTPS **PNG or JPEG** shown on a card when the post has no image or an unusable one (Chat doesn't render SVG). Host the repo's `apps/amplify/amplify-jobs/img/WSO2-Amplify-Poster-Default.png` in the WSO2 media/CDN bucket and use that URL. Do not use a raw.githubusercontent.com URL in a deployed environment: it is an untracked third-party host and breaks if the fork or path moves (the original image is in the Amplify Demo shared chat space). Empty = such cards go out without an image |
 | all | `sharePageBaseUrl` | One WSO2 Celebrate page for the button, e.g. `https://one.wso2.com/amplify/celebrate` (must be HTTPS); the card adds `?share=<campaignId>`, which opens that post's share dialog |
 | all | `chatMinIntervalSeconds` | `1` (Chat quota: 1 request/second per space, shared by every webhook in it) |
 | all | `chatAllowInsecureHttp` | **leave unset (false)**; local stack only |
