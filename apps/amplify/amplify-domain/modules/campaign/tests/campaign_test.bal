@@ -273,6 +273,12 @@ function testPostLinkOriginsAreConfigurable() returns error? {
     CampaignPolicy withMock = {wso2OrganizationUrn: WSO2_ORG,
         postLinkOrigins: [...DEFAULT_POST_LINK_ORIGINS, "http://localhost:19091"]};
     test:assertEquals((check newCampaign(d, withMock, "id", "m", T0)).resourceUrl, d.resourceUrl);
+    // The database's check (V019) only ever holds that one http origin; the app policy is what keeps production
+    // https-only, so any other plain-http origin stays refused even when the mock's origin is listed.
+    d.resourceUrl = "http://localhost:9091/feed/update/urn:li:share:7123/";
+    test:assertEquals(code(newCampaign(d, withMock, "id", "m", T0)), types:ERR_INVALID_CAMPAIGN);
+    d.resourceUrl = "http://localhost:19091.evil.example/feed/update/urn:li:share:7123/";
+    test:assertEquals(code(newCampaign(d, withMock, "id", "m", T0)), types:ERR_INVALID_CAMPAIGN);
 }
 
 @test:Config
