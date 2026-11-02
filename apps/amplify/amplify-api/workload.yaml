@@ -57,9 +57,9 @@ configurations:
     - name: BAL_CONFIG_VAR_CAMPAIGNLINKORIGINS
       value: ""
     - name: BAL_CONFIG_VAR_ROSTERCACHESECONDS
-      value: "259200"
+      value: "86400"
     - name: BAL_CONFIG_VAR_HEADCOUNTCACHESECONDS
-      value: "604800"
+      value: "86400"
     # Access (modules/auth/access.bal): Asgardeo groups per capability, comma separated.
     - name: BAL_CONFIG_VAR_CANCAMPAIGNGROUPS
       value: "amplify_po,amplify_marketing"

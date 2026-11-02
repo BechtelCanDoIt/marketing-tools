@@ -91,7 +91,7 @@ function takeDirectoryFetches() returns int {
     }
 }
 
-# Ages the cached index past `rosterCacheSeconds`, as if three days went by.
+# Ages the cached index past `rosterCacheSeconds`, as if a day went by.
 function expireDirectoryCache() {
     lock {
         [DirectoryIndex & readonly, decimal]? hit = directoryCache;
@@ -101,7 +101,7 @@ function expireDirectoryCache() {
     }
 }
 
-# Ages the cached employee count past `headcountCacheSeconds`, as if a week went by.
+# Ages the cached employee count past `headcountCacheSeconds`, as if a day went by.
 function expireHeadcountCache() {
     lock {
         [HeadcountSnapshot & readonly, decimal]? hit = headcountCache;
@@ -131,7 +131,7 @@ service /people/employees/basic\-info on jwksListener {
             return {teamName: "Rivers", members: [{name: "Bob Jones bob@wso2.com"}]};
         }
         json[] rows = from string m in RIVERS
-            select {workEmail: m.toUpperAscii(), firstName: "R", team: "Rivers", subTeam: (), businessUnit: "Water", house: "Oak"};
+            select {workEmail: m.toUpperAscii(), firstName: "R", lastName: m.substring(0, 4), team: "Rivers", subTeam: (), businessUnit: "Water", house: "Oak"};
         rows.push({workEmail: "rv-noteam@wso2.com", firstName: "N", team: (), subTeam: (), businessUnit: "Land"});
         return rows;
     }
@@ -215,6 +215,50 @@ isolated function mockTeamPageOf(string period, string[]? emails, string? q, rec
         }
     }
     return {items, total: rows.length()};
+}
+
+@test:Mock {functionName: "rosterPageOf"}
+isolated function mockRosterPageOf(string period, recognition:RosterMember[] members, string? q, recognition:TeamSort sort,
+        int page, int size) returns recognition:RosterPage|error {
+    check dbGate();
+    recognition:RosterEntry[] all = [];
+    foreach recognition:RosterMember m in members {
+        string email = m.email.toLowerAscii();
+        recognition:Standing? s = ();
+        foreach recognition:Standing candidate in STANDINGS {
+            if candidate.email == email {
+                s = candidate.clone();
+            }
+        }
+        string name = m.name != "" ? m.name : (s is recognition:Standing ? s.displayName : email);
+        all.push({employeeId: s is recognition:Standing ? s.employeeId : (), displayName: name, email,
+            totalPoints: s is recognition:Standing ? s.totalPoints : 0, rank: s is recognition:Standing ? s.rank : (),
+            previousRank: (), lastActivityAt: (), teamRank: 0});
+    }
+    recognition:RosterEntry[] ordered = from var e in all
+        order by e.totalPoints descending, e.displayName ascending, e.email ascending
+        select e;
+    int active = ordered.filter(e => e.totalPoints > 0).length();
+    // Dense rank over points, like the SQL's window.
+    int rank = 0;
+    int last = int:MAX_VALUE;
+    foreach recognition:RosterEntry e in ordered {
+        if e.totalPoints != last {
+            rank += 1;
+            last = e.totalPoints;
+        }
+        e.teamRank = rank;
+    }
+    recognition:RosterEntry[] matching = from var e in ordered
+        where q is () || e.displayName.includes(q)
+        select e;
+    recognition:RosterEntry[] items = [];
+    foreach int i in 0 ..< matching.length() {
+        if i >= page * size && i < (page + 1) * size {
+            items.push(matching[i]);
+        }
+    }
+    return {items, total: matching.length(), activeCount: active};
 }
 
 @test:Mock {functionName: "pointsByEmailOf"}
