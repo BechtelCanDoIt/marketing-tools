@@ -288,10 +288,11 @@ function testSettingsReadBeforeASaveIsNotCached() returns error? {
     runtime:sleep(0.01);
 }
 
-// A share on a campaign that exists but is not open stays 409 CAMPAIGN_CLOSED (the UI says "this post closed");
-// only an archived campaign is a 404 for a non-editor. Pinned on purpose: it is the answer, not an oversight.
+// An employee's share on a campaign that is not open (scheduled or closed) is a 404, the same answer as
+// `GET /campaigns/{id}`, so the route does not confirm the id exists. An editor still gets the specific 409
+// CAMPAIGN_CLOSED (checked at the end of the archived-campaign test above). Pinned on purpose.
 @test:Config {groups: ["writes"]}
-function testShareOnNonOpenCampaignIsCampaignClosed() returns error? {
+function testShareOnNonOpenCampaignIsNotFoundForAnEmployee() returns error? {
     string token = check po();
     string emp = check employee("emp-closed-1");
     connect("emp-closed-1");
@@ -306,8 +307,10 @@ function testShareOnNonOpenCampaignIsCampaignClosed() returns error? {
         test:assertEquals(created.statusCode, 201, body.toJsonString());
         string id = (check (check created.getJsonPayload()).campaign.id).toString();
         http:Response res = check send("POST", string `/campaigns/${id}/shares`, {kind: "REPOST"}, emp);
-        test:assertEquals(res.statusCode, 409, body.toJsonString());
-        test:assertEquals(check codeIn(res), "CAMPAIGN_CLOSED", body.toJsonString());
+        test:assertEquals(res.statusCode, 404, body.toJsonString());
+        string editorToken = check mint({sub: "emp-closed-1", email: "emp-closed-1@wso2.com", groups: [MARKETING_GROUP]});
+        http:Response asEditor = check send("POST", string `/campaigns/${id}/shares`, {kind: "REPOST"}, editorToken);
+        test:assertEquals(check codeIn(asEditor), "CAMPAIGN_CLOSED", body.toJsonString());
     }
 }
 // ---- PATCH /campaigns/{id}: post link and id ------------------------------------------------------------

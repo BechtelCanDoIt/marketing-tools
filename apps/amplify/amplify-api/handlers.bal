@@ -431,7 +431,10 @@ isolated function requestShare(auth:Principal p, string? correlationId, string i
         time:Utc now = time:utcNow();
         store:Actor actor = actorOf(p, correlationId);
         campaign:Campaign? c = check (check campaignRepository(actor)).findById(campaignId);
-        if c is () || (c.archivedAt !is () && !can(p, auth:CAN_CAMPAIGN)) {
+        // Same answer as `GET /campaigns/{id}`: an employee gets 404 for a campaign that is archived, scheduled or
+        // closed, so the share route does not confirm the id exists. Editors see every campaign and get the
+        // specific code (CAMPAIGN_CLOSED, CAMPAIGN_ARCHIVED) from the domain.
+        if c is () || (!can(p, auth:CAN_CAMPAIGN) && (c.archivedAt !is () || !campaign:isOpen(c, now))) {
             return notFound("Campaign not found", correlationId);
         }
         connection:LinkedInConnection? linked = check (check connectionRepository(actor)).findByEmployee(p.employeeId,
