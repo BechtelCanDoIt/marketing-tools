@@ -134,6 +134,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/CampaignRegistration"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
@@ -176,6 +177,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Campaign"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
@@ -250,6 +252,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/ConnectAuthorization"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
   /connections/linkedin/complete:
@@ -273,6 +276,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/LinkedInConnection"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
         "422": {$ref: "#/components/responses/Problem"}
@@ -297,6 +301,7 @@ paths:
       responses:
         "204": {description: Recorded}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "503": {$ref: "#/components/responses/Problem"}
   /connections/linkedin:
@@ -333,6 +338,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Share"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
@@ -358,7 +364,7 @@ paths:
       tags: [S3 External Sharing]
       operationId: claimExternalShare
       x-access: EMPLOYEE
-      description: Claims promotion done outside Amplify (My Campaign). Any public HTTPS URL; one claim per normalized URL across everyone (`EVIDENCE_ALREADY_CLAIMED`).
+      description: Claims promotion done outside Amplify (My Campaign). Any public HTTPS URL (not a `lnkd.in` short link), or just a LinkedIn post number; one claim per normalized URL across everyone (`EVIDENCE_ALREADY_CLAIMED`).
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -374,6 +380,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/ExternalShare"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
         "422": {$ref: "#/components/responses/Problem"}
@@ -456,6 +463,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/ExternalShare"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
@@ -520,6 +528,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/PointRule"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
@@ -546,6 +555,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/LedgerEntry"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
@@ -574,6 +584,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/LedgerEntry"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
@@ -679,7 +690,7 @@ paths:
       tags: [S4 Recognition]
       operationId: getHeadcount
       x-access: EMPLOYEE
-      description: "Current employee count, overall and by BU and team, counted from the people directory (everyone it returns with a work email). Kept in memory for `headcountCacheSeconds` (7 days); when that runs out the directory is read again, and a failed read keeps serving the last count. Never stored in the database."
+      description: "Current employee count, overall and by BU and team, counted from the people directory (everyone it returns with a work email). Kept in memory for `headcountCacheSeconds` (24 hours); when that runs out the directory is read again, and a failed read keeps serving the last count. Never stored in the database."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
       responses:
@@ -713,7 +724,7 @@ paths:
       tags: [S4 Recognition]
       operationId: getTeamPage
       x-access: EMPLOYEE
-      description: Team page. Employees see their own team (roster from One WSO2, server side); `CAN_ADJUST_POINTS` sees the company. `team.visibility = COMPANY` widens it for everyone (ADR-019).
+      description: "Team page. Employees see their own team (roster from the people directory, server side); `CAN_ADJUST_POINTS` sees the company. `team.visibility = COMPANY` widens it for everyone (ADR-019). The list is the whole roster from the directory (names included), joined to the standings: a person nobody has recorded points for is an entry with `points` 0, `employeeId` null and `rank` null, whether or not they ever signed in. Directory results are reused for 24 hours (`rosterCacheSeconds`). With the directory down and nothing cached, the team view lists only the caller (`teamStatus` UNAVAILABLE) and the company view only people with points (`teamStatus` UNAVAILABLE, `headcount` null)."
       parameters:
         - {$ref: "#/components/parameters/CorrelationId"}
         - {$ref: "#/components/parameters/Period"}
@@ -983,6 +994,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/SettingList"}
         "400": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
@@ -1073,7 +1085,7 @@ components:
           x-stable-codes: [TOKEN_MISSING, TOKEN_MALFORMED, TOKEN_ALG_NOT_ALLOWED, TOKEN_SIGNATURE_INVALID,
             TOKEN_EXPIRED, TOKEN_NOT_YET_VALID, TOKEN_ISSUER_INVALID, TOKEN_AUDIENCE_INVALID, TOKEN_CLAIMS_INVALID,
             ROUTE_NOT_PERMITTED, ROLE_NOT_PERMITTED, DEPENDENCY_UNAVAILABLE, EMAIL_CONFLICT, VALIDATION_FAILED,
-            NOT_FOUND, METHOD_NOT_ALLOWED, VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, INTERNAL_ERROR,
+            NOT_FOUND, METHOD_NOT_ALLOWED, PAYLOAD_TOO_LARGE, VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, INTERNAL_ERROR,
             CAMPAIGN_ALREADY_REGISTERED, NOT_WSO2_RESOURCE, INVALID_CAMPAIGN, INVALID_WINDOW, CAMPAIGN_ARCHIVED,
             POST_HAS_ACTIVITY, CAMPAIGN_CLOSED, OAUTH_STATE_INVALID, OAUTH_REDIRECT_MISMATCH, MISSING_SCOPE, MEMBER_ALREADY_LINKED, CONNECTION_REMOVED,
             LINKEDIN_NOT_CONNECTED, NEEDS_RECONNECT, DUPLICATE_ACTION, COMMENTARY_REQUIRED, COMMENTARY_NOT_ALLOWED,
@@ -1314,9 +1326,11 @@ components:
     ExternalShareClaim:
       type: object
       additionalProperties: false
-      required: [evidenceUrl, certified]
+      required: [certified]
+      description: "Send exactly one of `evidenceUrl` and `activityId` (both or neither is a `VALIDATION_FAILED` 400)."
       properties:
-        evidenceUrl: {type: string, minLength: 1, maxLength: 2048, description: Any public HTTPS URL; never fetched}
+        evidenceUrl: {type: string, minLength: 1, maxLength: 2048, description: "Any public HTTPS URL; never fetched. `lnkd.in` short links are refused (`INVALID_EVIDENCE_URL`): one post could otherwise be claimed twice"}
+        activityId: {type: string, minLength: 1, maxLength: 100, pattern: "^[0-9]+$", description: "A LinkedIn post number (the activity id: the digits in `urn:li:activity:<number>` or `...-activity-<number>-...`). Amplify builds the canonical post URL from it, stores that as `evidenceUrl`, and so it collides with any other form of the same post (`EVIDENCE_ALREADY_CLAIMED`)"}
         certified: {type: boolean, description: "\"I certify this is related to WSO2\" (must be true)"}
         campaignId: {type: string, format: uuid}
     ExternalShare:
@@ -1464,12 +1478,12 @@ components:
                 type: object
                 required: [employeeId, displayName, email, points, teamRank, companyRank, isMe]
                 properties:
-                  employeeId: {type: string}
-                  displayName: {type: string}
+                  employeeId: {type: string, nullable: true, description: "Null for a team member nobody has recorded points for (no standing row), whether or not they ever signed in. Such an entry has points 0 and no companyRank."}
+                  displayName: {type: string, description: "The people directory's name, else the standing's, else the email"}
                   email: {type: string}
                   points: {type: integer}
-                  teamRank: {type: integer}
-                  companyRank: {type: integer}
+                  teamRank: {type: integer, description: "Dense rank within the team; every zero-point member shares the last rank"}
+                  companyRank: {type: integer, nullable: true, description: "Null without a standing row"}
                   houseName: {type: string, nullable: true, description: "The member's house from the people directory"}
                   isMe: {type: boolean}
         teamStatus: {type: string, enum: [OK, NO_TEAM, UNAVAILABLE]}
@@ -1514,20 +1528,20 @@ components:
           type: object
           required: [activeCount]
           properties:
-            headcount: {type: integer, nullable: true, description: Roster size from One WSO2; null on the company view}
-            activeCount: {type: integer}
+            headcount: {type: integer, nullable: true, description: "Roster size from the people directory; on the company view everyone the directory lists. Null when the directory cannot supply it (no roster, or the company view falling back to standings)"}
+            activeCount: {type: integer, description: "People in the roster with points"}
         entries:
           type: array
           items:
             type: object
             required: [employeeId, displayName, email, points, rank, teamRank, actions]
             properties:
-              employeeId: {type: string}
-              displayName: {type: string}
+              employeeId: {type: string, nullable: true, description: "Null for a person nobody has recorded points for (no standing row), whether or not they ever signed in. Such an entry has points 0 and no rank. Do not link to a person page or history for it."}
+              displayName: {type: string, description: "The people directory's name, else the standing's, else the email"}
               email: {type: string}
               points: {type: integer}
-              rank: {type: integer}
-              teamRank: {type: integer}
+              rank: {type: integer, nullable: true, description: "Company rank; null without a standing row"}
+              teamRank: {type: integer, description: "Dense rank within the list; every zero-point person shares the last rank. Ties order by name, then email"}
               previousRank: {type: integer, nullable: true}
               lastActivityAt: {type: string, format: date-time, nullable: true}
               actions:
