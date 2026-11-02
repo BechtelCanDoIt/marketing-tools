@@ -178,6 +178,9 @@ isolated function handleCampaignRegistered(HandlerContext ctx, events:CampaignRe
             return failed(note);
         }
         // Novera answers 202 before it sends, so there is no Chat message name: a stable marker stands in.
+        // If the save below fails after Novera accepted the notification, the outbox retries this handler and
+        // Novera is notified again. Owner decision (2026-11-02): a duplicate announcement is better than a missed
+        // one, and the notification carries no id Novera could dedupe on, so the retry stands.
         messageName = string `${NOVERA_SPACE}:${c.id}`;
         if chat is ChatPort {
             string? note = postClubCard(ctx, chat, campaignSource, queued.threadKey);
