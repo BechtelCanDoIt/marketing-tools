@@ -311,6 +311,13 @@ isolated function teamPageOf(string period, string[]? emails, string? q, recogni
     }
 }
 
+isolated function rosterPageOf(string period, recognition:RosterMember[] members, string? q, recognition:TeamSort sort,
+        int page, int size) returns recognition:RosterPage|error {
+    retry<resilience:TransientDbRetry> (dbReadRetries) {
+        return check recognition:rosterPage(check db(), period, members, q, sort, page, size);
+    }
+}
+
 isolated function pointsByEmailOf(string period) returns recognition:EmailPoints[]|error {
     retry<resilience:TransientDbRetry> (dbReadRetries) {
         return check recognition:pointsByEmail(check db(), period);

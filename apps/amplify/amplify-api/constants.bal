@@ -63,6 +63,8 @@ const int IDEMPOTENCY_TTL_SECONDS = 86400;
 
 # Request body, query or path failed validation.
 const string VALIDATION_FAILED = "VALIDATION_FAILED";
+# Request body is larger than the API accepts (413).
+const string PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE";
 # Unknown resource, or one the caller may not see.
 const string NOT_FOUND = "NOT_FOUND";
 # Unexpected failure (details only in the log).

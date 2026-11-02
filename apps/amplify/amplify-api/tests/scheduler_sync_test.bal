@@ -317,12 +317,17 @@ function testAdminSyncEndpoint() returns error? {
 final boolean schedulerItEnabled = os:getEnv("AMPLIFY_IT") == "true" && os:getEnv("AMPLIFY_IT_SCHEDULER_URL") != "";
 
 isolated int stubRuns = 0;
+# The key header the scheduler sent on the last POST /runs (the IT asserts it is the scheduler key).
+isolated string? stubRunKey = ();
 
 # Stub amplify-jobs the scheduler calls in the IT.
 service / on new http:Listener(9598) {
-    resource function post runs() returns http:Ok {
+    resource function post runs(@http:Header {name: INTERNAL_KEY_HEADER} string? key) returns http:Ok {
         lock {
             stubRuns += 1;
+        }
+        lock {
+            stubRunKey = key;
         }
         return {body: {status: "COMPLETED"}};
     }
@@ -371,6 +376,11 @@ function testRealSchedulerReconcileUpdateAndFire() returns error? {
             runtime:sleep(1);
         }
         test:assertTrue(fired > 0, "scheduler fired POST /runs within 45 s");
+        string? sentKey;
+        lock {
+            sentKey = stubRunKey;
+        }
+        test:assertEquals(sentKey, schedulerApiKey, "the real scheduler sends the scheduler key, not the internal key");
         json history = check raw->get("/jobs/amplify-run/history");
         test:assertTrue((<json[]>check history.items).length() > 0);
     } on fail error e {
@@ -385,14 +395,28 @@ function testRealSchedulerReconcileUpdateAndFire() returns error? {
 }
 
 @test:Config
-function testRegisteredJobsCarryTheInternalKeyAndTheKeyIsRequiredWhenJobsIsConfigured() {
+function testRegisteredJobsCarryTheSchedulerKeyNotTheInternalKey() {
+    test:assertNotEquals(schedulerApiKey, internalApiKey);
     foreach scheduler:JobSpec spec in desiredJobs({}) {
-        test:assertEquals(spec.headers, [{name: INTERNAL_KEY_HEADER, value: internalApiKey}], spec.id);
+        test:assertEquals(spec.headers, [{name: INTERNAL_KEY_HEADER, value: schedulerApiKey}], spec.id);
+        foreach scheduler:Header h in spec.headers {
+            test:assertNotEquals(h.value, internalApiKey, spec.id + " must not carry the full-access key");
+        }
     }
-    test:assertTrue(checkInternalKey("http://jobs", "", "") is error);
-    test:assertTrue(checkInternalKey("", "http://scheduler", "short") is error);
-    test:assertEquals(checkInternalKey("http://jobs", "http://scheduler", internalApiKey), ());
-    test:assertEquals(checkInternalKey("", "", ""), (), "nothing to call, nothing to authenticate");
+}
+
+@test:Config
+function testKeysAreRequiredWhereUsedAndMustDiffer() {
+    string i = internalApiKey;
+    string s = schedulerApiKey;
+    test:assertTrue(checkApiKeys("http://jobs", "", "", s) is error, "jobs needs the internal key");
+    test:assertTrue(checkApiKeys("http://jobs", "", "short", s) is error);
+    test:assertTrue(checkApiKeys("", "http://scheduler", i, "") is error, "scheduler needs the scheduler key");
+    test:assertTrue(checkApiKeys("", "http://scheduler", i, "short") is error);
+    test:assertTrue(checkApiKeys("http://jobs", "http://scheduler", i, i) is error, "same value");
+    test:assertTrue(checkApiKeys("http://jobs", "http://scheduler", i, i + "\n") is error, "same value after trim");
+    test:assertEquals(checkApiKeys("http://jobs", "http://scheduler", i, s), ());
+    test:assertEquals(checkApiKeys("", "", "", ""), (), "nothing to call, nothing to authenticate");
 }
 
 @test:Config
