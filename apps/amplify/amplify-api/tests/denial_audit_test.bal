@@ -62,3 +62,26 @@ function testDenialThrottleDisabledByAZeroWindow() {
     test:assertEquals(shouldWriteDenialAt(ANON, [], ME_ROUTE, auth:TOKEN_MISSING, 100d, 0d), 0);
     resetDenialAudit();
 }
+
+@test:Config
+function testDenialThrottleNeverGrowsPastItsCap() {
+    resetDenialAudit();
+    foreach int i in 0 ..< DENIAL_THROTTLE_MAX {
+        test:assertEquals(shouldWriteDenialAt(ANON, [], string `GET /scan-${i}`, auth:TOKEN_MISSING, 100d, WINDOW), 0);
+    }
+    // Every key is still live inside the window: a new one is written but not tracked.
+    test:assertEquals(shouldWriteDenialAt(ANON, [], "GET /one-more", auth:TOKEN_MISSING, 101d, WINDOW), 0);
+    int size = 0;
+    lock {
+        size = denialBuckets.length();
+    }
+    test:assertEquals(size, DENIAL_THROTTLE_MAX);
+    resetDenialAudit();
+}
+
+@test:Config
+function testUnmatchedRoutesShareOneThrottleKeyPerMethod() {
+    test:assertEquals(unmatchedRoute("GET /wp-login.php"), "GET (unmatched)");
+    test:assertEquals(unmatchedRoute("GET /.env"), "GET (unmatched)");
+    test:assertEquals(unmatchedRoute("POST /admin"), "POST (unmatched)");
+}
