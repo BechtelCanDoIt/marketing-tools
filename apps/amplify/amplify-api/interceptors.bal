@@ -16,6 +16,7 @@
 import amplify_api.auth;
 
 import amplify_common.resilience;
+import amplify_common.types;
 
 import ballerina/http;
 import ballerina/http.httpscerr;
@@ -31,7 +32,7 @@ isolated service class AuthInterceptor {
     *http:RequestInterceptor;
 
     isolated resource function 'default [string... path](http:RequestContext ctx, http:Request req)
-            returns http:NextService|http:Unauthorized|http:Forbidden|http:ServiceUnavailable|error? {
+            returns http:NextService|http:Unauthorized|http:Forbidden|http:ServiceUnavailable|http:Conflict|error? {
         string correlationId = assignCorrelationId(ctx, req);
         if req.method == http:GET && auth:isPublic(path) {
             return ctx.next();
@@ -59,7 +60,22 @@ isolated service class AuthInterceptor {
                     correlationId);
             return forbidden(ROLE_NOT_PERMITTED, correlationId);
         }
-        ctx.set(PRINCIPAL_KEY, principal.cloneReadOnly());
+        // A re-created Asgardeo account acts as the employee the person already is (V020), so history keeps one key.
+        types:EmployeeId|types:DomainError|error employeeId = canonicalEmployeeId(principal);
+        if employeeId is types:DomainError {
+            deny(principal.employeeId, principal.roles, routeOf(req.method, path, rule), EMAIL_CONFLICT, correlationId);
+            // Generic on purpose: which email belongs to which record is nothing a caller may probe for.
+            return conflicted(EMAIL_CONFLICT, "This sign-in can't be matched to an Amplify profile, contact the Amplify admins",
+                    correlationId);
+        }
+        if employeeId is error {
+            log:printError("Could not resolve the employee", employeeId, correlationId = correlationId);
+            recordDbFailure(employeeId);
+            return unavailable(DEPENDENCY_UNAVAILABLE, correlationId);
+        }
+        auth:Principal acting = {employeeId, email: principal.email, displayName: principal.displayName,
+            roles: principal.roles, grants: principal.grants, issuer: principal.issuer};
+        ctx.set(PRINCIPAL_KEY, acting.cloneReadOnly());
         return ctx.next();
     }
 }

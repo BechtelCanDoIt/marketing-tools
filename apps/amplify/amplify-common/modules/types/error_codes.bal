@@ -19,6 +19,8 @@
 // Value objects
 public const ERR_INVALID_EMPLOYEE_ID = "INVALID_EMPLOYEE_ID";
 public const ERR_INVALID_EMAIL = "INVALID_EMAIL";
+# A sign-in whose email belongs to a different, still separate employee record (not a re-created account of the same person).
+public const ERR_EMAIL_CONFLICT = "EMAIL_CONFLICT";
 public const ERR_INVALID_MEMBER_URN = "INVALID_MEMBER_URN";
 public const ERR_INVALID_POST_URN = "INVALID_POST_URN";
 public const ERR_INVALID_EVIDENCE_URL = "INVALID_EVIDENCE_URL";

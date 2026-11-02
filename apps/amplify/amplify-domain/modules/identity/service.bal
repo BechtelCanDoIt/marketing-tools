@@ -18,6 +18,45 @@ import amplify_common.types;
 
 import ballerina/time;
 
+# Decides which employee a verified sign-in is. The employee id is the key of the ledger, standings, connection
+# and audit rows, and those are history that is never rewritten, so a person whose Asgardeo account was
+# re-created (new `sub`, same email) keeps their first id and the new `sub` becomes an alias of it.
+#
+# * `sub` is already an alias: its employee, unless the token's email now belongs to a different employee.
+# * `sub` has its own row: itself, unless the token's email belongs to a different employee.
+# * `sub` is new and the email belongs to an employee: alias that employee (the re-created account).
+# * Otherwise: `sub` itself (a new person).
+#
+# The clash cases are `EMAIL_CONFLICT`: two employee records that both claim one email cannot be merged by
+# guessing, and the answer carries nothing about the other record.
+#
+# + repo - Employee repository
+# + sub - Token `sub`
+# + email - Token email
+# + return - What to act as, `EMAIL_CONFLICT` for a genuine clash, or an error
+public isolated function resolveEmployee(EmployeeRepository repo, string sub, string email)
+        returns ResolvedEmployee|types:DomainError|error {
+    types:EmployeeId subId = check types:parseEmployeeId(sub);
+    string address = check types:parseEmail(email);
+    Employee? holder = check repo.findByEmail(address);
+    types:EmployeeId? alias = check repo.findAlias(subId);
+    if alias is types:EmployeeId {
+        return holder is Employee && holder.employeeId != alias ? emailConflict() : {employeeId: alias, aliased: true};
+    }
+    Employee? own = check repo.findById(subId);
+    if own is Employee {
+        return holder is Employee && holder.employeeId != subId ? emailConflict() : {employeeId: subId, aliased: false};
+    }
+    if holder is Employee {
+        types:EmployeeId mapped = check repo.addAlias(subId, holder.employeeId);
+        return {employeeId: mapped, aliased: mapped != subId};
+    }
+    return {employeeId: subId, aliased: false};
+}
+
+isolated function emailConflict() returns types:DomainError =>
+    types:domainError(types:ERR_EMAIL_CONFLICT, "This sign-in can't be matched to an Amplify profile");
+
 # Records an authenticated call: creates the employee on first sight, then refreshes name, email and
 # `lastSeenAt`. `firstSeenAt` never moves.
 #
