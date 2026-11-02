@@ -107,8 +107,13 @@ public type CampaignDraft record {|
     time:Utc? closesAt = ();
 |};
 
-# Fields a campaign edit may change. `()` keeps the current value. The resource can't change.
+# Fields a campaign edit may change. `()` keeps the current value. The post id (`resourceUrn`) may change only
+# while nothing has been recorded against the campaign (`POST_HAS_ACTIVITY` otherwise); the link may always change.
 public type CampaignPatch record {|
+    # New post id (`urn:li:...`); same rules as registration
+    string? resourceUrn = ();
+    # New public link to the post; same origin rules as registration. A blank value clears it
+    string? resourceUrl = ();
     # New title
     string? title = ();
     # New summary
@@ -166,4 +171,12 @@ public type CampaignRepository isolated object {
     # + expectedVersion - Version read before the change
     # + return - `VERSION_CONFLICT` if someone else changed it, or another error
     public isolated function update(Campaign campaign, int expectedVersion) returns error?;
+
+    # Whether anything has been recorded against the campaign: a share request, an engagement or an external
+    # share, matched by campaign id or by the post id. Read-only, across contexts (like the reporting reads).
+    #
+    # + id - Campaign id
+    # + resourceUrn - The campaign's stored post id
+    # + return - True when there is recorded activity, or an error
+    public isolated function hasActivity(string id, string resourceUrn) returns boolean|error;
 };

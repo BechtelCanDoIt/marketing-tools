@@ -48,7 +48,7 @@ const int MAX_ENTITY_BODY_BYTES = MAX_REQUEST_BODY_BYTES * 2;
 listener http:Listener apiListener = new (port, requestLimits = {maxEntityBodySize: MAX_ENTITY_BODY_BYTES});
 
 function init() returns error? {
-    check checkInternalKey(jobsUrl, schedulerUrl, internalApiKey);
+    check checkApiKeys(jobsUrl, schedulerUrl, internalApiKey, schedulerApiKey);
     log:printInfo(string `${COMPONENT} starting on port ${port}`);
     string? tls = store:tlsWarning(dbConfig());
     if tls is string {
