@@ -36,7 +36,7 @@ Check: both services are healthy in prod.
 
 1. PostgreSQL 18 server on a plan with backups. If 18 isn't offered, stop and escalate; do not continue on an older version.
 2. Run `amplify-database/checks/d2_extensions.sql`. `citext` and `pg_trgm` are required. If either is missing, stop and raise it.
-3. Database `amplify` (bootstrap admin goes only into the DB Migrate component's secrets) and database `scheduler` with its own user.
+3. Database `amplify` with one login user and one schema named after it, the four NOLOGIN roles granted to it (choreo-deploy B2) and database `scheduler` with its own user.
 4. Record backup frequency and retention.
 
 ### Step 3: Components (C), in this order
@@ -68,7 +68,7 @@ Deployed by the One WSO2 team after the proxy is live. They need the proxy URL. 
 | `CHATDEFAULTIMAGEURL`, `CHATCARDAVATARURL` (optional) | Repo; public HTTPS image pinned to a commit |
 | `SHAREPAGEBASEURL` | One WSO2 team (the prod Celebrate page) |
 | Asgardeo setup | `identity-setup.md` |
-| Generated DB passwords (`APIDBPASSWORD`, `JOBSDBPASSWORD`, `READONLYDBPASSWORD`), `TOKENKEYS` | Ops generates and stores only in Choreo |
+| The DBA's login password, `TOKENKEYS` | Ops generates and stores only in Choreo |
 
 ## Verify before calling it done (E3)
 

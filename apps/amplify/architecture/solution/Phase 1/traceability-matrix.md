@@ -33,7 +33,7 @@ Where no artefact exists yet, the row says **no artefact yet** — nothing here 
 | R1 | Register official WSO2 LinkedIn posts (category, priority) | Implemented (API); M7 UI open | M5 S1, M7 | ADR-012 (A6) | `amplify-api/handlers.bal` (POST `/campaigns`), `amplify-database/migrations/V002__identity_campaign.sql`; `amplify-domain/tests/integration_m5_test.bal` `testM5RegisterListAndShare` |
 | R2 | Share new posts to the Amplify Chat space automatically | Implemented (code); real webhook open | M6a | — (ADR-025 delivery) | `amplify-jobs/handlers.bal` (CampaignRegistered → Chat), `amplify-common/modules/googlechat/card.bal`; `amplify-jobs/tests/webhook_test.bal`; V011 chat thread columns |
 | R3 | Link LinkedIn to the WSO2 account via SSO | Implemented (direct OAuth; A8 research open) | M5 S2, M7 | — (A8 research) | `amplify-api/handlers.bal` (`connections/linkedin/complete`), `amplify-domain/modules/connection/service.bal`; `amplify-common/modules/crypto/tests/token_cipher_test.bal`; `amplify-domain/tests/integration_m5_test.bal` `testM5OAuthStateIsSingleUseAndOwned` |
-| R4 | Record who reacted/commented/reposted (or reposted with commentary) | Partial — in-app reposts only; reactions, comments, native reposts deferred | M6, ADR-018 | ADR-018 | `amplify-jobs/handlers.bal` (RepostRequested → `sharing.engagement`), V004 `engagement` table; `amplify-jobs/tests/integration_test.bal` `testM6RunAnnouncesSharesAndScores` |
+| R4 | Record who reacted/commented/reposted (or reposted with commentary) | Partial — in-app reposts only; reactions, comments, native reposts deferred | M6, ADR-018 | ADR-018 | `amplify-jobs/handlers.bal` (RepostRequested → `sharing_engagement`), V004 `engagement` table; `amplify-jobs/tests/integration_test.bal` `testM6RunAnnouncesSharesAndScores` |
 | R5 | Let employees submit their own WSO2 posts for higher-tier points | Implemented (API); M7 UI open | M5 S3, M7 | ADR-017 | `amplify-api/handlers.bal` (`POST /external-shares`), `amplify-database/migrations/V005__external_sharing.sql`; `amplify-api/tests/endpoint_test.bal` `testExternalShareApproveAndAmplifyAwardPoints` |
 | R6 | Apply points automatically, once per action per post per person | Implemented as deviation (one repost per campaign); PO sign-off open | M5 C1–C2, M6 | ADR-015 (C2) | `amplify-database/migrations/V004__sharing.sql` `UNIQUE (campaign_id, employee_id)`; V006 ledger PK + `ON CONFLICT`; `amplify-jobs/tests/integration_test.bal` rerun-safety test |
 | R7 | PO edits point values, corrects records, removes invalid activity | Implemented | M5 C2 | ADR-011 (A5) | `amplify-api/handlers.bal` (`po/point-rules`, `po/points/adjustments`, `po/points/{reference}/reverse`); `amplify-domain/tests/integration_m5_test.bal` `testM5AdjustReverseUpdatesStanding` |
@@ -45,7 +45,7 @@ Where no artefact exists yet, the row says **no artefact yet** — nothing here 
 | T2 | Tier: repost/share with commentary = mid | Implemented | M5 C1 | — | V006 `REPOST_COMMENTARY`; seed `S001__point_rules.sql` |
 | T3 | Tier: original employee post with meaningful WSO2 content = higher | Implemented | M5 S3 | — | V005 `external_share`, V006 `OWN_POST`; seed S001; `testExternalShareApproveAndAmplifyAwardPoints` |
 | T4 | Tier: original content amplified by WSO2/senior leader = highest | Implemented (with C4 top-up) | M5 S3 | — (C4) | `amplify-api/handlers.bal` (`po/external-shares/{id}/amplified`), `amplify-domain/modules/scoring/service.bal` `amplifiedTopUp`; V005 `CHECK`; `amplify-domain/tests/integration_test.bal` `testExternalShareOneClaimPerUrlAndAmplifiedCheck` |
-| K1 | Scale: 830+ employees, 10–30 posts/month | Implemented locally; Choreo load run open | M11 | — | V007 `recognition.standing`, V010 `apply_ledger_entry`/`rerank`; [load-test-2026-10.md](../../../docs/testing/load-test-2026-10.md); `scripts/load-test.sh` |
+| K1 | Scale: 830+ employees, 10–30 posts/month | Implemented locally; Choreo load run open | M11 | — | V007 `recognition_standing`, V010 `apply_ledger_entry`/`rerank`; [load-test-2026-10.md](../../../docs/testing/load-test-2026-10.md); `scripts/load-test.sh` |
 | K2 | Authentication: WSO2 SSO | Implemented; Asgardeo console steps open | M4 | ADR-022, ADR-023 | `amplify-api/interceptors.bal`, `amplify-api/modules/auth/token.bal`; `amplify-api/tests/auth_test.bal`; console: [identity-setup runbook](../../../docs/runbooks/identity-setup.md) |
 | K3 | Data privacy: opt-in linking, capture only needed metrics | Console-blocked — Legal consent copy pending (A9) | M10, M0c | — (A9) | `amplify-domain/modules/connection/service.bal` `sealToken`; `amplify-common/modules/crypto/token_cipher_test.bal`; consent copy placeholder in plan M0c A9 |
 | K4 | Governance: duplicate prevention, complete audit logging | Implemented | M2, M3 | ADR-029 (C1), ADR-005, ADR-017 | V006 ledger PK/unique keys, V008 `audit_log` (monthly partitions, 5 y); `amplify-domain/tests/integration_test.bal` `testFailedWriteRollsBackAggregateOutboxAndAudit` |
@@ -84,7 +84,7 @@ Where no artefact exists yet, the row says **no artefact yet** — nothing here 
 | # | Sev | Finding (mitigation) | Disposition | Milestone | ADR | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
 | B1 | High | Decision IDs collide → one ADR register, cite `ADR-NNN` | Docs applied | M0c | — | [decisions/README.md](../../decisions/README.md) index + D-number map |
-| B2 | Medium | Campaign states differ → use derived states | Docs applied | M3 | ADR-005 | V002 `campaign.campaign_v`; data model |
+| B2 | Medium | Campaign states differ → use derived states | Docs applied | M3 | ADR-005 | V002 `campaign_v`; data model |
 | B3 | Medium | ShareRequest key differs → `(campaign, employee)` for phase 1 | Implemented | M3 | ADR-015 | V004 `UNIQUE (campaign_id, employee_id)` |
 | B4 | Medium | `SHARE` kind has no home → add to enums | Implemented | M3 | — | V004/V006 action enums incl. `SHARE`, `SHARE_COMMENTARY` |
 | B5 | Medium | Comments and reactions: in or out → out of phase 1 | Deferred (ADR-018) | M0c | ADR-018 | plan D6; requirements-map B5 |
@@ -149,7 +149,7 @@ Every row in requirements-map §Other phases is **Deferred** to a later phase; n
 | Ledger reference aligned with wso2-coin rules | R8 | Deferred | ADR-029 | `ledger.bal` encoding is the phase 1 interim |
 | Employee data deletion / anonymize | K3, K4 | Deferred | ADR-016 | security checklist exception (pending) |
 | Campaign window default aligned to provider stats look-back | R4, R11 | Deferred | C7 | seed `campaign.default_window_days` |
-| Pre-coin verification before any Coin issue | R8, K4 | Deferred | ADR-018 | `sharing.engagement_verification` table only |
+| Pre-coin verification before any Coin issue | R8, K4 | Deferred | ADR-018 | `sharing_engagement_verification` table only |
 | SLT reports (participation, reach, points) | R11 | Deferred | ADR-013 | `amplify_readonly` role + read-only user exist |
 | HR Entity team/location sync (`org_dim`) | R10, R11 | Deferred | ADR-009 | none (D13 uses One WSO2 data) |
 | Community Management engagement sync (reactions/comments/native reposts) | R4 | Deferred | ADR-018 | tables designed, not created |

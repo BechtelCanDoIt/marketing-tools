@@ -25,7 +25,7 @@ import ballerina/sql;
 import ballerina/time;
 import ballerinax/postgresql;
 
-const string CAMPAIGN_TABLE = "campaign.campaign";
+const string CAMPAIGN_TABLE = "campaign";
 
 type CampaignRow record {|
     string id;
@@ -71,7 +71,7 @@ public isolated class PgCampaignRepository {
             SELECT id::text AS id, provider, resource_urn, resource_type, owner_urn, resource_url, title, summary,
                    image_url, category_code, is_priority, opens_at, closes_at, archived_at, created_by, created_at,
                    updated_at, version
-            FROM campaign.campaign WHERE id = CAST(${id} AS uuid)`);
+            FROM campaign WHERE id = CAST(${id} AS uuid)`);
         return self.toCampaign(row);
     }
 
@@ -80,7 +80,7 @@ public isolated class PgCampaignRepository {
             SELECT id::text AS id, provider, resource_urn, resource_type, owner_urn, resource_url, title, summary,
                    image_url, category_code, is_priority, opens_at, closes_at, archived_at, created_by, created_at,
                    updated_at, version
-            FROM campaign.campaign WHERE provider = ${provider} AND resource_urn = ${resourceUrn}`);
+            FROM campaign WHERE provider = ${provider} AND resource_urn = ${resourceUrn}`);
         return self.toCampaign(row);
     }
 
@@ -113,18 +113,18 @@ public isolated class PgCampaignRepository {
     // count: they were recorded against the post. A ledger row carries the campaign id (a points adjustment can name
     // one), and changing the post id under it would leave those points on a different post.
     private isolated function activityQuery(string id, string resourceUrn) returns sql:ParameterizedQuery => `
-        SELECT EXISTS (SELECT 1 FROM sharing.share_request
+        SELECT EXISTS (SELECT 1 FROM sharing_share_request
                        WHERE campaign_id = CAST(${id} AS uuid) OR target_resource_urn = ${resourceUrn})
-            OR EXISTS (SELECT 1 FROM sharing.engagement
+            OR EXISTS (SELECT 1 FROM sharing_engagement
                        WHERE campaign_id = CAST(${id} AS uuid) OR target_resource_urn = ${resourceUrn})
-            OR EXISTS (SELECT 1 FROM external_sharing.external_share
+            OR EXISTS (SELECT 1 FROM external_sharing_external_share
                        WHERE campaign_id = CAST(${id} AS uuid) OR resource_urn = ${resourceUrn})
-            OR EXISTS (SELECT 1 FROM scoring.points_ledger WHERE campaign_id = CAST(${id} AS uuid))`;
+            OR EXISTS (SELECT 1 FROM scoring_points_ledger WHERE campaign_id = CAST(${id} AS uuid))`;
 
     private isolated function updateTx(Campaign campaign, int expectedVersion) returns error? {
         transaction {
             record {|string resource_urn; string title; boolean archived; int version;|}|error old = self.db->queryRow(`
-                UPDATE campaign.campaign
+                UPDATE campaign
                 SET resource_urn = ${campaign.resourceUrn}, resource_type = ${campaign.resourceType},
                     resource_url = ${campaign.resourceUrl}, title = ${campaign.title}, summary = ${campaign.summary}, image_url = ${campaign.imageUrl},
                     category_code = ${campaign.categoryCode}, is_priority = ${campaign.isPriority},
@@ -158,7 +158,7 @@ public isolated class PgCampaignRepository {
     private isolated function insertTx(Campaign campaign, events:OutboxEvent[] outbox) returns error? {
         transaction {
             _ = check self.db->execute(`
-                INSERT INTO campaign.campaign (id, provider, resource_urn, resource_type, owner_urn, resource_url,
+                INSERT INTO campaign (id, provider, resource_urn, resource_type, owner_urn, resource_url,
                                                title, summary, image_url, category_code, is_priority, opens_at,
                                                closes_at, archived_at, created_by, created_at, updated_at, version)
                 VALUES (CAST(${campaign.id} AS uuid), ${campaign.provider}, ${campaign.resourceUrn},
@@ -180,10 +180,10 @@ public isolated class PgCampaignRepository {
     }
 
     private isolated transactional function replaceTags(Campaign campaign) returns error? {
-        _ = check self.db->execute(`DELETE FROM campaign.campaign_tag WHERE campaign_id = CAST(${campaign.id} AS uuid)`);
+        _ = check self.db->execute(`DELETE FROM campaign_tag WHERE campaign_id = CAST(${campaign.id} AS uuid)`);
         foreach string tag in campaign.tags {
             _ = check self.db->execute(`
-                INSERT INTO campaign.campaign_tag (campaign_id, tag) VALUES (CAST(${campaign.id} AS uuid), ${tag})`);
+                INSERT INTO campaign_tag (campaign_id, tag) VALUES (CAST(${campaign.id} AS uuid), ${tag})`);
         }
     }
 
@@ -192,7 +192,7 @@ public isolated class PgCampaignRepository {
             return store:isNoRows(row) ? () : row;
         }
         stream<TagRow, error?> rows = self.db->query(
-                `SELECT tag FROM campaign.campaign_tag WHERE campaign_id = CAST(${row.id} AS uuid) ORDER BY tag`);
+                `SELECT tag FROM campaign_tag WHERE campaign_id = CAST(${row.id} AS uuid) ORDER BY tag`);
         string[] tags = check from TagRow t in rows
             select t.tag;
         return {

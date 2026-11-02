@@ -6,8 +6,8 @@ Script: `amplify-database/migrations/V014__point_actions_all_phases.sql`, with s
 
 ## Context
 
-The business's points table prices more actions than the schema could hold. `scoring.point_rule` and
-`scoring.points_ledger` only accepted REPOST, REPOST_COMMENTARY, SHARE, SHARE_COMMENTARY, OWN_POST and
+The business's points table prices more actions than the schema could hold. `scoring_point_rule` and
+`scoring_points_ledger` only accepted REPOST, REPOST_COMMENTARY, SHARE, SHARE_COMMENTARY, OWN_POST and
 OWN_POST_AMPLIFIED, so likes, comments and the Amplify Challenge had no place to land when their phase
 arrived. Adding them later would have meant a schema change in the middle of a phase.
 
@@ -15,7 +15,7 @@ arrived. Adding them later would have meant a schema change in the middle of a p
 
 - `point_rule_action_check` and `points_ledger_action_check` are dropped and re-added with four more actions:
   REACTION (a like), COMMENT, CHALLENGE_ENTRY and CHALLENGE_WINNER.
-- `sharing.engagement.action` is unchanged. It grows when comments and reactions are synced.
+- `sharing_engagement.action` is unchanged. It grows when comments and reactions are synced.
 - Nothing awards the new actions yet. Likes and comments need Community Management (phase 4); Challenge entry
   and winner are PO adjustments until the Challenge has its own flow.
 - S006 prices them, effective 2026-10-19 like S005: REACTION 1, COMMENT 1, CHALLENGE_ENTRY 10,
@@ -37,7 +37,7 @@ arrived. Adding them later would have meant a schema change in the middle of a p
 
 ```sql
 SELECT version FROM public.schema_version WHERE version = 'V014__point_actions_all_phases';
-SELECT DISTINCT ON (action) action, points, effective_from FROM scoring.point_rule
+SELECT DISTINCT ON (action) action, points, effective_from FROM scoring_point_rule
 WHERE effective_from <= now() ORDER BY action, effective_from DESC;
 ```
 

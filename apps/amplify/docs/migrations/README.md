@@ -7,29 +7,31 @@ Schema source of truth: `architecture/solution/Phase 1/phase1-data-model.md`. Sc
 
 ## Running the migrate runner
 
-The runner connects as the **bootstrap admin** (Choreo/Aiven `avnadmin`, local `postgres`), because V001
-creates the roles. Configurables (Choreo: secrets / env `BAL_CONFIG_VAR_*`):
+The runner connects as the **one login user** the DBA gave Amplify (staging `amplify_stg_user`, production its own
+name, local `amplify_local_user`) and works in the schema named after it (ADR-042). Before the first run the DBA
+creates the four NOLOGIN roles, grants them to the login `WITH SET TRUE`, and creates the schema; run
+`amplify-database/checks/d3_single_user_roles.sql` to see what is missing. Configurables (Choreo: secrets / env
+`BAL_CONFIG_VAR_*`):
 
 | Key | Meaning |
 | --- | --- |
 | `dbHost`, `dbPort`, `dbName`, `dbUser`, `dbSslMode` | Connection (`dbSslMode` defaults to `VERIFY_FULL`; `DISABLE` only locally) |
+| `dbSchema` | Schema every table lives in. Empty = the login user's name |
 | `dbSslRootCert` | Managed Postgres CA PEM path (Choreo file mount, `BAL_CONFIG_VAR_DBSSLROOTCERT`, per environment). The runner warns at start-up when a remote server isn't verified |
-| `dbPassword` | Bootstrap admin password (secret) |
-| `apiDbPassword`, `jobsDbPassword`, `readonlyDbPassword` | Login passwords for the app roles (secrets, 16+ characters). Empty = leave the role as it is |
+| `dbPassword` | Login password (secret) |
 | `migrationsDir`, `seedDir`, `dryRun` | Folders, and report-only mode (see below) |
 
-Role passwords never appear in a script. Roles are created `NOLOGIN`; after the scripts the runner calls
-`public.amplify_set_login_password(role, password)` with bind parameters, which quotes with `format(%L)`.
-`amplify_migrate` stays `NOLOGIN`: the runner reaches it through `SET LOCAL ROLE`.
+No role passwords exist: the roles stay `NOLOGIN`. The runner reaches `amplify_migrate` through `SET LOCAL ROLE`,
+and the services take `amplify_api` / `amplify_jobs` at connect (`dbRole`, `dbSchema` in `store:newClient`).
 
 Each script runs in its own transaction under a transaction-level advisory lock, and is recorded in
-`public.schema_version` with a SHA-256 checksum. A rerun applies nothing; a changed applied script stops the run.
+`schema_version` with a SHA-256 checksum. A rerun applies nothing; a changed applied script stops the run.
 A pending script that sorts below an already-applied version also stops the run: scripts apply in version
 order only, so a late-arriving `V0NN` must be renumbered above the highest applied version.
 
-`dryRun = true` connects to the database but creates nothing (not even `public.schema_version`) and runs no
+`dryRun = true` connects to the database but creates nothing (not even `schema_version`) and runs no
 script. It logs each script as `pending`, `applied` or `changed` and fails when any is `changed`, so it doubles
-as a checksum check before a deploy. Roles and passwords are not touched.
+as a checksum check before a deploy. Nothing in the database is touched.
 
 Local: `make up` runs it once before api/jobs start; `make seed` reruns it (compose pins `postgres:18`).
 
@@ -40,9 +42,10 @@ Local: `make up` runs it once before api/jobs start; `make seed` reruns it (comp
 ```sh
 docker run -d --name amplify-pg18 -e POSTGRES_PASSWORD=postgres -p 55432:5432 postgres:18
 
-# 1. Runner: drops/creates `amplify_it`, migrates fresh, reruns (idempotent), checksum guard, partition tests.
+# 1. Runner: drops/creates `amplify_it`, plays the DBA (roles, login user `amplify_it_user`, its schema), migrates fresh as that
+#    login, reruns (idempotent), checksum guard, partition tests. Then lets the app roles log in (test only) for steps 2 and 3.
 cd amplify-database
-BAL_CONFIG_VAR_ITENABLED=true BAL_CONFIG_VAR_DBPORT=55432 BAL_CONFIG_VAR_DBPASSWORD=postgres \
+BAL_CONFIG_VAR_ITENABLED=true BAL_CONFIG_VAR_DBPORT=55432 BAL_CONFIG_VAR_ITADMINPASSWORD=postgres \
   BAL_CONFIG_VAR_DBSSLMODE=DISABLE bal test --groups integration
 
 # 2. Repositories and the M5 API flows (integration_m5_test.bal), as amplify_api / amplify_jobs against `amplify_it`.

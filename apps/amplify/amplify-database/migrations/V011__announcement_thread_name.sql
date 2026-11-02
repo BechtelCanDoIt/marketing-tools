@@ -20,15 +20,15 @@
 
 SET LOCAL ROLE amplify_migrate;
 
-ALTER TABLE announcement.announcement ADD COLUMN chat_thread_name text;
+ALTER TABLE announcement ADD COLUMN chat_thread_name text;
 
-DROP VIEW announcement.announcement_v;
+DROP VIEW announcement_v;
 
-CREATE VIEW announcement.announcement_v WITH (security_invoker = true) AS
+CREATE VIEW announcement_v WITH (security_invoker = true) AS
 SELECT a.*,
        CASE WHEN a.sent_at IS NOT NULL THEN 'SENT'
             WHEN a.failed_at IS NOT NULL THEN 'FAILED'
             ELSE 'QUEUED' END AS status
-FROM announcement.announcement a;
+FROM announcement a;
 
-GRANT SELECT ON announcement.announcement_v TO amplify_api, amplify_readonly, amplify_jobs;
+GRANT SELECT ON announcement_v TO amplify_api, amplify_readonly, amplify_jobs;

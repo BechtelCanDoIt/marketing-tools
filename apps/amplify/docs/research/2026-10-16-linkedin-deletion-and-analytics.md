@@ -41,7 +41,7 @@ What we can't settle from docs alone (needs a live call, phase 2): whether `GET 
 
 - Phase 1 can't run the "check the repost still exists" step. The M6 pass stays in the plan as the target design, gated on Community Management access (ADR-018).
 - Phase 1 points stay `HELD`. Coins are phase 2, so nothing gets paid out on an unchecked share.
-- The anti-farming guard that *does* work in phase 1 is the DB one: `UNIQUE (provider, target_resource_urn, employee_id, action)` on `sharing.engagement` and ledger PK `reference` with `ON CONFLICT DO NOTHING` ([phase1-data-model.md](../../architecture/solution/Phase%201/phase1-data-model.md) lines ~417 and ~534). Delete-and-repost of the same campaign can't score twice. A deleted share keeping its points is the gap until verification lands.
+- The anti-farming guard that *does* work in phase 1 is the DB one: `UNIQUE (provider, target_resource_urn, employee_id, action)` on `sharing_engagement` and ledger PK `reference` with `ON CONFLICT DO NOTHING` ([phase1-data-model.md](../../architecture/solution/Phase%201/phase1-data-model.md) lines ~417 and ~534). Delete-and-repost of the same campaign can't score twice. A deleted share keeping its points is the gap until verification lands.
 - The reversal path (`EngagementDeleted` → `REV-…` row, reason `ENGAGEMENT_DELETED`) stays modelled, so it can be switched on without a schema change.
 - Not a fix: listening for our own `DELETE` calls only catches deletes made through Amplify. Members delete on linkedin.com.
 

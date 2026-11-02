@@ -20,7 +20,7 @@
 
 SET LOCAL ROLE amplify_migrate;
 
-UPDATE config.app_setting
+UPDATE config_app_setting
 SET value = '"MONTH"'::jsonb,
     updated_by = 'system',
     updated_at = now(),

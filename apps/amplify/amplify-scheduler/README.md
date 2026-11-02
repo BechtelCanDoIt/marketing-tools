@@ -4,7 +4,7 @@ The pinned `akorn/scheduler` image (v1.7.8) that triggers Amplify's background w
 
 ## Jobs
 
-amplify-api owns both jobs (`amplify-api/scheduler_sync.bal`) and pushes them into the scheduler collection `amplify` at startup and on `POST /admin/scheduler/sync`. The schedules come from `config.app_setting`. A manual edit in the scheduler UI is overwritten by the next sync, so change the setting instead.
+amplify-api owns both jobs (`amplify-api/scheduler_sync.bal`) and pushes them into the scheduler collection `amplify` at startup and on `POST /admin/scheduler/sync`. The schedules come from `config_app_setting`. A manual edit in the scheduler UI is overwritten by the next sync, so change the setting instead.
 
 ```
 ┌────────────────────────────────┬────────────────┬──────────────────────────────┬────────────────────────────┬────────────┬──────────┐
@@ -39,7 +39,7 @@ It returns the run log in the response.
 
 The nightly housekeeping call to `amplify-jobs POST /maintenance/partitions`. It does three things:
 
-- Runs the messaging partition maintenance (`messaging.run_partition_maintenance()`), which keeps the daily token and event partitions rolling forward.
+- Runs the messaging partition maintenance (`messaging_run_partition_maintenance()`), which keeps the daily token and event partitions rolling forward.
 - Purges expired `Idempotency-Key` rows.
 - Rotates the token encryption key. A token on an old key is also re-sealed on use, so this is best effort.
 

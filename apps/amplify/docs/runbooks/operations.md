@@ -17,7 +17,7 @@ Paths: `apps/…` = `apps/amplify/…`. Local commands run from `apps/amplify/`.
 | Maintenance now | `POST {jobs}/maintenance/partitions` (either key; also rotates token keys: `token_rotation` in the response) |
 | Scheduler sync now | `POST /admin/scheduler/sync` (admin) |
 | Retry one announcement | `POST /admin/announcements/{id}/retry` (admin) |
-| Kill switches | `PUT /admin/settings` `sharing.enabled` / `announcements.enabled` |
+| Kill switches | `PUT /admin/settings` `sharing_enabled` / `announcements.enabled` |
 | DB shell (local) | `docker compose exec postgres psql -U postgres -d amplify` |
 | Refresh team rosters now | Restart Amplify Backend (the people-directory index lives in memory, §13) |
 
@@ -25,7 +25,7 @@ Alert list that pairs with these procedures: [choreo-deploy.md](choreo-deploy.md
 
 ## 1. Reprocess FAILED outbox rows
 
-The outbox is `messaging.outbox`, status ∈ {`PENDING`,`IN_PROGRESS`,`DONE`,`FAILED`} (`amplify-database/migrations/V008__announcement_messaging_audit_config.sql:55`). Rows reach `FAILED` when `settle` sees a `FAIL` or `RETRY` past `maxAttempts=8` (`amplify-jobs/run.bal:197-210`; `amplify-jobs/config.bal`).
+The outbox is `messaging_outbox`, status ∈ {`PENDING`,`IN_PROGRESS`,`DONE`,`FAILED`} (`amplify-database/migrations/V008__announcement_messaging_audit_config.sql:55`). Rows reach `FAILED` when `settle` sees a `FAIL` or `RETRY` past `maxAttempts=8` (`amplify-jobs/run.bal:197-210`; `amplify-jobs/config.bal`).
 
 **Gap — there is no generic "reprocess FAILED outbox" endpoint.** The only built-in retry is per-announcement (below). A generic reprocess is a **manual SQL** step; ADR-025 (§Consequences) requires this runbook to say so.
 
@@ -33,7 +33,7 @@ The outbox is `messaging.outbox`, status ∈ {`PENDING`,`IN_PROGRESS`,`DONE`,`FA
 1. Find the id: the PO dashboard "Share health"/announcements view, or
    ```sql
    SELECT id, aggregate_id, event_type, attempts, last_error
-   FROM messaging.outbox
+   FROM messaging_outbox
    WHERE status='FAILED' AND event_type='CampaignRegistered'
    ORDER BY created_at DESC;
    ```
@@ -43,11 +43,11 @@ The outbox is `messaging.outbox`, status ∈ {`PENDING`,`IN_PROGRESS`,`DONE`,`FA
 1. Inspect first:
    ```sql
    SELECT event_type, count(*), max(last_error)
-   FROM messaging.outbox WHERE status='FAILED' GROUP BY event_type;
+   FROM messaging_outbox WHERE status='FAILED' GROUP BY event_type;
    ```
 2. Reset the rows you have decided to retry:
    ```sql
-   UPDATE messaging.outbox
+   UPDATE messaging_outbox
    SET status='PENDING', attempts=0, next_attempt_at=now(),
        locked_by=NULL, locked_until=NULL, last_error=NULL, processed_at=NULL
    WHERE status='FAILED' AND event_type='RepostRequested';   -- scope!
@@ -55,7 +55,7 @@ The outbox is `messaging.outbox`, status ∈ {`PENDING`,`IN_PROGRESS`,`DONE`,`FA
 3. Trigger a run: `POST {jobs}/runs` (Project-only), or wait for `run.schedule`.
 4. Confirm drain: re-run the §1 step 1 query; rows should move to `DONE`.
 
-**Backstop:** `DONE` rows older than 30 days are purged by `messaging.purge_done_outbox(30)` in the nightly maintenance job (`V009`).
+**Backstop:** `DONE` rows older than 30 days are purged by `messaging_purge_done_outbox(30)` in the nightly maintenance job (`V009`).
 
 ## 2. Rotate the token-encryption key
 
@@ -72,7 +72,7 @@ Keys live in the Choreo secret `TOKENKEYS` (`keyId:base64Key[,keyId:base64Key…
    - `NOT_CONFIGURED` / `FAILED`: token keys aren't set on jobs / the database refused. Fix that and rerun.
 4. Confirm nothing still needs the old key:
    ```sql
-   SELECT key_id, count(*) FROM connection.provider_token GROUP BY key_id;   -- must not list prod-1
+   SELECT key_id, count(*) FROM connection_provider_token GROUP BY key_id;   -- must not list prod-1
    ```
 5. Remove `prod-1` from `TOKENKEYS` **[console]** on both components and redeploy. (Always back the old secret value up somewhere safe first... a key removed too early makes every row it sealed unreadable, and those employees have to reconnect.)
 
@@ -111,7 +111,7 @@ The version is data: `LinkedIn-Version: 202610` (`amplify-common/modules/linkedi
 
 ## 6. Change the run schedule
 
-Settings `run.schedule` (default `@every 5m`, min `minRunIntervalSeconds=60`), `run.enabled`, `maintenance.schedule` (default `0 2 * * *` UTC) live in `config.app_setting` and are pushed to the scheduler by `amplify-api` (`amplify-api/scheduler_sync.bal`).
+Settings `run.schedule` (default `@every 5m`, min `minRunIntervalSeconds=60`), `run.enabled`, `maintenance.schedule` (default `0 2 * * *` UTC) live in `config_app_setting` and are pushed to the scheduler by `amplify-api` (`amplify-api/scheduler_sync.bal`).
 
 1. `PUT /admin/settings` (admin) with `{"run.schedule":"@every 10m"}` etc.
 2. The save commits, then `amplify-api` pushes to the scheduler (`changeSettings` → `touchesSchedule` → `syncScheduler`). The response carries `schedulerSync`.
@@ -138,7 +138,7 @@ The scheduler is the pinned image `akorn/scheduler:1.7.8@sha256:07462c…`, UID 
 4. Run **Amplify DB Migrate** against the restored database **[console: Manual Task; locally `make seed`]** — optionally first with `BAL_CONFIG_VAR_DRYRUN=true` to list what it will apply. It applies only the `V###`/`S###` scripts newer than the snapshot (checksums in `public.schema_version`; a changed applied script stops it), then re-sets the `amplify_api`/`amplify_jobs`/`amplify_readonly` passwords from the current secrets, so the services log in even if the snapshot carries older role passwords.
 5. Run partition upkeep once before re-enabling runs: `POST {jobs}/maintenance/partitions`. An old snapshot may lack today's token partition (created 7 days ahead) or this month's audit partition; until then OAuth connects and audit writes fail.
 6. Re-enable runs; verify `GET {jobs}/ready` and amplify-api `/ready` UP, then a manual `POST {jobs}/runs` drains the outbox. `IN_PROGRESS` rows from the snapshot are released as stale by that run (lease expired).
-7. **Double-post risk:** a share published after the snapshot point is `QUEUED` again in the restored data and its `RepostRequested` row is pending, so the run posts it to LinkedIn a second time (same risk class as ADR-025). For a restore older than a few minutes, list `sharing.share_request_v WHERE status = 'QUEUED' AND requested_at < <snapshot time>` and decide with the PO before re-enabling `sharing.enabled`.
+7. **Double-post risk:** a share published after the snapshot point is `QUEUED` again in the restored data and its `RepostRequested` row is pending, so the run posts it to LinkedIn a second time (same risk class as ADR-025). For a restore older than a few minutes, list `sharing_share_request_v WHERE status = 'QUEUED' AND requested_at < <snapshot time>` and decide with the PO before re-enabling `sharing_enabled`.
 8. Note: dropped token partitions survive in backups until **backup retention** ends — this is the true max time token ciphertext exists at rest.
 
 **Restore test (plan M3/B4, still to do):** restore one backup into dev once and record the result here.
@@ -151,9 +151,9 @@ Key points: Remove Connection deletes tokens at once; the interim process anonym
 
 ## 10. Kill switches
 
-`sharing.enabled` and `announcements.enabled` (default **true**, `amplify-api/settings.bal:42-44`; seeded `amplify-database/seed/S003__app_settings.sql:31-32`).
+`sharing_enabled` and `announcements.enabled` (default **true**, `amplify-api/settings.bal:42-44`; seeded `amplify-database/seed/S003__app_settings.sql:31-32`).
 
-1. Pause sharing: `PUT /admin/settings` `{"sharing.enabled":false}` (admin). API returns 409 `FEATURE_DISABLED` on new shares; `amplify-jobs` **defers** pending `RepostRequested` rows (not lost).
+1. Pause sharing: `PUT /admin/settings` `{"sharing_enabled":false}` (admin). API returns 409 `FEATURE_DISABLED` on new shares; `amplify-jobs` **defers** pending `RepostRequested` rows (not lost).
 2. Pause announcements: `{"announcements.enabled":false}` — `retryAnnouncement` 409; jobs defer `CampaignRegistered` rows.
 3. Resume by setting `true`. Settings cache is ~5 s, so the change takes effect within ~5 s on each replica (a local save invalidates that replica's cache; others pick it up within `settingsCacheSeconds`).
 4. Use when: LinkedIn outage storm, Chat spam, or a PO request to stop the pilot's posting.
@@ -166,7 +166,7 @@ Key points: Remove Connection deletes tokens at once; the interim process anonym
 - **Breakers:** `amplify_breaker_state{component,dependency}` gauge (0=closed, 1=half-open, 2=open, -1=unknown) — exported on `/ready`, viewed in Choreo metrics.
 - **Outbox backlog:** gauges `amplify_outbox_pending`, `amplify_outbox_failed` and `amplify_outbox_oldest_pending_seconds` (-1 when nothing is pending), and an `outbox` block on amplify-jobs' `GET /ready` (`pending`, `inProgress`, `failed`, `oldestPendingSeconds`, `alerting`). **Alert when `amplify_outbox_oldest_pending_seconds` is over 3600** (`outboxAlertSeconds`) **or `amplify_outbox_failed` is above 0.** A row that waits that long means Novera, the Chat webhook or LinkedIn is unconfigured or down and every retry is deferring; nothing else reports it. Jobs also logs `Outbox backlog needs attention` (at most every 5 minutes) with the numbers. Fix the dependency, then see section 1 for failed rows.
 - **Token partition runway:** gauge `amplify_token_partition_days_ahead` (days past today with a `provider_token` partition; -1 when unknown) and a `tokenPartitions` block on amplify-jobs' `GET /ready` (`daysAhead`, `alerting`). **Alert when it is below 3** (`tokenPartitionAlertDays`). The partitions are two weeks ahead (V009), jobs creates them at start-up and the daily maintenance run keeps them going; a connect on a day with no partition fails, so a falling number means the maintenance schedule is off or failing. Check the scheduler job `amplify-maintenance-partitions` and `POST /maintenance/partitions` on jobs; running it by hand restores the runway.
-- **Partition upkeep:** nightly `POST /maintenance/partitions`; each drop audits `PARTITION_DROPPED`; `oauth_state` swept by `connection.sweep_oauth_state()`. The response's `token_rotation` should read `DONE` (or `NOT_CONFIGURED` where no keys are set); `failed > 0` needs a look (§2).
+- **Partition upkeep:** nightly `POST /maintenance/partitions`; each drop audits `PARTITION_DROPPED`; `oauth_state` swept by `connection_sweep_oauth_state()`. The response's `token_rotation` should read `DONE` (or `NOT_CONFIGURED` where no keys are set); `failed > 0` needs a look (§2).
 - **Sessions idle in transaction (alert, R-13).** On Ballerina 2201.13.x a runtime race can leave a session `idle in transaction` holding locks ([R-13 write-up](../reviews/2026-10-17-r13-transaction-race.md), [ADR-032](../../architecture/decisions/ADR-032-transaction-gate-ballerina-2201-13.md)). The transaction gate should stop it, and V013's 30 s `idle_in_transaction_session_timeout` on `amplify_api`/`amplify_jobs` ends such a session, so any hit means something got past both. Alert when this returns a row (run as the admin user, every few minutes):
   ```sql
   SELECT pid, usename, state_change, now() - state_change AS idle_for

@@ -18,7 +18,7 @@
 
 SET LOCAL ROLE amplify_migrate;
 
-INSERT INTO campaign.category (code, label, active, sort_order)
+INSERT INTO campaign_category (code, label, active, sort_order)
 VALUES ('PRODUCT', 'Product', true, 10),
        ('COMPANY_NEWS', 'Company news', true, 20),
        ('CUSTOMER_STORY', 'Customer story', true, 30),

@@ -15,7 +15,7 @@
 -- under the License.
 
 -- V017: least privilege on the token table (security review). The API and the worker each only need part of what
--- V003 granted them on connection.provider_token:
+-- V003 granted them on connection_provider_token:
 --   amplify_api  connects and removes a connection: INSERT, SELECT (to revoke at LinkedIn first), DELETE. It never
 --                rewrites a token row, so UPDATE goes.
 --   amplify_jobs reads tokens to publish, re-seals them under a new key and deletes expired ones: SELECT, UPDATE,
@@ -26,5 +26,5 @@
 
 SET LOCAL ROLE amplify_migrate;
 
-REVOKE UPDATE ON connection.provider_token FROM amplify_api;
-REVOKE INSERT ON connection.provider_token FROM amplify_jobs;
+REVOKE UPDATE ON connection_provider_token FROM amplify_api;
+REVOKE INSERT ON connection_provider_token FROM amplify_jobs;
