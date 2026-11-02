@@ -47,11 +47,10 @@ docker run -d --name "$NAME-db" --network "$NAME" \
   -e POSTGRES_DB=scheduler -e POSTGRES_USER=scheduler -e POSTGRES_PASSWORD="$DB_PASSWORD" "$PG_IMAGE" >/dev/null
 ready=false
 for _ in $(seq 1 60); do
-  docker exec "$NAME-db" pg_isready -U scheduler -d scheduler >/dev/null 2>&1 && { ready=true; break; }
+  docker exec "$NAME-db" pg_isready -h 127.0.0.1 -U scheduler -d scheduler >/dev/null 2>&1 && { ready=true; break; }
   sleep 1
 done
 $ready || fail "scheduler Postgres did not become ready"
-sleep 2
 
 docker run -d --name "$NAME-app" --network "$NAME" --user 10014 --read-only \
   -e DSN="postgres://scheduler:${DB_PASSWORD}@$NAME-db:5432/scheduler?sslmode=disable" \

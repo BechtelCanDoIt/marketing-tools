@@ -43,6 +43,8 @@ export const options = {
     'http_req_duration{endpoint:me_points}': ['p(95)<50'],
     'http_req_duration{endpoint:team}': ['p(95)<50'],
     'checks': ['rate>0.99'],
+    // k6 drops scheduled iterations when it runs out of VUs; the duration thresholds above only see requests that ran.
+    'dropped_iterations': ['count==0'],
   },
   summaryTrendStats: ['avg', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 };

@@ -45,14 +45,14 @@ isolated service class AuthInterceptor {
                 log:printError("Token keys unavailable", errorCode = code, correlationId = correlationId);
                 return unavailable(DEPENDENCY_UNAVAILABLE, correlationId);
             }
-            deny(ANONYMOUS, [], routeOf(req.method, path, ()), code, correlationId);
+            deny(ANONYMOUS, [], routeOf(req.method, path, ()), code, correlationId, routeMatched = false);
             return unauthorized(code, principal.message(), correlationId);
         }
 
         auth:Rule? rule = auth:findRule(req.method, path);
         if rule is () {
             deny(principal.employeeId, principal.roles, routeOf(req.method, path, ()), ROUTE_NOT_PERMITTED,
-                    correlationId);
+                    correlationId, routeMatched = false);
             return forbidden(ROUTE_NOT_PERMITTED, correlationId);
         }
         if !auth:isAllowed(rule, principal.grants) {
@@ -69,7 +69,7 @@ isolated service class AuthInterceptor {
                     correlationId);
         }
         if employeeId is error {
-            log:printError("Could not resolve the employee", employeeId, correlationId = correlationId);
+            log:printError("Could not resolve the employee", resilience:loggable(employeeId), correlationId = correlationId);
             recordDbFailure(employeeId);
             return unavailable(DEPENDENCY_UNAVAILABLE, correlationId);
         }
@@ -124,6 +124,10 @@ isolated function shouldWriteDenialAt(string actorId, string[] roles, string rou
                     _ = denialBuckets.remove(k);
                 }
             }
+            if denialBuckets.length() >= DENIAL_THROTTLE_MAX {
+                // Still full of live keys: the map never grows past the cap. This denial is written, just not tracked.
+                return 0;
+            }
         }
         int suppressed = bucket is DenialBucket ? bucket.suppressed : 0;
         denialBuckets[key] = {writtenAt: now};
@@ -133,6 +137,12 @@ isolated function shouldWriteDenialAt(string actorId, string[] roles, string rou
 
 isolated function shouldWriteDenial(string actorId, string[] roles, string route, string code) returns int? =>
     shouldWriteDenialAt(actorId, roles, route, code, time:monotonicNow(), denialAuditWindowSeconds);
+
+# The throttle key route for a path no rule matched: the method and a fixed marker.
+isolated function unmatchedRoute(string route) returns string {
+    int? space = route.indexOf(" ");
+    return (space is int ? route.substring(0, space) : route) + " (unmatched)";
+}
 
 # Clears the throttle (tests).
 isolated function resetDenialAudit() {
@@ -150,9 +160,12 @@ isolated function resetDenialAudit() {
 # + route - `METHOD /template`
 # + code - Stable denial code
 # + correlationId - Correlation id
-isolated function deny(string actorId, string[] roles, string route, string code, string? correlationId) {
+# + routeMatched - False when no route rule matched the path. The throttle then keys on the method alone, so a
+#                  scanner trying random paths shares one bucket instead of adding a key and a write per path
+isolated function deny(string actorId, string[] roles, string route, string code, string? correlationId,
+        boolean routeMatched = true) {
     log:printWarn("Access denied", errorCode = code, route = route, correlationId = correlationId);
-    int? suppressed = shouldWriteDenial(actorId, roles, route, code);
+    int? suppressed = shouldWriteDenial(actorId, roles, routeMatched ? route : unmatchedRoute(route), code);
     if suppressed is () {
         return;
     }
