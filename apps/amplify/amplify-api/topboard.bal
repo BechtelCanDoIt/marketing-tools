@@ -20,6 +20,8 @@
 // in memory for `topBoardCacheSeconds` (default 2 hours). The first caller after it runs out loads the
 // totals; everyone else reuses them. The viewer's own line ("My position") comes from the same cached
 // totals, so it matches the top three. `leaderboard.top_scope = ALL` serves the all-time standings instead.
+// The podium always holds the top N, whatever the points: `leaderboard.top_min_points` is returned as the
+// monthly minimum rule the page shows ("Earn at least 100 points"), not as a filter on who is ranked.
 
 import amplify_api.auth;
 import amplify_common.resilience;
@@ -122,7 +124,8 @@ isolated function topBoard(auth:Principal p, string? correlationId) returns http
             mine = own.length() > 0 ? own[0] : ();
             scopeInfo = {
                 period: "MONTH",
-                minPoints: (),
+                // Shown as the monthly rule; everyone with points is still ranked, so the top N always shows.
+                minPoints: settings.topMinPoints,
                 monthStart: ts(month.monthStart),
                 monthEnd: ts(recognition:nextMonthStartOf(month.monthStart)),
                 generatedAt: ts(month.loadedAt)

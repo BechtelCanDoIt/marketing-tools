@@ -20,7 +20,7 @@ Every insert is `ON CONFLICT DO NOTHING`, so an admin's later change is never ov
   `maintenance.schedule = 0 2 * * *` (UTC), pushed to the scheduler by amplify-api (ADR-026).
 - `S008__token_grace_one_day.sql`: moves `connection.token_grace_days` from 5 to 1 (ADR-002). S003 can't be edited once applied; V016 does the same for databases that already have the 5.
 - `S009__top_scope_month.sql`: moves `leaderboard.top_scope` from WEEK to MONTH (ADR-037 amended). S007 can't be edited once applied; an admin value of ALL is kept.
-- `S010__top_min_points_setting.sql`: `leaderboard.top_min_points = 100`, the points that earn Coins (separate from the Celebrate top three, which has no minimum since 2026-11-04, ADR-037); an admin can change it.
+- `S010__top_min_points_setting.sql`: `leaderboard.top_min_points = 100`, the monthly minimum the page states ("Earn at least 100 points") and the floor for Coins; it does not gate the Celebrate top three, which always shows the top N (2026-11-04, ADR-037). An admin can change it.
 
 ## Rules
 
