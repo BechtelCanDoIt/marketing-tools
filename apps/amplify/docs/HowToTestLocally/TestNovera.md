@@ -185,6 +185,8 @@ cd apps/amplify/local/novera-mock
 CHECK_URL=http://localhost:3002/internal/notifications node server.mjs      # :3003
 ```
 
+To see the real card in Google Chat, add `NOVERA_MOCK_CHAT_WEBHOOK_URL=<incoming webhook of a dev test space>` to `local/.env` (or the shell) before starting the mock. It then posts each card to that space and answers 503 if Chat refuses it. The URL is a secret: the mock never logs it, and it must never be the WSO2 Club space. The mock is for local development only.
+
 The mock is off by default: nothing uses it until you start it and set these in `local/.env`. `local/.env.example` carries them as a commented-out block; copy them in **instead of** the `NOVERA_*` lines (the stack runs in Docker, so the host is `host.docker.internal`). Then recreate the jobs container:
 
 ```
