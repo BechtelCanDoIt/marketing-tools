@@ -4,7 +4,7 @@ Operational procedures for the Amplify phase 1 pilot. Every procedure gives the 
 
 Owner: Developer. Escalation: PO team for product impact, WSO2 platform for Choreo/Aiven.
 
-**Companion runbooks** (linked, not duplicated): [choreo-deploy.md](choreo-deploy.md) · [identity-setup.md](identity-setup.md) · [google-chat-webhook.md](google-chat-webhook.md) · [data-deletion-interim.md](data-deletion-interim.md) · [resilience-targets.md](resilience-targets.md) · checklist exception: data deletion.
+**Companion runbooks** (linked, not duplicated): [choreo-deploy.md](choreo-deploy.md) · [identity-setup.md](identity-setup.md) · [data-deletion-interim.md](data-deletion-interim.md) · [resilience-targets.md](resilience-targets.md) · checklist exception: data deletion.
 
 Paths: `apps/…` = `apps/amplify/…`. Local commands run from `apps/amplify/`. In Choreo the same work is a console action (no shell) — those steps are marked **[console]**.
 
@@ -89,15 +89,15 @@ The LinkedIn developer app has one client id/secret; it is stored in Choreo secr
 4. Smoke test: connect (real account in non-prod), share a campaign, confirm `POST /rest/posts` succeeds. Watch the run log `breakers` for `linkedinOAuth`/`linkedinApi`.
 5. A `401` on share revokes the connection (`NEEDS_RECONNECT`) — after a secret change, affected users reconnect.
 
-## 4. Rotate the Google Chat webhook
+## 4. Rotate the Novera client credential
 
-Full procedure: [google-chat-webhook.md](google-chat-webhook.md). Summary:
+Announcements go through Novera (`NOVERACLIENTID` / `NOVERACLIENTSECRET` on `amplify-jobs`).
 
-1. Chat space **[console]**: create a new incoming webhook ("Amplify").
-2. Update the `CHATWEBHOOKURL` secret **[console]**, redeploy `amplify-jobs`.
-3. Verify: `Save & Share Now` on a test campaign → card posts to the space.
-4. **Delete the old webhook** (delete first if the old URL leaked).
-5. A `404` on every card means the webhook was deleted — rotate. The URL is a bearer secret: never logged, never in `announcement.last_error`.
+1. Asgardeo **[console]**: create a new secret for the application subscribed to Novera's API.
+2. Update the `NOVERACLIENTSECRET` secret **[console]**, redeploy `amplify-jobs`.
+3. Verify: `Save & Share Now` on a test campaign, and confirm the Novera card arrives.
+4. Revoke the old secret.
+5. A `401` or `403` on every announcement means the credential or subscription is wrong. Announcements stay queued and retry; they are not lost.
 
 ## 5. Bump `LinkedIn-Version`
 

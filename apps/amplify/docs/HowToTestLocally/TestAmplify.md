@@ -12,7 +12,7 @@ Phase 1 (2026-10-19 breakdown) is: Marketing and PO register posts (New Post, Cu
 
 | Piece | Where | Port |
 |---|---|---|
-| amplify-api, amplify-jobs, scheduler, Postgres ×2, mock LinkedIn, chat-stub, people-stub | Docker Compose, `apps/amplify` | api 9090, mock LinkedIn 19091, people-stub 19092 |
+| amplify-api, amplify-jobs, scheduler, Postgres ×2, mock LinkedIn, people-stub | Docker Compose, `apps/amplify` | api 9090, mock LinkedIn 19091, people-stub 19092 |
 | Dev proxy (stands in for the Choreo API proxy) | `node local/one-wso2-proxy/proxy.mjs` | 9089 |
 | One WSO2 | `npm run dev` in `projects/one-wso2/webapp` | 3000 |
 | Real people-app (optional) | `local/people-app-proto/run.sh up` | gateway 19093, people-app 19094 |

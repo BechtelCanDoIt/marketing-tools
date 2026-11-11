@@ -217,7 +217,7 @@ Status is written in the feature body. "Built, ahead of phase N" means the code 
 | --- | --- | --- | --- |
 | F2.1 | Novera announcement card: campaign image and Amplify button | Built, needs agents change deployed first | `novera.bal`; `buildNoveraNotification`; `56271f0`; agents `4b7d5ff` |
 | F2.2 | Admin retry of failed announcements | Built | `/admin/announcements/{id}/retry` |
-| F2.3 | Local Chat stub and Novera mock | Built | `local/chat-stub`, `local/novera-mock` |
+| F2.3 | Local Novera mock | Built | `local/novera-mock` |
 
 ### R3: Connect LinkedIn through SSO (phase 1)
 

@@ -14,7 +14,6 @@ Related: [phase1-solution-architecture.md](phase1-solution-architecture.md) (log
 | `amplify-jobs` | HTTP-triggered worker (the Run, maintenance) | Ballerina | 54 | 5 | **59** | 100% |
 | `amplify-database` | Migrate runner plus 13 migrations (V001–V013) and seeds | Ballerina + SQL | 22 | 16 | **38** | 100% |
 | `amplify-scheduler` | Pinned akornatskyy/scheduler image plus history-retention SQL | Dockerfile + SQL (upstream image is Go) | — | 2 | **2** | 100% |
-| `chat-stub` (local) | Google Chat webhook stub for Compose | Ballerina | 2 | — | **2** | 100% |
 | `people-stub` (local) | people-app directory stub for Compose (`GET /employees/basic-info`) | Ballerina | 2 | — | **2** | 100% |
 | people-app prototype (`local/people-app-proto`) | Real people-app behind a gateway stand-in; amplify-api reads it as a service client | Bash + Node + Ballerina | — | 11 checks | **11** | 100% |
 | people-app service clients (`projects/people-ops-suite`, PR) | Lets a listed service client read `GET /employees/basic-info` | Ballerina (2201.12.7) | 5 | — | **5** | 100% |
@@ -36,7 +35,7 @@ flowchart BT
         DB["<b>amplify-database</b><br/>V001–V013 migrations · seeds · migrate runner<br/><i>Ballerina + SQL · no package deps</i>"]
     end
     subgraph L1["② Foundation brick"]
-        COMMON["<b>amplify_common</b> 0.6.0<br/>types · events · crypto · resilience · linkedin · googlechat<br/><i>Ballerina</i>"]
+        COMMON["<b>amplify_common</b> 0.6.0<br/>types · events · crypto · resilience · linkedin<br/><i>Ballerina</i>"]
     end
     subgraph L2["③ Domain brick"]
         DOMAIN["<b>amplify_domain</b> 0.2.0<br/>store · identity · campaign · connection · sharing ·<br/>external_sharing · scoring · recognition · announcements<br/><i>Ballerina</i>"]
@@ -166,7 +165,7 @@ Locally, Compose swaps the outside bricks for stand-ins with the same interface,
 | Real brick | Local stand-in | Used by |
 |---|---|---|
 | LinkedIn | `mock_linkedin` (`apps/amplify/linkedin/apps/mock_linkedin`) | Compose, jobs integration tests, e2e |
-| Google Chat | `chat-stub` (`local/chat-stub`) | Compose; jobs tests use an in-test stub |
+| Novera (Google Chat) | `novera-mock` (`local/novera-mock`) | Run by hand (node); jobs tests use an in-test stub |
 | Asgardeo + API proxy | dev-only signed JWT (`local/dev-jwt`, ADR-023, `ENVIRONMENT=local` only) | Compose, e2e |
 | Managed Postgres | `postgres:17` container | Compose, integration tests |
 | people-app directory | `people-stub` (`local/people-stub`, edit `directory.json`); or the real people-app via `local/people-app-proto` | Compose; a local One WSO2 for photos |
