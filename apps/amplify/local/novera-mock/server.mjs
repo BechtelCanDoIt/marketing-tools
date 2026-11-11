@@ -77,8 +77,10 @@ function buildCard(n) {
 const envFileValue = (name) => {
   const file = fileURLToPath(new URL("../.env", import.meta.url));
   if (!existsSync(file)) return "";
-  const line = readFileSync(file, "utf8").split("\n").find((l) => l.startsWith(`${name}=`));
-  return line ? line.slice(name.length + 1).trim().replace(/^(["'])(.*)\1$/, "$2") : "";
+  // Like an env file elsewhere: the last non-empty assignment wins.
+  const values = readFileSync(file, "utf8").split("\n").filter((l) => l.startsWith(`${name}=`))
+    .map((l) => l.slice(name.length + 1).trim().replace(/^(["'])(.*)\1$/, "$2")).filter(Boolean);
+  return values.length ? values[values.length - 1] : "";
 };
 const CHAT_WEBHOOK_URL = process.env.NOVERA_MOCK_CHAT_WEBHOOK_URL || envFileValue("NOVERA_MOCK_CHAT_WEBHOOK_URL");
 
