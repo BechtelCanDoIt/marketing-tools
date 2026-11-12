@@ -41,7 +41,7 @@ Check: both services are healthy in prod.
 ### Step 3: Components (C), in this order
 
 1. DB Migrate (Manual Task). Run once for the first release, then after every release that adds a `V###` or `S###` script. The log must end with `Migration run done`.
-2. Amplify Jobs (Project visibility). Needs the Chat webhook, the LinkedIn prod URLs and client id, and `TOKENKEYS`.
+2. Amplify Jobs (Project visibility). Needs the Novera gateway URL and client credentials, the LinkedIn prod URLs and client id, and `TOKENKEYS`.
 3. Amplify Scheduler (Project visibility, no auth upstream, never behind the proxy). Needs `DSN` for the `scheduler` database.
 4. Amplify Backend. Set `JOBSURL` and `SCHEDULERURL` to the Project URLs of the Jobs and Scheduler endpoints (leave `SCHEDULERJOBSURL` empty), and the four `HRENTITY*` values from the HR Entity client (C7). These are plain settings, so nothing is committed before the build. The gateway JWT values don't exist yet, so the first deploy runs without them and step 4 finishes the job.
 5. Back to step 1: add the Backend's people-app client id to `directoryClientIds` and redeploy people-app.

@@ -71,9 +71,9 @@ A solid arrow is a package dependency (`[[dependency]]` in `Ballerina.toml`). A 
 | Brick | Depends on | Owns | Never does |
 |---|---|---|---|
 | `amplify-database` | nothing | Schemas, roles and column grants, partition functions, views, seeds; forward-only `V###__*.sql` | Run at request time. It's a one-shot Manual Task / Compose job |
-| `amplify_common` | stdlib only | Value objects, ledger references (ADR-029), event shapes, AES-256-GCM token cipher, breakers and retry, LinkedIn adapter and ID-token validator, Google Chat card builder and client | Touch the database |
+| `amplify_common` | stdlib only | Value objects, ledger references (ADR-029), event shapes, AES-256-GCM token cipher, breakers and retry, LinkedIn adapter and ID-token validator | Touch the database |
 | `amplify_domain` | `amplify_common` | One module per bounded context: domain rules, repository ports, Postgres repositories. `store` holds the client, outbox and audit writers, and the process-wide transaction gate (ADR-032) | Speak HTTP |
-| `amplify-api` | common + domain | Resources, JWT verification and activity matrix (`modules/auth`), idempotency, problem details, scheduler sync (`modules/scheduler`) | Post to LinkedIn or Chat; that's the jobs' work |
+| `amplify-api` | common + domain | Resources, JWT verification and activity matrix (`modules/auth`), idempotency, problem details, scheduler sync (`modules/scheduler`) | Post to LinkedIn or Novera; that's the jobs' work |
 | `amplify-jobs` | common + domain | The Run (outbox drain → LinkedIn shares, Chat announcements, scoring), partition upkeep, token key rotation, recognition rebuild | Run on its own timer (ADR-003); the scheduler triggers it |
 | One WSO2 module | `openapi.yaml` (contract) | Rail, role gate (`GET /me`), screens, idempotency keys, LinkedIn consent popup | Hold roles of its own; the backend's `/me` and `actions` decide |
 
@@ -126,7 +126,7 @@ flowchart LR
         MIG["amplify-database<br/>(migrate, one-shot)"]
     end
     LI["LinkedIn<br/>OAuth · Posts API"]
-    GC["Google Chat<br/>webhook"]
+    NV["Novera<br/>(Google Chat assistant)"]
     ROSTER["people-app directory<br/>(via Choreo gateway)"]
 
     BROWSER --> UI
@@ -140,7 +140,7 @@ flowchart LR
     MIG -->|"amplify_migrate role"| PG
     API -->|"connect: token exchange · userinfo"| LI
     JOBS -->|"publish shares"| LI
-    JOBS -->|"announcements"| GC
+    JOBS -->|"announcements"| NV
     API -->|"team rosters (client credentials, 3-day cache)"| ROSTER
     UI -.->|"photos · names (user token)"| ROSTER
     BROWSER -.->|"LinkedIn consent (new tab)"| LI
@@ -154,7 +154,7 @@ flowchart LR
 | Timer | scheduler → jobs | `POST /runs` (300 s deadline), `POST /maintenance/partitions` | Jobs' run lock: one run at a time |
 | Data | api, jobs, migrate → Postgres | SQL, one DB role per component | Column-level grants, `VERIFY_FULL` TLS by default, transaction gate (ADR-032) |
 | LinkedIn | api → LinkedIn (connect); jobs → LinkedIn (post) | OAuth code exchange, userinfo, `/rest/posts` | Breakers, per-run and per-day ceilings, tokens encrypted at rest |
-| Chat | jobs → Google Chat | Campaign announcement cards | Webhook URL is a secret; plain HTTP only to an exact loopback host |
+| Novera | jobs → Novera (Choreo gateway, `POST /internal/notifications`) | Campaign announcement notifications; Novera sends the Google Chat card | OAuth2 client credentials; breaker; outbox retries; plain HTTP only for the local mock |
 | Roster | api → people-app (`GET /employees/basic-info`) | Team membership for My Team (sub-team, else team) | OAuth2 client credentials; people-app allows the client on that route only; breaker; index cached 3 days; `teamStatus` degrades instead of failing |
 | Photos and names | UI → people-app | Leaderboard photos and full names | The user's own token; falls back to amplify-api's name and initials |
 

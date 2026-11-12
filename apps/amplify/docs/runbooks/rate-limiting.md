@@ -89,7 +89,6 @@ Nothing special. The Amplify screens don't read `Retry-After` or retry, so a thr
 | LinkedIn member limit for `POST /rest/posts` (non-prod) | _open (L1)_ | | |
 | LinkedIn app and member limits (prod) | _open (L1)_ | | |
 | `linkedinMaxPostsPerDay` / `linkedinMaxPostsPerRun` set to | 1000 / 50 (defaults) | 2026-10-21 | |
-| Google Chat webhook limit (if published) | _open (G3)_ | | |
 | Proxy limit per operation (reads / writes / shares) | _open (P2)_ | | |
 | Proxy 429: status, body, `Retry-After` present? | _open (P4)_ | | |
 

@@ -24,17 +24,11 @@
 //   GET  /health
 // Every notification is logged and its card written to OUT_DIR.
 //
-// Posting to a real Google Chat space: set NOVERA_MOCK_CHAT_WEBHOOK_URL (environment, or a line in local/.env) to
-// an incoming-webhook URL of a DEV TEST space. The card is then posted there, like real Novera would send it.
-// The URL carries its own key and token: it is a secret, so it is never logged, and never the WSO2 Club space.
-// Unset = log and write the card only. If the post to Chat fails the answer is 503 (Novera's own answer when
-// Chat is down), so amplify-jobs' retry path can be tried.
-//
 // If CHECK_URL is set (local Novera, e.g. http://localhost:3002/internal/notifications), the body is also
 // sent there and its verdict is logged: 400 = Novera's schema rejects it, 503 = schema OK (no Google key).
 // Run: node server.mjs   (PORT defaults to 3003). See docs/HowToTestLocally/TestNovera.md.
 import http from "node:http";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // Cards land in OUT_DIR/last-card.json (full Chat message) and last-card-builder.json (inner card only). Paste the latter into Google's Card Builder
@@ -71,33 +65,6 @@ function buildCard(n) {
   if (n.button) widgets.push({ buttonList: { buttons: [{ text: n.button.label, onClick: { openLink: { url: n.button.url } } }] } });
   if (n.footer) widgets.push({ divider: {} }, { textParagraph: { text: `<font color="#5f6368">${esc(n.footer)}</font>` } });
   return { cardsV2: [{ cardId: `notification-${n.source}`, card: { sections: [{ widgets }] } }] };
-}
-
-// The webhook URL may live in local/.env (next to .env.example), so one file holds every local setting.
-const envFileValue = (name) => {
-  const file = fileURLToPath(new URL("../.env", import.meta.url));
-  if (!existsSync(file)) return "";
-  // Like an env file elsewhere: the last non-empty assignment wins.
-  const values = readFileSync(file, "utf8").split("\n").filter((l) => l.startsWith(`${name}=`))
-    .map((l) => l.slice(name.length + 1).trim().replace(/^(["'])(.*)\1$/, "$2")).filter(Boolean);
-  return values.length ? values[values.length - 1] : "";
-};
-const CHAT_WEBHOOK_URL = process.env.NOVERA_MOCK_CHAT_WEBHOOK_URL || envFileValue("NOVERA_MOCK_CHAT_WEBHOOK_URL");
-
-// Posts the card to the dev test space. Returns true when Chat accepted it. The URL is never logged.
-async function postToChat(card) {
-  try {
-    const r = await fetch(CHAT_WEBHOOK_URL, {
-      method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" },
-      body: JSON.stringify(card), signal: AbortSignal.timeout(10000),
-    });
-    if (!r.ok) { console.log(`[mock-novera] Google Chat refused the card: HTTP ${r.status} ${(await r.text()).slice(0, 300)}`); return false; }
-    console.log("[mock-novera] card posted to the Google Chat space");
-    return true;
-  } catch (e) {
-    console.log(`[mock-novera] Google Chat unreachable: ${e.name}`);
-    return false;
-  }
 }
 
 const PORT = Number(process.env.PORT || 3003);
@@ -147,10 +114,9 @@ http.createServer(async (req, res) => {
         console.log(`[mock-novera] real Novera says ${r.status} ${t} (400 = schema rejected, 503 = schema ok)`);
       } catch (e) { console.log("[mock-novera] real Novera unreachable:", e.message); }
     }
-    if (CHAT_WEBHOOK_URL && !(await postToChat(lastCard))) return send(res, 503, { error: "google chat did not accept the card" });
     return send(res, 202, { accepted: true });
   }
   if (req.method === "GET" && path === "/card") return send(res, lastCard ? 200 : 404, lastCard ?? { error: "no notification yet" });
   if (path === "/health") return send(res, 200, { status: "ok" });
   send(res, 404, { error: "not found" });
-}).listen(PORT, "0.0.0.0", () => console.log(`[mock-novera] LOCAL DEVELOPMENT ONLY. Listening on ${PORT}; Google Chat posting ${CHAT_WEBHOOK_URL ? "ON" : "off (set NOVERA_MOCK_CHAT_WEBHOOK_URL)"}`));
+}).listen(PORT, "0.0.0.0", () => console.log(`[mock-novera] LOCAL DEVELOPMENT ONLY. Listening on ${PORT}; nothing is sent to Google Chat`));

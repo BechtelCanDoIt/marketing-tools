@@ -341,7 +341,7 @@ Phases follow the screenshot, with the PO's confirmations of 24 Oct applied.
 
 | Item | Screenshot | PO decision | Result |
 | --- | --- | --- | --- |
-| R2 Chat share | Phase 1 | Phase 1, and the channel is now Novera, not the Club chat space mentioned in the requirements document. | R2 retitled "through Novera". F2.2 (Novera) is the main feature. F2.1 becomes "keep the Club webhook path off by default, for dev work" (PO decision) |
+| R2 Chat share | Phase 1 | Phase 1, and the channel is now Novera, not the Club chat space mentioned in the requirements document. | R2 retitled "through Novera". F2.2 (Novera) is the main feature. The Club webhook path was removed afterwards, so F2.1 is the Novera card |
 | R5 Own posts | Phase 3 | Phase 3 | Unchanged. F5.1 to F5.3 are built ahead of phase 3 |
 | R7 PO edits | Phase 3 | Phase 3 | Unchanged. F7.1 to F7.3 are built ahead of phase 3 |
 | R6 Automatic scoring | Phase 3 | Phase 1 (PO updated the chart) | R6 and F6.1 to F6.4 are phase 1 and plain "Built". The phase 1 leaderboard (R10) ranks by points, so this closes the earlier conflict |
