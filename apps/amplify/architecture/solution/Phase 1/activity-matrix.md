@@ -64,7 +64,7 @@ Enforced twice: API proxy scopes per resource, then the Ballerina request interc
 | S6 | `GET /dashboards/people/{employeeId}` | `CAN_DASHBOARD` | — | R | R | R | R | One person's Post Performance popup (ADR-036) |
 | S6 | `GET /dashboards/export?from=&to=` | `CAN_EXPORT` | — | R | R | R | R | Raw rows behind the boards as CSV, with names and emails. Its own grant so the export can be narrowed (e.g. to PO and Admin) without code (R16) |
 | S4 | `GET /me/points` | `EMPLOYEE` | R own | R own | R own | R own | R own | Points only, no Coin value (A11) |
-| S4 | `GET /team?q=&sort=&page=` | `EMPLOYEE` | R (per ADR-014) | R | R (per ADR-014) | R (per ADR-014) | R (per ADR-014) | Returns emails for One WSO2 enrichment (ADR-009). Without `CAN_ADJUST_POINTS`, visibility follows the three-leaderboard rule |
+| S6 | `GET /team?q=&sort=&page=` | `CAN_DASHBOARD` | — | R | R | R | R | The Team board under Dashboarding: the whole company roster from the people directory, joined to the standings (emails for One WSO2 enrichment). A plain employee gets 403 `ROLE_NOT_PERMITTED` |
 | S4 | `GET /team/{employeeId}/history` | `EMPLOYEE` | R own + team | R any | R own + team | R own + team | R own + team | Without `CAN_ADJUST_POINTS`: own, or a member of the caller's team from the people-app directory (sub-team, else team; ADR-019) (`team.visibility = COMPANY` does not widen it, ADR-035), else 403 `TEAM_SCOPE` ([leaderboards.md](leaderboards.md)). `CAN_ADJUST_POINTS` sees any row (needed for adjust/reverse) |
 | S4 | `GET /po/dashboard` | `CAN_PO_DASHBOARD` | — | R | — | — | — | Phase 1 (ADR-013); shape defined in M0c B6 |
 | S4 (phase 2) | `GET /reports/participation`, `GET /reports/campaigns` | `CAN_REPORTS` | — | R | — | R | — | Phase 2; read-only DB user |
