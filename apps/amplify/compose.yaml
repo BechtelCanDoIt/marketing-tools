@@ -270,14 +270,6 @@ services:
       - "127.0.0.1:19091:9091"
     networks: [internal]
 
-  # Local Google Chat webhook stub (M6a): logs each card (docker compose logs -f chat-stub).
-  # GET /stub/messages, PUT /stub/status/{code}: docker compose exec chat-stub wget -qO- localhost:9095/stub/messages
-  chat-stub:
-    build:
-      context: local/chat-stub
-    read_only: true
-    networks: [internal]
-
   # Local people-app directory stub (D13): GET /employees/basic-info from local/people-stub/directory.json
   # (re-read on every call; amplify-api still caches teams for ROSTERCACHESECONDS). Published on 19092 so a
   # local One WSO2 can show photos and names (ONE_WSO2_PEOPLE_BACKEND_URL = http://localhost:19092).
