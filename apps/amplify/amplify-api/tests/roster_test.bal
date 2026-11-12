@@ -154,11 +154,22 @@ function testGroupRowsSumPointsAndKeepUnplacedPeople() returns error? {
         {email: "f@wso2.com", totalPoints: 4}
     ];
     var [teams, unplaced, unplacedPoints] = groupRows(index, snapshot, points, "TEAM", ());
-    test:assertEquals(teams.length(), 3, "departments with no points are listed too");
+    test:assertEquals(teams.length(), 2, "a department is one row across BUs; ones with no points are listed too");
     test:assertEquals(unplaced, 2);
     test:assertEquals(unplacedPoints, 11);
     json[] ranked = rankGroups(teams);
-    test:assertEquals(check ranked[0].key, "Product/Engineering", "Engineering and Marketing tie on 80: by name");
+    test:assertEquals(check ranked[0].key, "engineering", "Engineering and Marketing tie on 80: by name");
+}
+
+@test:Config
+function testGroupRowsRollADepartmentUpAcrossBus() {
+    DirectoryIndex index = indexDirectory(BU_DIRECTORY);
+    HeadcountSnapshot snapshot = headcountOf(index, [1760000000, 0]);
+    var [teams, _, _] = groupRows(index, snapshot, [{email: "a@wso2.com", totalPoints: 5}], "TEAM", ());
+    GroupRow[] engineering = teams.filter(t => t.name == "Engineering");
+    test:assertEquals(engineering.length(), 1, "Engineering shows once, not once per BU");
+    test:assertEquals(engineering[0].headcount, 4, "Product 3 + Corporate 1");
+    test:assertEquals(engineering[0].businessUnit, (), "spans BUs, so none is shown");
 }
 
 @test:Config
