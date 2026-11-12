@@ -56,13 +56,15 @@ const LAST = ["Abbott", "Barlow", "Calloway", "Dalton", "Ellison", "Fairbanks", 
   "Brandt", "Crane"];
 
 // business unit -> department (the team Amplify ranks) -> sub-teams
+// Some departments sit under several BUs, one with a different spelling, as in the real directory: that is what
+// makes the Team Leaderboard list a department more than once unless Amplify rolls it up by name.
 const ORG = {
-  PO: { PO: ["PO"] },
-  SLT: { SLT: ["CEO", "Office"] },
-  MKT: { Marketing: ["Content", "Events", "Growth"] },
-  CS: { Support: ["FDE", "Success"] },
-  ENG: { Platform: ["Core", "Infra"], Integration: ["Connectors", "Runtime"], Apps: ["Web", "Mobile"] },
-  PPL: { People: ["Recruiting", "Ops"] },
+  PO: { PO: ["PO"], "Business Operations": ["Planning"] },
+  SLT: { SLT: ["CEO", "Office"], "BUSINESS OPERATIONS": ["Office of the CEO"] },
+  MKT: { Marketing: ["Content", "Events", "Growth"], "Business Operations": ["Programs"] },
+  CS: { Support: ["FDE", "Success"], "Customer Success": ["Onboarding", "Renewals"] },
+  ENG: { Platform: ["Core", "Infra"], Integration: ["Connectors", "Runtime"], Apps: ["Web", "Mobile"], "Customer Success": ["Solutions"] },
+  PPL: { People: ["Recruiting", "Ops"], "Business Operations": ["Ops"] },
 };
 const HOUSES = [[1, "Orion"], [2, "Phoenix"], [3, "Draco"], [4, "Lyra"]];
 const LOCATIONS = [["WSO2 - US", "US"], ["WSO2 - LK", "Sri Lanka"], ["WSO2 - UK", "UK"]];

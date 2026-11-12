@@ -42,7 +42,7 @@ Seed and bootstrap files only run on an empty volume, so after `gen.mjs` changes
 | `user@example.com` | none |
 | 195 others (`first.last@example.com`) | none |
 
-Teams, business units, sub-teams and houses (about 15% of people have no house) are spread over everyone. `admin@example.com` is ThunderID's built-in admin user (its username is the email too), so it also sits in ThunderID's own `Administrators` group and can open the ThunderID console at `https://localhost:8090/console`.
+Teams, business units, sub-teams and houses (about 15% of people have no house) are spread over everyone. A few departments sit under several BUs, one in a different spelling (Business Operations under 4 BUs, Customer Success under 2), like the real directory, so the Team Leaderboard's one-row-per-department roll-up can be seen locally. `admin@example.com` is ThunderID's built-in admin user (its username is the email too), so it also sits in ThunderID's own `Administrators` group and can open the ThunderID console at `https://localhost:8090/console`.
 
 ## Point Amplify at it
 
