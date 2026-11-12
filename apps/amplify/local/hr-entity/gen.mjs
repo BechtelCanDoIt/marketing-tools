@@ -239,7 +239,7 @@ inboundAuthConfig:
         email:
           - email
           - email_verified
-        group:
+        groups:
           - groups
         ou:
           - ouId`);
