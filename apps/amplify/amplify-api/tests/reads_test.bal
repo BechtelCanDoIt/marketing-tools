@@ -237,9 +237,19 @@ function testTeamPageIsForDashboardRolesAndListsTheCompany() returns error? {
     test:assertEquals(check plus.employeeId, (), "a member with no standing row has no employee id");
     test:assertEquals(check plus.points, 0);
     test:assertEquals(check plus.rank, ());
+    test:assertEquals(check plus.houseName, (), "no house in the directory: null");
     test:assertEquals(check entries[0].actions.canReverse, true, "PO can adjust");
     json marketing = check (check send("GET", "/team", (), check rvToken("mk-team", groups = [MARKETING_GROUP]))).getJsonPayload();
     test:assertEquals(check (<json[]>check marketing.entries)[0].actions.canAdjust, false, "Marketing only reads");
+
+    // A person in a house shows it; the rest have none.
+    setDirectory("house");
+    json housed = check (check send("GET", "/team", (), check rvToken("po-team", groups = [PO_GROUP]))).getJsonPayload();
+    json[] housedEntries = <json[]>check housed.entries;
+    test:assertEquals(check housedEntries.filter(e => e.email == "rv-a@wso2.com")[0].houseName, "Oak",
+            "the house comes from the directory");
+    test:assertEquals(check housedEntries.filter(e => e.email == "rv-b@wso2.com")[0].houseName, (), "no house: null");
+    setDirectory("ok");
 
     // Directory down (nothing cached): the list falls back to the people with points, flagged.
     setDirectory("down");

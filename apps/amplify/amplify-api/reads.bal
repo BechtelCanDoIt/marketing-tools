@@ -340,6 +340,8 @@ isolated function teamView(auth:Principal p, string? correlationId, string perio
                     teamRank: e.teamRank,
                     previousRank: e.previousRank,
                     lastActivityAt: tsOpt(e.lastActivityAt),
+                    // From the directory; empty for someone with no house, or when the directory is down.
+                    houseName: index is DirectoryIndex ? index.houseOf[e.email.toLowerAscii()] : (),
                     actions: {canAdjust: adjuster, canReverse: adjuster}
                 }
         };

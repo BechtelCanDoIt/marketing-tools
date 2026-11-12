@@ -1578,6 +1578,7 @@ components:
               teamRank: {type: integer, description: "Dense rank within the list; every zero-point person shares the last rank. Ties order by name, then email"}
               previousRank: {type: integer, nullable: true}
               lastActivityAt: {type: string, format: date-time, nullable: true}
+              houseName: {type: string, nullable: true, description: "The person's house from the people directory; null when they have none or the directory is unavailable"}
               actions:
                 type: object
                 required: [canAdjust, canReverse]
