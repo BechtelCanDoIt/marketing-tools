@@ -193,7 +193,7 @@ signOutFlowId: 01900000-0000-7000-8000-00000000006a
 recoveryFlowId: 01900000-0000-7000-8000-000000000070
 isRecoveryFlowEnabled: false
 allowedUserTypes:
-  - person
+  - Person
 inboundAuthConfig:
   - type: oauth2
     config:
@@ -247,7 +247,7 @@ for (const p of people) {
   if (p.email === "admin@example.com") continue; // the built-in admin
   docs.push(`resource_type: user
 id: ${p.uuid}
-type: person
+type: Person
 ouHandle: default
 attributes:
   username: ${yq(p.email)}
