@@ -8,7 +8,7 @@ Standalone: its own Compose project (`amplify-hr-entity`) and network. It change
 |---|---|---|
 | `hr-entity` | `127.0.0.1:19097` | Node mock of the HR Entity GraphQL `employees(filter, limit, offset)` query, over Postgres. No auth. Also `GET /employees/basic-info` (people-app's shape) for One WSO2 names |
 | `hr-entity-db` | none | Postgres 17, `seed.sql` loaded on first start |
-| `thunderid` | `https://127.0.0.1:8090` | [ThunderID](https://github.com/asgardeo/thunder) (image `ghcr.io/thunder-id/thunderid-gateway`) (self-signed certificate: open it once in the browser and accept it) |
+| `thunderid` | `https://127.0.0.1:8090` | [ThunderID](https://github.com/asgardeo/thunder) (image `ghcr.io/thunder-id/thunderid:1.0.0`, pinned by tag and digest: the `latest` gateway image is a 2.0 milestone whose console and user type name differ) (self-signed certificate: open it once in the browser and accept it) |
 
 ## Design
 

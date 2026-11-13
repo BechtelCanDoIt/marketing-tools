@@ -56,7 +56,7 @@ services:
 
   # ---- ThunderID (the repo's own quick-start layout) + the Amplify cast ----------------------------------------
   thunderid-db-init:
-    image: ghcr.io/thunder-id/thunderid-gateway:latest
+    image: ghcr.io/thunder-id/thunderid:1.0.0@sha256:12b7348b6727b756b8155c5157804bc05ef5d0ffa5f42bc6307747bd18425a36
     command: sh -c "cp -r /opt/thunderid/database/* /data/"
     volumes:
       - thunderid-db:/data
@@ -65,7 +65,7 @@ services:
   # Runs once: creates the built-in resources, then everything in thunder/ (users, amplify_* groups, the sign-in
   # client). The built-in admin user becomes admin@example.com with the shared password.
   thunderid-setup:
-    image: ghcr.io/thunder-id/thunderid-gateway:latest
+    image: ghcr.io/thunder-id/thunderid:1.0.0@sha256:12b7348b6727b756b8155c5157804bc05ef5d0ffa5f42bc6307747bd18425a36
     command: ./setup.sh
     environment:
       ADMIN_USERNAME: admin@example.com
@@ -82,7 +82,7 @@ services:
 
   # https://localhost:8090 (self-signed certificate: open it once in the browser and accept it).
   thunderid:
-    image: ghcr.io/thunder-id/thunderid-gateway:latest
+    image: ghcr.io/thunder-id/thunderid:1.0.0@sha256:12b7348b6727b756b8155c5157804bc05ef5d0ffa5f42bc6307747bd18425a36
     depends_on:
       thunderid-setup:
         condition: service_completed_successfully
